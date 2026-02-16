@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platoonix - Innovation & Strategy | Direct Haulier Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #faf9f6;
+            color: #1a2332;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a2332 0%, #2d3e52 100%);
+            padding: 1.5rem 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo img {
+            height: 50px;
+            width: auto;
+        }
+
+        .tagline {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 400;
+        }
+
+        .role-toggle {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.3rem;
+            border-radius: 100px;
+        }
+
+        .role-btn {
+            padding: 0.6rem 1.5rem;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 100px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .role-btn.active {
+            background: #00ffc3;
+            color: #1a2332;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #1a2332 0%, #2d3e52 100%);
+            padding: 3rem 2rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            line-height: 1.2;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 600px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border-left: 4px solid #00ffc3;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #1a2332;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.5rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: #00ffc3;
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 255, 195, 0.15);
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: #1a2332;
+        }
+
+        .upload-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9fa;
+        }
+
+        .upload-zone:hover {
+            border-color: #00ffc3;
+            background: rgba(0, 255, 195, 0.05);
+        }
+
+        .upload-text {
+            color: #64748b;
+            font-size: 0.95rem;
+            margin-top: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #1a2332;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: #00ffc3;
+            box-shadow: 0 0 0 3px rgba(0, 255, 195, 0.1);
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-item label {
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: #00ffc3;
+            color: #1a2332;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: #00e6b0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 255, 195, 0.3);
+        }
+
+        .match-card {
+            background: white;
+            border: 2px solid #00ffc3;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s;
+        }
+
+        .match-card:hover {
+            transform: translateX(8px);
+            box-shadow: 0 4px 16px rgba(0, 255, 195, 0.2);
+        }
+
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .match-info h3 {
+            font-size: 1.25rem;
+            color: #1a2332;
+            margin-bottom: 0.5rem;
+        }
+
+        .match-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .detail-item {
+            font-size: 0.9rem;
+        }
+
+        .detail-label {
+            color: #64748b;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: #1a2332;
+        }
+
+        .match-score {
+            font-size: 2rem;
+            font-weight: 900;
+            color: #00ffc3;
+            text-align: center;
+        }
+
+        .tags {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            background: rgba(0, 255, 195, 0.2);
+            color: #00a876;
+        }
+
+        .tag.warning {
+            background: rgba(255, 193, 7, 0.2);
+            color: #d39e00;
+        }
+
+        .tag.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #dc2626;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: #64748b;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .hero h1 {
+                font-size: 2rem;
+            }
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .logo {
+                font-size: 1.5rem;
+            }
+            .tagline {
+                display: none;
+            }
+        }
+
+        .info-box {
+            background: #f0f9ff;
+            border-left: 4px solid #0ea5e9;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        footer {
+            background: #1a2332;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 2rem;
+            text-align: center;
+            margin-top: 4rem;
+        }
+
+        footer .logo-footer {
+            color: #00ffc3;
+            font-size: 1.25rem;
+            font-weight: 900;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="platoonix-logo.png" alt="Platoonix - Innovation & Strategy">
+                </div>
+                <div class="role-toggle">
+                    <button class="role-btn active" id="haulierBtn" onclick="switchRole('haulier')">Haulier</button>
+                    <button class="role-btn" id="distributorBtn" onclick="switchRole('distributor')">Distributor</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <div class="hero">
+                <h1 id="heroTitle">Turn Empty Miles Into Revenue</h1>
+                <p id="heroText">Upload your return journey schedules and discover backload opportunities within 25 miles. Intelligent matching based on vehicle type, capacity, and certifications.</p>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="statJourneys">0</div>
+                    <div class="stat-label" id="statLabel1">Active Journeys</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statMatches">0</div>
+                    <div class="stat-label">Available Matches</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statEarnings">£0</div>
+                    <div class="stat-label">Potential Earnings</div>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h2>📤 Upload Data</h2>
+                    <div class="info-box" id="csvInfo">
+                        CSV columns: vehicle, vehicleType, capacity_kg, palletSpaces, certifications, destination, returnPostcode, returnTime
+                    </div>
+                    <label class="upload-zone">
+                        <input type="file" accept=".csv" style="display:none" id="fileUpload" onchange="handleFileUpload(event)">
+                        <div style="font-size: 3rem; opacity: 0.3;">📁</div>
+                        <div class="upload-text">
+                            Drop CSV file or click to upload<br>
+                            <small>Bulk import with vehicle specifications</small>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="card">
+                    <h2 id="manualTitle">🚛 Manual Entry</h2>
+                    <form id="dataForm" onsubmit="handleSubmit(event)">
+                        <div id="formFields"></div>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Add Journey</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>✨ Available Matches</h2>
+                <div id="matchesContainer">
+                    <div class="empty-state">
+                        <div style="font-size: 4rem; opacity: 0.2;">📍</div>
+                        <p>No matches found yet. Add data to see opportunities.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <div style="display: flex; justify-content: center; margin-bottom: 1rem;">
+                <img src="platoonix-logo.png" alt="Platoonix" style="height: 40px;">
+            </div>
+            <p>Direct Haulier-Distributor Platform • Pilot Version</p>
+        </footer>
+    </div>
+
+    <script>
+        // Global state
+        let currentRole = 'haulier';
+        let journeys = [];
+        let loads = [];
+        let matches = [];
+
+        // Vehicle types and certifications
+        const VEHICLE_TYPES = [
+            'Curtain-sider',
+            'Box Van',
+            'Refrigerated (Fridge)',
+            'Refrigerated (Freezer)',
+            'Flatbed',
+            'Tipper',
+            'Tanker'
+        ];
+
+        const CERTIFICATIONS = [
+            'ADR (Dangerous Goods)',
+            'Temperature Controlled',
+            'Livestock Approved',
+            'FORS Certified',
+            'Tail Lift',
+            'Moffett Mounted'
+        ];
+
+        const LOAD_TYPES = [
+            'Palletized Goods',
+            'Loose Cargo',
+            'Temperature Sensitive',
+            'Hazardous Materials',
+            'Fragile Items',
+            'Oversized'
+        ];
+
+        // Mock geocoding
+        const mockCoords = {
+            'M1': { lat: 53.4808, lng: -2.2426 },
+            'M2': { lat: 53.4808, lng: -2.2426 },
+            'B2': { lat: 52.4862, lng: -1.8904 },
+            'B1': { lat: 52.4862, lng: -1.8904 },
+            'LE1': { lat: 52.6369, lng: -1.1398 },
+            'L1': { lat: 53.4084, lng: -2.9916 },
+            'L2': { lat: 53.4084, lng: -2.9916 },
+        };
+
+        function geocode(postcode) {
+            const prefix = postcode.substring(0, 2).toUpperCase();
+            return mockCoords[prefix] || { lat: 52.5, lng: -1.5 };
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 3959;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function switchRole(role) {
+            currentRole = role;
+            
+            document.getElementById('haulierBtn').classList.toggle('active', role === 'haulier');
+            document.getElementById('distributorBtn').classList.toggle('active', role === 'distributor');
+            
+            if (role === 'haulier') {
+                document.getElementById('heroTitle').textContent = 'Turn Empty Miles Into Revenue';
+                document.getElementById('heroText').textContent = 'Upload your return journey schedules and discover backload opportunities within 25 miles. Intelligent matching based on vehicle type, capacity, and certifications.';
+                document.getElementById('statLabel1').textContent = 'Active Journeys';
+                document.getElementById('csvInfo').textContent = 'CSV columns: vehicle, vehicleType, capacity_kg, palletSpaces, certifications, destination, returnPostcode, returnTime';
+                document.getElementById('manualTitle').textContent = '🚛 Manual Entry';
+                document.getElementById('submitBtn').textContent = 'Add Journey';
+                renderHaulierForm();
+            } else {
+                document.getElementById('heroTitle').textContent = 'Find Available Haulage Instantly';
+                document.getElementById('heroText').textContent = 'Post your loads with specific requirements and get matched with suitable vehicles. We check capacity, certifications, and route compatibility.';
+                document.getElementById('statLabel1').textContent = 'Posted Loads';
+                document.getElementById('csvInfo').textContent = 'CSV columns: reference, pickupPostcode, deliveryPostcode, weight_kg, pallets, loadType, requirements, price';
+                document.getElementById('manualTitle').textContent = '📦 Manual Entry';
+                document.getElementById('submitBtn').textContent = 'Add Load';
+                renderDistributorForm();
+            }
+            
+            updateStats();
+            renderMatches();
+        }
+
+        function renderHaulierForm() {
+            document.getElementById('formFields').innerHTML = `
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Vehicle Registration</label>
+                        <input type="text" name="vehicle" class="form-input" placeholder="AB12 XYZ" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Vehicle Type</label>
+                        <select name="vehicleType" class="form-select" required>
+                            <option value="">Select type...</option>
+                            ${VEHICLE_TYPES.map(type => `<option value="${type}">${type}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Capacity (kg)</label>
+                        <input type="number" name="capacity" class="form-input" placeholder="e.g., 24000" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Pallet Spaces</label>
+                        <input type="number" name="pallets" class="form-input" placeholder="e.g., 26" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Certifications / Features</label>
+                    <div class="checkbox-group">
+                        ${CERTIFICATIONS.map(cert => `
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="certifications" value="${cert}" id="cert-${cert.replace(/\s+/g, '-')}">
+                                <label for="cert-${cert.replace(/\s+/g, '-')}">${cert}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Destination City</label>
+                    <input type="text" name="destination" class="form-input" placeholder="Birmingham" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Return Base Postcode</label>
+                        <input type="text" name="returnPostcode" class="form-input" placeholder="M1 1AA" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Return Time</label>
+                        <input type="datetime-local" name="returnTime" class="form-input" required>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDistributorForm() {
+            document.getElementById('formFields').innerHTML = `
+                <div class="form-group">
+                    <label class="form-label">Load Reference</label>
+                    <input type="text" name="reference" class="form-input" placeholder="LD-001" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Pickup Postcode</label>
+                        <input type="text" name="pickupPostcode" class="form-input" placeholder="LE1 5DB" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Delivery Postcode</label>
+                        <input type="text" name="deliveryPostcode" class="form-input" placeholder="M1 2AB" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Weight (kg)</label>
+                        <input type="number" name="weight" class="form-input" placeholder="5000" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Number of Pallets</label>
+                        <input type="number" name="pallets" class="form-input" placeholder="10" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Load Type</label>
+                    <select name="loadType" class="form-select" required>
+                        <option value="">Select type...</option>
+                        ${LOAD_TYPES.map(type => `<option value="${type}">${type}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Special Requirements</label>
+                    <div class="checkbox-group">
+                        ${CERTIFICATIONS.map(cert => `
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="requirements" value="${cert}" id="req-${cert.replace(/\s+/g, '-')}">
+                                <label for="req-${cert.replace(/\s+/g, '-')}">${cert}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Offered Price (£)</label>
+                    <input type="number" name="price" class="form-input" placeholder="285" step="0.01" required>
+                </div>
+            `;
+        }
+
+        function handleSubmit(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            
+            if (currentRole === 'haulier') {
+                const certifications = formData.getAll('certifications');
+                const journey = {
+                    id: 'J' + Date.now(),
+                    vehicle: formData.get('vehicle'),
+                    vehicleType: formData.get('vehicleType'),
+                    capacity: parseInt(formData.get('capacity')),
+                    pallets: parseInt(formData.get('pallets')),
+                    certifications: certifications,
+                    destination: formData.get('destination'),
+                    returnPostcode: formData.get('returnPostcode'),
+                    returnTime: formData.get('returnTime'),
+                    status: 'Available'
+                };
+                journeys.push(journey);
+            } else {
+                const requirements = formData.getAll('requirements');
+                const load = {
+                    id: 'L' + Date.now(),
+                    reference: formData.get('reference'),
+                    pickupPostcode: formData.get('pickupPostcode'),
+                    deliveryPostcode: formData.get('deliveryPostcode'),
+                    weight: parseInt(formData.get('weight')),
+                    pallets: parseInt(formData.get('pallets')),
+                    loadType: formData.get('loadType'),
+                    requirements: requirements,
+                    price: parseFloat(formData.get('price')),
+                    status: 'Available'
+                };
+                loads.push(load);
+            }
+            
+            e.target.reset();
+            findMatches();
+            updateStats();
+            renderMatches();
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const text = event.target.result;
+                    const rows = text.split('\n').map(row => row.split(','));
+                    
+                    if (currentRole === 'haulier') {
+                        const newJourneys = rows.slice(1).filter(row => row.length >= 7).map((row, idx) => ({
+                            id: 'J' + Date.now() + '-' + idx,
+                            vehicle: row[0]?.trim() || 'Unknown',
+                            vehicleType: row[1]?.trim() || 'Curtain-sider',
+                            capacity: parseInt(row[2]) || 24000,
+                            pallets: parseInt(row[3]) || 26,
+                            certifications: row[4]?.trim().split(';').filter(c => c) || [],
+                            destination: row[5]?.trim() || 'Unknown',
+                            returnPostcode: row[6]?.trim() || 'M1 1AA',
+                            returnTime: row[7]?.trim() || new Date().toISOString(),
+                            status: 'Available'
+                        }));
+                        journeys.push(...newJourneys);
+                    } else {
+                        const newLoads = rows.slice(1).filter(row => row.length >= 7).map((row, idx) => ({
+                            id: 'L' + Date.now() + '-' + idx,
+                            reference: row[0]?.trim() || 'LD-' + idx,
+                            pickupPostcode: row[1]?.trim() || 'B2 4QA',
+                            deliveryPostcode: row[2]?.trim() || 'M1 1AA',
+                            weight: parseInt(row[3]) || 5000,
+                            pallets: parseInt(row[4]) || 10,
+                            loadType: row[5]?.trim() || 'Palletized Goods',
+                            requirements: row[6]?.trim().split(';').filter(r => r) || [],
+                            price: parseFloat(row[7]) || 285,
+                            status: 'Available'
+                        }));
+                        loads.push(...newLoads);
+                    }
+                    
+                    findMatches();
+                    updateStats();
+                    renderMatches();
+                    alert('Data uploaded successfully!');
+                } catch (err) {
+                    alert('Error parsing file. Please check CSV format.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function checkCompatibility(journey, load) {
+            const issues = [];
+            
+            if (load.weight > journey.capacity) {
+                issues.push(`Weight exceeds capacity (${load.weight}kg > ${journey.capacity}kg)`);
+            }
+            
+            if (load.pallets > journey.pallets) {
+                issues.push(`Pallets exceed capacity (${load.pallets} > ${journey.pallets})`);
+            }
+            
+            const missingCerts = load.requirements.filter(req => !journey.certifications.includes(req));
+            if (missingCerts.length > 0) {
+                issues.push(`Missing: ${missingCerts.join(', ')}`);
+            }
+            
+            if (load.loadType === 'Temperature Sensitive' && !journey.vehicleType.includes('Refrigerated')) {
+                issues.push('Requires refrigerated vehicle');
+            }
+            
+            return issues;
+        }
+
+        function findMatches() {
+            matches = [];
+            
+            for (let journey of journeys) {
+                const returnCoords = geocode(journey.returnPostcode);
+                
+                for (let load of loads) {
+                    const pickupCoords = geocode(load.pickupPostcode);
+                    const distance = calculateDistance(
+                        returnCoords.lat, returnCoords.lng,
+                        pickupCoords.lat, pickupCoords.lng
+                    );
+                    
+                    if (distance <= 25) {
+                        const issues = checkCompatibility(journey, load);
+                        const isCompatible = issues.length === 0;
+                        
+                        let score = Math.max(0, 100 - (distance * 3));
+                        
+                        if (!isCompatible) {
+                            score = score * 0.5;
+                        }
+                        
+                        const weightUtil = (load.weight / journey.capacity) * 100;
+                        const palletUtil = (load.pallets / journey.pallets) * 100;
+                        if (weightUtil > 70 && weightUtil < 95) score += 10;
+                        if (palletUtil > 70 && palletUtil < 95) score += 10;
+                        
+                        matches.push({
+                            id: journey.id + '-' + load.id,
+                            journey,
+                            load,
+                            distance: distance.toFixed(1),
+                            score: Math.round(score),
+                            compatible: isCompatible,
+                            issues: issues
+                        });
+                    }
+                }
+            }
+            
+            matches.sort((a, b) => b.score - a.score);
+        }
+
+        function updateStats() {
+            const count = currentRole === 'haulier' ? journeys.length : loads.length;
+            document.getElementById('statJourneys').textContent = count;
+            document.getElementById('statMatches').textContent = matches.length;
+            
+            const totalEarnings = matches.reduce((sum, m) => sum + (m.load?.price || 0), 0);
+            document.getElementById('statEarnings').textContent = '£' + totalEarnings.toFixed(0);
+        }
+
+        function renderMatches() {
+            const container = document.getElementById('matchesContainer');
+            
+            if (matches.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div style="font-size: 4rem; opacity: 0.2;">📍</div>
+                        <p>No matches found yet. Add ${currentRole === 'haulier' ? 'journeys' : 'loads'} to see opportunities.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = matches.map(match => `
+                <div class="match-card">
+                    <div class="match-header">
+                        <div class="match-info">
+                            <h3>${currentRole === 'haulier' 
+                                ? `${match.load.reference} - ${match.load.pickupPostcode} → ${match.load.deliveryPostcode}`
+                                : `${match.journey.vehicle} (${match.journey.vehicleType})`
+                            }</h3>
+                            <div class="tags">
+                                <span class="tag">${match.load.loadType || 'Standard'}</span>
+                                <span class="tag ${match.compatible ? '' : 'error'}">${match.compatible ? 'Compatible ✓' : 'Check Requirements'}</span>
+                                ${match.issues.length > 0 ? match.issues.map(issue => `<span class="tag warning">${issue}</span>`).join('') : ''}
+                            </div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div class="match-score">${match.score}</div>
+                            <div style="font-size: 0.75rem; color: #64748b;">MATCH SCORE</div>
+                        </div>
+                    </div>
+                    <div class="match-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Distance</div>
+                            <div class="detail-value">${match.distance} miles</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Price</div>
+                            <div class="detail-value">£${match.load.price}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Weight</div>
+                            <div class="detail-value">${match.load.weight}kg / ${match.journey.capacity}kg</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Pallets</div>
+                            <div class="detail-value">${match.load.pallets} / ${match.journey.pallets} spaces</div>
+                        </div>
+                        ${match.load.requirements.length > 0 ? `
+                        <div class="detail-item" style="grid-column: 1 / -1;">
+                            <div class="detail-label">Requirements</div>
+                            <div class="detail-value">${match.load.requirements.join(', ')}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize
+        renderHaulierForm();
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+vehicle,vehicleType,capacity_kg,palletSpaces,certifications,destination,returnPostcode,returnTime
+AB12 XYZ,Refrigerated (Fridge),24000,26,Temperature Controlled;Tail Lift,Birmingham,M1 1AA,2026-02-16T18:00:00
+CD34 EFG,Curtain-sider,28000,33,,Leicester,M1 1AA,2026-02-16T19:30:00
+GH56 IJK,Box Van,15000,18,FORS Certified;Tail Lift,Liverpool,M1 1AA,2026-02-17T08:00:00
+LM78 NOP,Refrigerated (Freezer),22000,24,Temperature Controlled;ADR (Dangerous Goods),Manchester,B2 4QA,2026-02-17T14:00:00
+QR90 STU,Flatbed,32000,0,Moffett Mounted,Birmingham,LE1 5DB,2026-02-17T16:30:00

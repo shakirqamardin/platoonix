@@ -1,0 +1,6 @@
+reference,pickupPostcode,deliveryPostcode,weight_kg,pallets,loadType,requirements,price
+LD-001,LE1 5DB,M1 2AB,5000,10,Palletized Goods,Tail Lift,285
+LD-002,B2 5QA,M1 1AA,12000,20,Temperature Sensitive,Temperature Controlled;Tail Lift,520
+LD-003,L1 8JQ,B2 4QA,3500,8,Palletized Goods,,195
+LD-004,M1 3HE,LE1 5DB,18000,15,Fragile Items,FORS Certified,340
+LD-005,B2 4AA,L1 8JQ,6500,12,Temperature Sensitive,Temperature Controlled,365
