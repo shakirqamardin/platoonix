@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platoonix - Innovation & Strategy | Direct Haulier Platform</title>
+    <title>Plat∞nix - Direct Haulier Platform</title>
     <style>
         * {
             margin: 0;
@@ -40,9 +40,23 @@
         .logo {
             font-size: 2rem;
             font-weight: 900;
-            color: #00ffc3;
+            color: white;
             letter-spacing: 2px;
             text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .logo .infinity-symbol {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: #5dcdcb;
+            margin: 0 -8px;
+            line-height: 1;
+            transform: scaleX(1.3);
         }
 
         .role-toggle {
@@ -403,7 +417,9 @@
     <div id="app">
         <header class="header">
             <div class="header-content">
-                <div class="logo">PLATOONIX</div>
+                <div class="logo">
+                    PLAT<span class="infinity-symbol">∞</span>NIX
+                </div>
                 <div class="role-toggle">
                     <button class="role-btn active" id="haulierBtn" onclick="switchRole('haulier')">Haulier</button>
                     <button class="role-btn" id="distributorBtn" onclick="switchRole('distributor')">Distributor</button>
@@ -469,7 +485,9 @@
         </div>
 
         <footer>
-            <div style="font-size: 1.25rem; font-weight: 900; color: #00ffc3; letter-spacing: 2px; margin-bottom: 0.5rem;">PLATOONIX</div>
+            <div style="font-size: 1.25rem; font-weight: 900; letter-spacing: 2px; margin-bottom: 0.5rem; display: flex; justify-content: center; align-items: center;">
+                <span style="color: white;">PLAT</span><span style="font-size: 1.5rem; color: #5dcdcb; margin: 0 -4px; transform: scaleX(1.3); display: inline-block;">∞</span><span style="color: white;">NIX</span>
+            </div>
             <p>Direct Haulier-Distributor Platform • Pilot Version</p>
         </footer>
     </div>
