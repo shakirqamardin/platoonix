@@ -32,7 +32,7 @@
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
-            align-items: center;https://github.com/shakirqamardin/platoonix/blob/main/index.html
+            align-items: center;
             flex-wrap: wrap;
             gap: 1rem;
         }
@@ -50,9 +50,9 @@
 
         .logo .infinity-symbol {
             display: inline-flex;
-            align-items: top;
+            align-items: center;
             justify-content: center;
-            font-size: 3rem;
+            font-size: 2rem;
             color: #5dcdcb;
             margin: 0 -4px;
             line-height: 1;
@@ -367,6 +367,41 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
+        }
+
+        .btn-accept {
+            background: #00ffc3;
+            color: #1a2332;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-accept:hover {
+            background: #00e6b0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 255, 195, 0.3);
+        }
+
+        .btn-accept:disabled {
+            background: #cbd5e1;
+            color: #64748b;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .match-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
         }
 
         @media (max-width: 768px) {
@@ -869,7 +904,7 @@
             }
             
             container.innerHTML = matches.map(match => `
-                <div class="match-card">
+                <div class="match-card" id="match-${match.id}">
                     <div class="match-header">
                         <div class="match-info">
                             <h3>${currentRole === 'haulier' 
@@ -911,8 +946,88 @@
                         </div>
                         ` : ''}
                     </div>
+                    <div class="match-actions">
+                        <button class="btn-accept" onclick="handleAcceptMatch('${match.id}')" id="btn-${match.id}">
+                            ✓ I'm Interested
+                        </button>
+                        <div style="flex: 1; text-align: right; font-size: 0.85rem; color: #64748b; display: flex; align-items: center; justify-content: flex-end;">
+                            Click to notify Platoonix team
+                        </div>
+                    </div>
                 </div>
             `).join('');
+        }
+
+        function handleAcceptMatch(matchId) {
+            const match = matches.find(m => m.id === matchId);
+            if (!match) return;
+            
+            const button = document.getElementById(`btn-${matchId}`);
+            button.disabled = true;
+            button.textContent = 'Sending notification...';
+            
+            // Prepare email content
+            const subject = `MATCH ACCEPTED: ${match.load.reference}`;
+            const body = `
+🎯 NEW MATCH ACCEPTANCE
+━━━━━━━━━━━━━━━━━━━━
+
+Match Score: ${match.score}
+Distance: ${match.distance} miles
+Compatible: ${match.compatible ? 'YES ✓' : 'NO - Issues below'}
+
+HAULIER DETAILS:
+━━━━━━━━━━━━━━━━━━━━
+Vehicle: ${match.journey.vehicle}
+Type: ${match.journey.vehicleType}
+Capacity: ${match.journey.capacity}kg / ${match.journey.pallets} pallets
+Certifications: ${match.journey.certifications.join(', ') || 'None'}
+Destination: ${match.journey.destination}
+Return Base: ${match.journey.returnPostcode}
+Return Time: ${match.journey.returnTime}
+
+LOAD DETAILS:
+━━━━━━━━━━━━━━━━━━━━
+Reference: ${match.load.reference}
+Pickup: ${match.load.pickupPostcode}
+Delivery: ${match.load.deliveryPostcode}
+Weight: ${match.load.weight}kg
+Pallets: ${match.load.pallets}
+Type: ${match.load.loadType}
+Requirements: ${match.load.requirements.join(', ') || 'None'}
+Price: £${match.load.price}
+
+${match.issues.length > 0 ? `
+⚠️ COMPATIBILITY ISSUES:
+${match.issues.map(issue => `- ${issue}`).join('\n')}
+` : ''}
+
+━━━━━━━━━━━━━━━━━━━━
+Action Required: Contact both parties to coordinate pickup/delivery
+            `.trim();
+            
+            // Create mailto link
+            const mailtoLink = `mailto:shakir.qamardin@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            
+            // Open email client
+            window.location.href = mailtoLink;
+            
+            // Update button
+            setTimeout(() => {
+                button.textContent = '✓ Interest Sent';
+                button.style.background = '#10b981';
+                button.style.color = 'white';
+                
+                // Show confirmation
+                const card = document.getElementById(`match-${matchId}`);
+                const confirmation = document.createElement('div');
+                confirmation.style.cssText = 'background: #d1fae5; padding: 1rem; margin-top: 1rem; border-radius: 8px; border-left: 4px solid #10b981;';
+                confirmation.innerHTML = `
+                    <strong style="color: #065f46;">✓ Interest Recorded!</strong><br>
+                    <span style="font-size: 0.9rem; color: #047857;">The Platoonix team has been notified and will contact you to coordinate this match.</span>
+                `;
+                card.appendChild(confirmation);
+            }, 500);
         }
 
         // Initialize
