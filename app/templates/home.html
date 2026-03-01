@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Platonix · Backhaul Logistics Console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <style>
+      .tab-panel { display: none; }
+      .tab-panel.active { display: block; }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-100" style="background: linear-gradient(180deg, #0c1929 0%, #0f172a 12rem, #0f172a 100%);">
+    <div class="max-w-6xl mx-auto px-4 py-6">
+      <header class="mb-6 flex items-center justify-between py-3 px-4 -mx-4 sm:mx-0 sm:px-4 rounded-xl" style="background-color: #0c1929;">
+        <div class="flex items-center gap-4">
+          <img src="/static/logo.png" alt="Platonix" class="h-12 w-auto object-contain" />
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight">Backhaul Logistics Console</h1>
+            <p class="text-sm text-slate-400">Hauliers and distributors – add data, find loads, get alerts.</p>
+          </div>
+        </div>
+        <a href="/docs" class="inline-flex items-center rounded-md bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-100 hover:bg-slate-700 border border-slate-700">API Docs</a>
+      </header>
+
+      {% if uploaded is not none or upload_errors %}
+      <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800/80 px-4 py-2 text-sm">
+        {% if uploaded is not none and uploaded > 0 %}<p class="text-emerald-300">Bulk upload: <strong>{{ uploaded }}</strong> {{ upload_type }} created.</p>{% endif %}
+        {% if upload_errors and upload_errors > 0 %}<p class="text-amber-300">Some rows had errors ({{ upload_errors }}).</p>{% endif %}
+      </div>
+      {% endif %}
+
+      <!-- 1. Add data – one section, three tabs (Hauliers & vehicles | Loads | Planned routes) -->
+      <section class="mb-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        <h2 class="text-lg font-semibold mb-3">Add data</h2>
+        <p class="text-xs text-slate-400 mb-3">Add one at a time below, or bulk upload a file in the relevant tab.</p>
+        <div class="flex flex-wrap gap-1 mb-3 border-b border-slate-700 pb-2">
+          <label class="tab-label rounded px-2 py-1 text-sm cursor-pointer bg-emerald-900/40 text-slate-100 border border-slate-600">
+            <input type="radio" name="add-tab" class="sr-only" value="hauliers-vehicles" checked /> Hauliers &amp; vehicles
+          </label>
+          <label class="tab-label rounded px-2 py-1 text-sm cursor-pointer bg-slate-800/60 text-slate-300 hover:bg-slate-700 border border-transparent">
+            <input type="radio" name="add-tab" class="sr-only" value="loads" /> Loads
+          </label>
+          <label class="tab-label rounded px-2 py-1 text-sm cursor-pointer bg-slate-800/60 text-slate-300 hover:bg-slate-700 border border-transparent">
+            <input type="radio" name="add-tab" class="sr-only" value="planned" /> Planned routes
+          </label>
+        </div>
+        <div class="tab-content">
+          <!-- Tab 1: Hauliers & vehicles (one place: add haulier, add vehicle, or bulk upload) -->
+          <div class="tab-panel active" data-tab="hauliers-vehicles">
+            <p class="text-xs text-slate-400 mb-2">Add a haulier (company), then add their vehicles. Or bulk upload a CSV/Excel.</p>
+            <div class="space-y-4 mb-3">
+              <div>
+                <span class="text-xs font-medium text-slate-500 block mb-1">Add one haulier</span>
+                <form method="post" action="/hauliers" class="flex flex-wrap items-end gap-2">
+                  <input name="name" required placeholder="Name" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-40" />
+                  <input name="contact_email" type="email" required placeholder="Email" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-44" />
+                  <input name="contact_phone" placeholder="Phone" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-28" />
+                  <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add haulier</button>
+                </form>
+              </div>
+              <div>
+                <span class="text-xs font-medium text-slate-500 block mb-1">Add one vehicle (pick haulier first)</span>
+                <form method="post" action="/vehicles" class="flex flex-wrap items-end gap-2">
+                  <select name="haulier_id" required class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5"><option value="">Haulier</option>{% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}</select>
+                  <input name="registration" required placeholder="Reg" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-24" />
+                  <select name="vehicle_type" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5"><option value="artic">Artic</option><option value="rigid">Rigid</option><option value="van">Van</option></select>
+                  <select name="trailer_type" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5"><option value="">Trailer</option><option value="curtain_sider">Curtain sider</option><option value="box">Box</option><option value="flatbed">Flatbed</option><option value="refrigerated">Refrigerated</option><option value="tautliner">Tautliner</option><option value="tanker">Tanker</option><option value="tipper">Tipper</option><option value="low_loader">Low loader</option><option value="other">Other</option></select>
+                  <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add vehicle</button>
+                </form>
+              </div>
+              <div class="border-t border-slate-700 pt-2">
+                <span class="text-xs font-medium text-slate-500 block mb-1">Or bulk upload</span>
+                <span class="text-xs text-slate-500 mr-2">Templates:</span>
+                <a href="/download-templates/hauliers" class="text-xs text-emerald-400 hover:underline mr-1">Hauliers</a>
+                <a href="/download-templates/vehicles" class="text-xs text-emerald-400 hover:underline mr-1">Vehicles</a>
+                <form method="post" action="/upload" enctype="multipart/form-data" class="inline-flex flex-wrap items-center gap-2 mt-1">
+                  <select name="type" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5">
+                    <option value="hauliers">Hauliers</option>
+                    <option value="vehicles">Vehicles</option>
+                  </select>
+                  <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="text-sm file:rounded file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-slate-100" />
+                  <button type="submit" class="rounded bg-slate-600 px-2 py-1.5 text-sm text-white hover:bg-slate-500">Upload</button>
+                </form>
+              </div>
+            </div>
+            <ul class="text-sm max-h-28 overflow-auto text-slate-300 space-y-0.5">
+              <li class="text-slate-500 font-medium">Hauliers:</li>
+              {% for h in hauliers %}<li class="ml-2">{{ h.id }} · {{ h.name }} · {{ h.contact_email }}</li>{% endfor %}
+              {% if not hauliers %}<li class="ml-2 text-slate-500">None yet.</li>{% endif %}
+              <li class="text-slate-500 font-medium mt-1">Vehicles:</li>
+              {% for v in vehicles %}<li class="ml-2">{{ v.id }} · {{ v.registration }} · {{ v.vehicle_type }}{% if v.trailer_type %} · {{ v.trailer_type }}{% endif %}</li>{% endfor %}
+              {% if not vehicles %}<li class="ml-2 text-slate-500">None yet.</li>{% endif %}
+            </ul>
+          </div>
+          <!-- Tab 2: Loads (add one or bulk upload) -->
+          <div class="tab-panel" data-tab="loads">
+            <p class="text-xs text-slate-400 mb-2">Add one load or bulk upload a file.</p>
+            <div class="space-y-3 mb-3">
+              <div>
+                <span class="text-xs font-medium text-slate-500 block mb-1">Add one load</span>
+                <form method="post" action="/loads" class="flex flex-wrap items-end gap-2">
+                  <input name="shipper_name" required placeholder="Shipper" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-36" />
+                  <input name="pickup_postcode" required placeholder="Pickup" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-24" />
+                  <input name="delivery_postcode" required placeholder="Delivery" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-24" />
+                  <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add load</button>
+                </form>
+              </div>
+              <div class="border-t border-slate-700 pt-2">
+                <span class="text-xs font-medium text-slate-500 block mb-1">Or bulk upload</span>
+                <a href="/download-templates/loads" class="text-xs text-emerald-400 hover:underline mr-2">Loads template</a>
+                <form method="post" action="/upload" enctype="multipart/form-data" class="inline-flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="type" value="loads" />
+                  <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="text-sm file:rounded file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-slate-100" />
+                  <button type="submit" class="rounded bg-slate-600 px-2 py-1.5 text-sm text-white hover:bg-slate-500">Upload</button>
+                </form>
+              </div>
+            </div>
+            <ul class="text-sm max-h-32 overflow-auto text-slate-300 space-y-0.5">{% for l in loads %}<li>{{ l.id }} · {{ l.shipper_name }} · {{ l.pickup_postcode }} → {{ l.delivery_postcode }} · {{ l.status }}</li>{% endfor %}{% if not loads %}<li class="text-slate-500">No loads yet.</li>{% endif %}</ul>
+          </div>
+          <div class="tab-panel" data-tab="planned">
+            <p class="text-xs text-slate-400 mb-2">Loader: recurring load · Haulier: where you're empty each week.</p>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <form method="post" action="/planned-loads" class="space-y-2 mb-2">
+                  <div class="flex flex-wrap gap-2">
+                    <input name="shipper_name" required placeholder="Shipper" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 flex-1 min-w-0" />
+                    <input name="pickup_postcode" required placeholder="Pickup" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-24" />
+                    <input name="delivery_postcode" required placeholder="Delivery" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-24" />
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <select name="day_of_week" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5">{% for d in range(7) %}<option value="{{ d }}">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d] }}</option>{% endfor %}</select>
+                    <select name="recurrence" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5"><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select>
+                    <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add planned load</button>
+                  </div>
+                </form>
+                <ul class="text-xs text-slate-400 max-h-20 overflow-auto">{% for pl in planned_loads %}<li>{{ pl.shipper_name }} · {{ pl.pickup_postcode }}→{{ pl.delivery_postcode }} · {{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][pl.day_of_week] }}</li>{% endfor %}{% if not planned_loads %}<li>None</li>{% endif %}</ul>
+              </div>
+              <div>
+                <form method="post" action="/haulier-routes" class="space-y-2 mb-2">
+                  <div class="flex flex-wrap gap-2">
+                    <select name="haulier_id" required class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5"><option value="">Haulier</option>{% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}</select>
+                    <select name="vehicle_id" required class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5"><option value="">Vehicle</option>{% for v in vehicles %}<option value="{{ v.id }}">{{ v.registration }}</option>{% endfor %}</select>
+                    <input name="empty_at_postcode" required placeholder="Empty at postcode" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-28" />
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <select name="day_of_week" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5">{% for d in range(7) %}<option value="{{ d }}">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d] }}</option>{% endfor %}</select>
+                    <select name="recurrence" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5"><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select>
+                    <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add my route</button>
+                  </div>
+                </form>
+                <ul class="text-xs text-slate-400 max-h-20 overflow-auto">{% for r in haulier_routes %}<li>V{{ r.vehicle_id }} · {{ r.empty_at_postcode }} · {{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][r.day_of_week] }}</li>{% endfor %}{% if not haulier_routes %}<li>None</li>{% endif %}</ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Find backhaul & matches (one section) -->
+      <section class="mb-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        <h2 class="text-lg font-semibold mb-2">Find backhaul &amp; matches</h2>
+        <p class="text-xs text-slate-400 mb-3">Vehicle + postcode → find loads now or get live alerts. Below: suggested matches from your planned routes.</p>
+        <form method="get" action="/find-backhaul" class="flex flex-wrap items-end gap-3 mb-2">
+          <select id="find-vehicle-id" name="vehicle_id" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 min-w-[10rem]">
+            <option value="">Vehicle</option>
+            {% for v in vehicles %}
+            <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %}>{{ v.registration }} · {{ v.vehicle_type }}{% if v.trailer_type %} · {{ v.trailer_type }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <input id="find-origin-postcode" name="origin_postcode" value="{{ find_origin_postcode or '' }}" placeholder="Your postcode" class="rounded border border-slate-700 bg-slate-900 text-sm px-2 py-1.5 w-28" />
+          <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Find loads</button>
+          <button type="button" id="start-alerts-btn" class="rounded bg-amber-600 px-2 py-1.5 text-sm text-white hover:bg-amber-500">Live alerts</button>
+          <button type="button" id="stop-alerts-btn" class="rounded border border-slate-600 px-2 py-1.5 text-sm text-slate-300 hidden">Stop</button>
+          <span id="alerts-status" class="text-xs text-slate-500"></span>
+        </form>
+        <div id="alerts-list" class="mb-3 space-y-1 max-h-28 overflow-auto text-sm hidden"></div>
+        {% if matching_results is not none %}
+        <div class="mb-3 text-sm">
+          {% if matching_results %}
+          <p class="text-emerald-300 mb-1">{{ matching_results|length }} load(s) within 25 mi.</p>
+          <ul class="space-y-1 max-h-32 overflow-auto">
+            {% for m in matching_results %}
+            <li class="flex justify-between text-slate-300"><span>Load {{ m.load.id }} · {{ m.load.shipper_name }} · {{ m.load.pickup_postcode }}→{{ m.load.delivery_postcode }}</span><span class="text-emerald-400 text-xs">{{ m.distance_miles }} mi</span></li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-slate-400">No matching loads.</p>
+          {% endif %}
+        </div>
+        {% endif %}
+        <div class="border-t border-slate-700 pt-2">
+          <p class="text-xs font-medium text-slate-400 mb-1">Suggested for you (show interest)</p>
+          {% if load_interests %}
+          <ul class="space-y-1 text-sm max-h-36 overflow-auto">
+            {% for i in load_interests %}
+            <li class="flex justify-between items-center">
+              <span class="text-slate-300">{% if i.planned_load_id %}Planned {{ i.planned_load_id }}{% else %}Load {{ i.load_id }}{% endif %} · H{{ i.haulier_id }} V{{ i.vehicle_id }} <span class="rounded px-1.5 py-0.5 text-xs {% if i.status == 'suggested' %}bg-amber-900/50 text-amber-200{% elif i.status == 'expressed' %}bg-emerald-900/50 text-emerald-200{% else %}bg-slate-700{% endif %}">{{ i.status }}</span></span>
+              {% if i.status == 'suggested' %}
+              <form method="post" action="/show-interest" class="inline">
+                <input type="hidden" name="haulier_id" value="{{ i.haulier_id }}" /><input type="hidden" name="vehicle_id" value="{{ i.vehicle_id }}" />{% if i.planned_load_id %}<input type="hidden" name="planned_load_id" value="{{ i.planned_load_id }}" />{% endif %}{% if i.load_id %}<input type="hidden" name="load_id" value="{{ i.load_id }}" />{% endif %}
+                <button type="submit" class="rounded bg-amber-600 px-1.5 py-0.5 text-xs text-white">Show interest</button>
+              </form>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-slate-500 text-sm">No suggested matches. Add planned loads and haulier routes.</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <!-- 4. Jobs & payments -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        <h2 class="text-lg font-semibold mb-2">Backhaul jobs &amp; payments</h2>
+        <p class="text-xs text-slate-500 mb-2">Platform fee: <strong>{{ platform_fee_percent }}%</strong> of job value (set <code>PLATFORM_FEE_PERCENT=0</code> for pilot).</p>
+        {% if jobs %}
+        <ul class="text-sm space-y-2 max-h-48 overflow-auto">
+          {% for j in jobs %}
+          <li class="border border-slate-800 rounded px-2 py-1.5">
+            <span class="font-medium">Job {{ j.id }} · V{{ j.vehicle_id }} · Load {{ j.load_id }}</span>
+            {% for p in payments if p.backhaul_job_id == j.id %}
+            <span class="ml-2 text-xs text-slate-400">£{{ '%.2f' % p.net_payout_gbp }} <span class="rounded px-1 border text-[10px] {% if p.status == 'paid_out' %}border-emerald-500 text-emerald-300{% else %}border-amber-400 text-amber-200{% endif %}">{{ p.status }}</span></span>
+            {% endfor %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-slate-500 text-sm">No backhaul jobs yet.</p>
+        {% endif %}
+      </section>
+    </div>
+    <script>
+      (function () {
+        (function () {
+          var radios = document.querySelectorAll('input[name="add-tab"]');
+          var labels = document.querySelectorAll('.tab-label');
+          function switchTab() {
+            var v = document.querySelector('input[name="add-tab"]:checked');
+            var id = v ? v.value : 'hauliers-vehicles';
+            document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+            var panel = document.querySelector('.tab-panel[data-tab="' + id + '"]');
+            if (panel) panel.classList.add('active');
+            labels.forEach(function (l, i) {
+              var r = l.querySelector('input');
+              if (r && r.checked) { l.classList.add('bg-emerald-900/40', 'text-slate-100', 'border-slate-600'); l.classList.remove('bg-slate-800/60', 'border-transparent'); }
+              else { l.classList.remove('bg-emerald-900/40', 'text-slate-100', 'border-slate-600'); l.classList.add('bg-slate-800/60', 'border-transparent'); }
+            });
+          }
+          radios.forEach(function (r) { r.addEventListener('change', switchTab); });
+          switchTab();
+        })();
+
+        var startBtn = document.getElementById('start-alerts-btn');
+        var stopBtn = document.getElementById('stop-alerts-btn');
+        var statusEl = document.getElementById('alerts-status');
+        var listEl = document.getElementById('alerts-list');
+        var vehicleSelect = document.getElementById('find-vehicle-id');
+        var postcodeInput = document.getElementById('find-origin-postcode');
+        var eventSource = null;
+        function showStatus(msg) { if (statusEl) statusEl.textContent = msg; }
+        if (startBtn) {
+          startBtn.addEventListener('click', function () {
+            var vehicleId = vehicleSelect && vehicleSelect.value;
+            var postcode = postcodeInput && postcodeInput.value && postcodeInput.value.trim();
+            if (!vehicleId || !postcode) { showStatus('Pick vehicle and postcode.'); return; }
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource('/api/alerts/stream?vehicle_id=' + encodeURIComponent(vehicleId) + '&origin_postcode=' + encodeURIComponent(postcode));
+            showStatus('Listening…');
+            if (listEl) listEl.classList.remove('hidden');
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+            var dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+            eventSource.onmessage = function (e) {
+              try {
+                var d = JSON.parse(e.data);
+                if (listEl) {
+                  var li = document.createElement('li');
+                  if (d.type === 'new_load') li.innerHTML = '<strong>New load ' + d.load_id + '</strong> ' + (d.pickup_postcode || '') + '→' + (d.delivery_postcode || '');
+                  else if (d.type === 'planned_load_match') li.innerHTML = '<strong>Planned match (' + (dayNames[d.day_of_week] || '') + ')</strong> ' + (d.pickup_postcode || '') + '→' + (d.delivery_postcode || '');
+                  else return;
+                  li.className = 'border border-slate-700 rounded px-2 py-1 bg-slate-800/80';
+                  listEl.insertBefore(li, listEl.firstChild);
+                }
+              } catch (err) {}
+            };
+            eventSource.onerror = function () { showStatus('Closed'); stopAlerts(); };
+          });
+        }
+        function stopAlerts() {
+          if (eventSource) { eventSource.close(); eventSource = null; }
+          if (startBtn) startBtn.classList.remove('hidden');
+          if (stopBtn) stopBtn.classList.add('hidden');
+        }
+        if (stopBtn) stopBtn.addEventListener('click', stopAlerts);
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,2 @@
+shipper_name,pickup_postcode,delivery_postcode,pickup_window_start,pickup_window_end,weight_kg,volume_m3,budget_gbp
+Example Shipper,SW1A1AA,B11AA,2026-03-01 09:00,2026-03-01 11:00,10000,30,350
