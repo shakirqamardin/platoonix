@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -15,6 +16,19 @@ app = FastAPI(
 static_dir = Path(__file__).resolve().parent.parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.on_event("startup")
+def check_db_and_create_tables():
+    """Check DB connection and create tables if missing (no Shell needed on free tier)."""
+    try:
+        from app.database import Base, engine
+        from app import models  # noqa: F401 - register models with Base
+        engine.connect().close()
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"Startup error: {e!r}", file=sys.stderr)
+        raise
 
 
 @app.get("/health", tags=["meta"])
