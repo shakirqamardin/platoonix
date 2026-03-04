@@ -47,6 +47,16 @@ def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     uploaded = request.query_params.get("uploaded")
     errors_count = request.query_params.get("errors")
     upload_type = request.query_params.get("upload_type")
+    delete_error = request.query_params.get("delete_error")
+    deleted = request.query_params.get("deleted")
+    try:
+        open_loads_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
+    except Exception:
+        open_loads_count = 0
+    try:
+        total_payout = float(sum((p.net_payout_gbp or 0) for p in payments))
+    except Exception:
+        total_payout = 0.0
 
     return templates.TemplateResponse(
         "home.html",
@@ -63,26 +73,86 @@ def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
             "uploaded": int(uploaded) if uploaded and uploaded.isdigit() else None,
             "upload_errors": int(errors_count) if errors_count and errors_count.isdigit() else None,
             "upload_type": upload_type or "",
+            "delete_error": delete_error,
+            "deleted": deleted,
+            "open_loads_count": open_loads_count,
+            "total_payout": total_payout,
             "matching_results": None,
             "find_vehicle_id": "",
             "find_origin_postcode": "",
+            "postcode_lookup_failed": False,
+            "match_diagnostic": None,
             "platform_fee_percent": get_settings().platform_fee_percent,
         },
     )
 
 
+def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
+    """Explain why each open load did or didn't match (for 'no matches' debugging)."""
+    from app.services.geocode import get_lat_lon
+    from app.services.distance import haversine_miles
+    from app.config import get_settings
+
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    if not vehicle:
+        return {"origin_ok": False, "origin_reason": "Vehicle not found", "loads": []}
+    origin_ll = get_lat_lon(origin_postcode)
+    if not origin_ll:
+        return {"origin_ok": False, "origin_reason": "Postcode lookup failed", "loads": []}
+    radius = get_settings().default_backhaul_radius_miles
+    open_loads = (
+        db.query(models.Load)
+        .filter(models.Load.status == models.LoadStatusEnum.OPEN.value)
+        .all()
+    )
+    rows = []
+    for load in open_loads:
+        pickup_ll = get_lat_lon(load.pickup_postcode)
+        if not pickup_ll:
+            rows.append({"load": load, "reason": "Pickup postcode lookup failed", "distance_miles": None})
+            continue
+        dist = round(haversine_miles(origin_ll[0], origin_ll[1], pickup_ll[0], pickup_ll[1]), 1)
+        if dist > radius:
+            rows.append({"load": load, "reason": f"{dist} mi (over {radius} mi limit)", "distance_miles": dist})
+            continue
+        req = load.requirements or {}
+        required_trailer = req.get("trailer_type") if isinstance(req, dict) else None
+        if required_trailer not in (None, ""):
+            if (vehicle.trailer_type or "").strip().lower() != str(required_trailer).strip().lower():
+                rows.append({"load": load, "reason": f"Trailer type (need {required_trailer})", "distance_miles": dist})
+                continue
+        if vehicle.capacity_weight_kg and vehicle.capacity_weight_kg > 0 and (load.weight_kg or 0) > vehicle.capacity_weight_kg:
+            rows.append({"load": load, "reason": "Load too heavy for vehicle", "distance_miles": dist})
+            continue
+        if vehicle.capacity_volume_m3 and vehicle.capacity_volume_m3 > 0 and (load.volume_m3 or 0) > vehicle.capacity_volume_m3:
+            rows.append({"load": load, "reason": "Load too large for vehicle", "distance_miles": dist})
+            continue
+        rows.append({"load": load, "reason": None, "distance_miles": dist})  # would match
+    return {"origin_ok": True, "origin_reason": None, "loads": rows}
+
+
 @router.get("/find-backhaul", response_class=HTMLResponse)
 def find_backhaul_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     """Run smart matching and render home with matching_results (vehicle_id + origin_postcode from query)."""
+    from app.services.geocode import get_lat_lon
+
     vehicle_id_raw = request.query_params.get("vehicle_id", "").strip()
     origin_postcode = (request.query_params.get("origin_postcode") or "").strip()
 
     matching_results = None
+    postcode_lookup_failed = False
+    match_diagnostic = None
     if vehicle_id_raw and origin_postcode:
         try:
             vehicle_id = int(vehicle_id_raw)
             pairs = find_matching_loads(vehicle_id, origin_postcode, db)
             matching_results = [{"load": load, "distance_miles": dist} for load, dist in pairs]
+            if not matching_results:
+                open_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
+                if open_count > 0:
+                    if get_lat_lon(origin_postcode) is None:
+                        postcode_lookup_failed = True
+                    match_diagnostic = _match_diagnostic(vehicle_id, origin_postcode, db)
         except ValueError:
             matching_results = []
 
@@ -94,6 +164,14 @@ def find_backhaul_page(request: Request, db: Session = Depends(get_db)) -> HTMLR
     planned_loads = db.query(models.PlannedLoad).order_by(models.PlannedLoad.created_at.desc()).all()
     haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
     load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
+    try:
+        open_loads_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
+    except Exception:
+        open_loads_count = 0
+    try:
+        total_payout = float(sum((p.net_payout_gbp or 0) for p in payments))
+    except Exception:
+        total_payout = 0.0
 
     return templates.TemplateResponse(
         "home.html",
@@ -110,9 +188,15 @@ def find_backhaul_page(request: Request, db: Session = Depends(get_db)) -> HTMLR
             "uploaded": None,
             "upload_errors": None,
             "upload_type": "",
+            "delete_error": None,
+            "deleted": None,
+            "open_loads_count": open_loads_count,
+            "total_payout": total_payout,
             "matching_results": matching_results,
             "find_vehicle_id": vehicle_id_raw,
             "find_origin_postcode": origin_postcode,
+            "postcode_lookup_failed": postcode_lookup_failed,
+            "match_diagnostic": match_diagnostic,
             "platform_fee_percent": get_settings().platform_fee_percent,
         },
     )
@@ -282,6 +366,60 @@ async def create_haulier_route_form(
         if planned_load_matches_route(pl, route, db):
             notify_route_match(pl, route, db)
     return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/delete-haulier/{haulier_id}", response_class=RedirectResponse)
+def delete_haulier_form(
+    haulier_id: int,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Delete a haulier (only if they have no vehicles)."""
+    haulier = db.get(models.Haulier, haulier_id)
+    if not haulier:
+        return RedirectResponse(url="/?delete_error=Haulier+not+found", status_code=303)
+    if db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier_id).first():
+        return RedirectResponse(url="/?delete_error=Delete+vehicles+first", status_code=303)
+    db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier_id).delete()
+    db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier_id).delete()
+    db.delete(haulier)
+    db.commit()
+    return RedirectResponse(url="/?deleted=haulier", status_code=303)
+
+
+@router.post("/delete-vehicle/{vehicle_id}", response_class=RedirectResponse)
+def delete_vehicle_form(
+    vehicle_id: int,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Delete a vehicle (only if not used in jobs or planned routes)."""
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    if not vehicle:
+        return RedirectResponse(url="/?delete_error=Vehicle+not+found", status_code=303)
+    if db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id == vehicle_id).first():
+        return RedirectResponse(url="/?delete_error=Vehicle+has+jobs", status_code=303)
+    if db.query(models.HaulierRoute).filter(models.HaulierRoute.vehicle_id == vehicle_id).first():
+        return RedirectResponse(url="/?delete_error=Remove+from+planned+routes+first", status_code=303)
+    db.query(models.LoadInterest).filter(models.LoadInterest.vehicle_id == vehicle_id).delete()
+    db.delete(vehicle)
+    db.commit()
+    return RedirectResponse(url="/?deleted=vehicle", status_code=303)
+
+
+@router.post("/delete-load/{load_id}", response_class=RedirectResponse)
+def delete_load_form(
+    load_id: int,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Delete a load (only if it has no backhaul jobs)."""
+    load = db.get(models.Load, load_id)
+    if not load:
+        return RedirectResponse(url="/?delete_error=Load+not+found", status_code=303)
+    if db.query(models.BackhaulJob).filter(models.BackhaulJob.load_id == load_id).first():
+        return RedirectResponse(url="/?delete_error=Load+has+jobs", status_code=303)
+    db.query(models.LoadInterest).filter(models.LoadInterest.load_id == load_id).delete()
+    db.delete(load)
+    db.commit()
+    return RedirectResponse(url="/?deleted=load", status_code=303)
 
 
 @router.post("/show-interest", response_class=RedirectResponse)

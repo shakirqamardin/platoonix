@@ -42,3 +42,22 @@ def list_hauliers(
 ) -> list[models.Haulier]:
     return db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
 
+
+@router.delete("/{haulier_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_haulier(
+    haulier_id: int,
+    db: Session = Depends(get_db),
+) -> None:
+    haulier = db.get(models.Haulier, haulier_id)
+    if not haulier:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Haulier not found")
+    if db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier_id).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete: delete this haulier's vehicles first",
+        )
+    db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier_id).delete()
+    db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier_id).delete()
+    db.delete(haulier)
+    db.commit()
+

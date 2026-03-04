@@ -51,3 +51,20 @@ def list_loads(
 ) -> list[models.Load]:
     return db.query(models.Load).order_by(models.Load.created_at.desc()).all()
 
+
+@router.delete("/{load_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_load(
+    load_id: int,
+    db: Session = Depends(get_db),
+) -> None:
+    load = db.get(models.Load, load_id)
+    if not load:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Load not found")
+    if db.query(models.BackhaulJob).filter(models.BackhaulJob.load_id == load_id).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete: load has backhaul jobs",
+        )
+    db.query(models.LoadInterest).filter(models.LoadInterest.load_id == load_id).delete()
+    db.delete(load)
+    db.commit()

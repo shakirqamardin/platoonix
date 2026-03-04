@@ -75,3 +75,26 @@ def list_vehicles(
 ) -> list[models.Vehicle]:
     return db.query(models.Vehicle).order_by(models.Vehicle.created_at.desc()).all()
 
+
+@router.delete("/{vehicle_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_vehicle(
+    vehicle_id: int,
+    db: Session = Depends(get_db),
+) -> None:
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
+    if db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id == vehicle_id).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete: vehicle has backhaul jobs",
+        )
+    if db.query(models.HaulierRoute).filter(models.HaulierRoute.vehicle_id == vehicle_id).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete: remove vehicle from planned routes first",
+        )
+    db.query(models.LoadInterest).filter(models.LoadInterest.vehicle_id == vehicle_id).delete()
+    db.delete(vehicle)
+    db.commit()
+
