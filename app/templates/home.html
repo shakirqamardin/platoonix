@@ -18,38 +18,46 @@
           <img src="/static/logo.png" alt="Platoonix" class="h-10 w-auto" />
           <span class="text-lg font-semibold">Platoonix</span>
         </div>
-        <div class="flex items-center gap-4 text-sm">
+        <div class="flex items-center gap-4 text-sm flex-wrap">
+          {% if current_user_email %}<span class="text-slate-500">Logged in as <strong class="text-slate-200">{{ current_user_email }}</strong></span>{% endif %}
           <span class="text-slate-400">Open: <strong class="text-white">{{ open_loads_count|default(0) }}</strong></span>
           <span class="text-slate-400">Vehicles: <strong class="text-white">{{ vehicles|length }}</strong></span>
           <span class="text-slate-400">Matched: <strong class="text-white">{{ jobs|length }}</strong></span>
           <span class="text-slate-400">Payouts: <strong class="text-white">£{{ (total_payout|default(0))|round(0) }}</strong></span>
+          <a href="/logout" class="text-slate-400 hover:text-white">Switch user / Sign out</a>
         </div>
       </header>
 
       {% if delete_error %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-amber-200 bg-amber-900/40">{{ delete_error }}</div>{% endif %}
-      {% if deleted %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-emerald-300 bg-emerald-900/30">Deleted {{ deleted }}.</div>{% endif %}
+      {% if deleted %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-emerald-300 bg-emerald-900/30">{% if deleted == 'job' %}Job cancelled. You can now delete the load or vehicle if needed.{% else %}Deleted {{ deleted }}.{% endif %}</div>{% endif %}
+      {% if uploaded is not none and uploaded > 0 %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-emerald-300 bg-emerald-900/30">Uploaded {{ uploaded }} {{ upload_type }}.{% if upload_type == 'loads' %} Matching runs automatically — check the Matches tab.{% endif %}</div>{% endif %}
+      {% if upload_errors and upload_errors > 0 %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-amber-200 bg-amber-900/40">Upload had {{ upload_errors }} error(s).</div>{% endif %}
 
+      {% set initial_section = request.query_params.get("section", "find") %}
       <!-- Category tabs -->
       <nav class="flex flex-wrap gap-1 mb-4 border-b border-slate-700 pb-2">
-        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer bg-emerald-800/60 text-emerald-100 border border-slate-600">
-          <input type="radio" name="section" class="sr-only" value="find" checked /> Find backhaul
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'find' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="find" {{ 'checked' if initial_section == 'find' else '' }} /> Find backhaul
         </label>
-        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700">
-          <input type="radio" name="section" class="sr-only" value="vehicles" /> Vehicles
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'vehicles' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="vehicles" {{ 'checked' if initial_section == 'vehicles' else '' }} /> Vehicles
         </label>
-        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700">
-          <input type="radio" name="section" class="sr-only" value="loads" /> Loads
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'loads' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="loads" {{ 'checked' if initial_section == 'loads' else '' }} /> Loads
         </label>
-        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700">
-          <input type="radio" name="section" class="sr-only" value="routes" /> Routes
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'routes' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="routes" {{ 'checked' if initial_section == 'routes' else '' }} /> Routes
         </label>
-        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700">
-          <input type="radio" name="section" class="sr-only" value="matches" /> Matches
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'matches' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="matches" {{ 'checked' if initial_section == 'matches' else '' }} /> Matches
+        </label>
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'admin' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="admin" {{ 'checked' if initial_section == 'admin' else '' }} /> Admin
         </label>
       </nav>
 
       <!-- Find backhaul -->
-      <section class="section-panel active" data-section="find">
+      <section class="section-panel {{ 'active' if initial_section == 'find' else '' }}" data-section="find">
         <form method="get" action="/find-backhaul" class="flex flex-wrap items-center gap-2 mb-4">
           <select id="find-vehicle-id" name="vehicle_id" required class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm min-w-[10rem]">
             <option value="">Vehicle</option>
@@ -76,12 +84,13 @@
           </table>
           {% else %}
           <p class="text-slate-500 py-2">No matching loads.</p>
-          {% if postcode_lookup_failed %}<p class="text-amber-400 text-xs">Postcode lookup failed. Use full UK postcode.</p>{% endif %}
+          {% if postcode_lookup_failed %}<p class="text-amber-400 text-xs">Your postcode (vehicle location) couldn’t be looked up. Use a full UK postcode, e.g. M1 1AA or NN8 4RR. If it still fails, try from a different network or check the live site can reach the internet.</p>{% endif %}
           {% if match_diagnostic and not match_diagnostic.origin_ok %}<p class="text-amber-400 text-xs">{{ match_diagnostic.origin_reason }}</p>{% endif %}
           {% if match_diagnostic and match_diagnostic.origin_ok and match_diagnostic.loads %}
           <table class="w-full text-sm border-collapse mt-2"><thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2">Route</th><th class="py-2">Why no match</th></tr></thead><tbody>
             {% for row in match_diagnostic.loads %}<tr class="border-b border-slate-800"><td class="py-1">{{ row.load.pickup_postcode }} → {{ row.load.delivery_postcode }}</td><td class="py-1 text-amber-400">{{ row.reason if row.reason else (row.distance_miles|default(0)|round(1)|string + " mi") }}</td></tr>{% endfor %}
           </tbody></table>
+          <p class="text-slate-500 text-xs mt-1">If “Pickup postcode lookup failed”, the load’s pickup postcode isn’t in our database—check for typos or use another UK postcode.</p>
           {% endif %}
           {% endif %}
         </div>
@@ -89,7 +98,7 @@
       </section>
 
       <!-- Vehicles -->
-      <section class="section-panel" data-section="vehicles">
+      <section class="section-panel {{ 'active' if initial_section == 'vehicles' else '' }}" data-section="vehicles">
         <div class="flex flex-wrap items-center gap-2 mb-3">
           <form method="post" action="/hauliers" class="inline-flex flex-wrap gap-2">
             <input name="name" required placeholder="Company" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-28" />
@@ -101,6 +110,7 @@
           <form method="post" action="/vehicles" class="inline-flex flex-wrap gap-2">
             <select name="haulier_id" required class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm">{% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}<option value="" disabled>Company</option></select>
             <input name="registration" required placeholder="Reg" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+            <input name="base_postcode" placeholder="Base postcode (for auto-match)" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-32" title="Where this vehicle is usually empty; loads near here will match automatically" />
             <select name="vehicle_type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="artic">Artic</option><option value="rigid">Rigid</option><option value="van">Van</option></select>
             <select name="trailer_type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="">Trailer</option><option value="curtain_sider">Curtain</option><option value="box">Box</option><option value="flatbed">Flatbed</option><option value="other">Other</option></select>
             <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add vehicle</button>
@@ -120,7 +130,7 @@
       </section>
 
       <!-- Loads -->
-      <section class="section-panel" data-section="loads">
+      <section class="section-panel {{ 'active' if initial_section == 'loads' else '' }}" data-section="loads">
         <div class="flex flex-wrap items-center gap-2 mb-3">
           <form method="post" action="/loads" class="inline-flex flex-wrap gap-2">
             <input name="shipper_name" required placeholder="Shipper" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-28" />
@@ -128,7 +138,13 @@
             <input name="delivery_postcode" required placeholder="Delivery" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
             <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add load</button>
           </form>
-          <span class="text-slate-500 text-xs"><a href="/download-templates/loads" download target="_blank" class="template-download text-emerald-500 hover:underline">CSV template</a></span>
+          <span class="text-slate-500 text-xs">|</span>
+          <form method="post" action="/upload" enctype="multipart/form-data" class="inline-flex flex-wrap gap-2 items-center">
+            <input type="hidden" name="type" value="loads" />
+            <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300" required />
+            <button type="submit" class="rounded bg-slate-600 hover:bg-slate-500 px-2 py-1.5 text-sm text-white">Bulk upload loads</button>
+          </form>
+          <span class="text-slate-500 text-xs"><a href="/download-templates/loads" download target="_blank" class="template-download text-emerald-500 hover:underline">CSV template</a> (several rows = matching runs for each)</span>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm border-collapse">
@@ -142,7 +158,7 @@
       </section>
 
       <!-- Routes -->
-      <section class="section-panel" data-section="routes">
+      <section class="section-panel {{ 'active' if initial_section == 'routes' else '' }}" data-section="routes">
         <p class="text-slate-400 text-sm mb-2">Haulier: where I’m empty · Loader: recurring load</p>
         <div class="grid md:grid-cols-2 gap-4 mb-4">
           <div>
@@ -173,27 +189,59 @@
       </section>
 
       <!-- Matches -->
-      <section class="section-panel" data-section="matches">
-        <p class="text-slate-400 text-sm mb-2">Suggested for you · Backhaul jobs</p>
+      <section class="section-panel {{ 'active' if initial_section == 'matches' else '' }}" data-section="matches">
+        <h2 class="text-lg font-semibold mb-1">Matches</h2>
+        <p class="text-slate-400 text-sm mb-4">Suggested loads show <strong>collection</strong> and <strong>delivery</strong> postcodes. Click Interest to express interest; loader accepts to create a job. Jobs below are confirmed backhauls.</p>
+
+        <p class="text-slate-300 font-medium text-sm mb-2">Suggested matches</p>
         <div class="overflow-x-auto mb-4">
           <table class="w-full text-sm border-collapse">
-            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-4">Load / Planned</th><th class="py-2 pr-4">Status</th><th class="py-2 w-24"></th></tr></thead>
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-3">Shipper</th><th class="py-2 pr-3">Collection (pickup)</th><th class="py-2 pr-3">Delivery</th><th class="py-2 pr-3">Status</th><th class="py-2 w-24"></th></tr></thead>
             <tbody>
-              {% for i in load_interests %}<tr class="border-b border-slate-800"><td class="py-1.5 pr-4">{% if i.planned_load_id %}Planned {{ i.planned_load_id }}{% else %}Load {{ i.load_id }}{% endif %}</td><td class="py-1.5 pr-4"><span class="rounded px-1.5 py-0.5 text-xs {% if i.status == 'suggested' %}bg-amber-900/50 text-amber-200{% else %}bg-emerald-900/50 text-emerald-200{% endif %}">{{ i.status }}</span></td><td class="py-1.5">{% if i.status == 'suggested' %}<form method="post" action="/show-interest" class="inline"><input type="hidden" name="haulier_id" value="{{ i.haulier_id }}" /><input type="hidden" name="vehicle_id" value="{{ i.vehicle_id }}" />{% if i.planned_load_id %}<input type="hidden" name="planned_load_id" value="{{ i.planned_load_id }}" />{% endif %}{% if i.load_id %}<input type="hidden" name="load_id" value="{{ i.load_id }}" />{% endif %}<button type="submit" class="rounded bg-amber-600 px-2 py-0.5 text-xs text-white">Interest</button></form>{% endif %}</td></tr>{% endfor %}
+              {% for row in load_interests_display %}<tr class="border-b border-slate-800"><td class="py-2 pr-3">{{ row.shipper or row.label }}</td><td class="py-2 pr-3 font-mono text-emerald-200">{{ row.collection }}</td><td class="py-2 pr-3 font-mono text-slate-200">{{ row.delivery }}</td><td class="py-2 pr-3"><span class="rounded px-1.5 py-0.5 text-xs {% if row.interest.status == 'suggested' %}bg-amber-900/50 text-amber-200{% else %}bg-emerald-900/50 text-emerald-200{% endif %}">{{ row.interest.status }}</span></td><td class="py-2">{% if row.interest.status == 'suggested' %}<form method="post" action="/show-interest" class="inline"><input type="hidden" name="haulier_id" value="{{ row.interest.haulier_id }}" /><input type="hidden" name="vehicle_id" value="{{ row.interest.vehicle_id }}" />{% if row.interest.planned_load_id %}<input type="hidden" name="planned_load_id" value="{{ row.interest.planned_load_id }}" />{% endif %}{% if row.interest.load_id %}<input type="hidden" name="load_id" value="{{ row.interest.load_id }}" />{% endif %}<button type="submit" class="rounded bg-amber-600 hover:bg-amber-500 px-2 py-1 text-xs text-white">Interest</button></form>{% endif %}</td></tr>{% endfor %}
             </tbody>
           </table>
         </div>
-        {% if not load_interests %}<p class="text-slate-500 text-sm mb-4">No suggested matches.</p>{% endif %}
+        {% if not load_interests_display %}<p class="text-slate-500 text-sm mb-4">No suggested matches. Add loads and vehicles with base postcodes (or planned routes) so they match automatically.</p>{% endif %}
+        <p class="text-slate-300 font-medium text-sm mb-2">Backhaul jobs (confirmed)</p>
         <div class="overflow-x-auto">
           <table class="w-full text-sm border-collapse">
-            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-4">Job</th><th class="py-2 pr-4">Vehicle · Load</th><th class="py-2 pr-4">Payment</th></tr></thead>
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-3">Job</th><th class="py-2 pr-3">Vehicle · Load</th><th class="py-2 pr-3">Collection → Delivery</th><th class="py-2 pr-3">Payment</th><th class="py-2 w-20"></th></tr></thead>
             <tbody>
-              {% for j in jobs %}<tr class="border-b border-slate-800"><td class="py-1.5 pr-4">{{ j.id }}</td><td class="py-1.5 pr-4">V{{ j.vehicle_id }} · L{{ j.load_id }}</td><td class="py-1.5 pr-4">{% for p in payments %}{% if p.backhaul_job_id == j.id %}£{{ (p.net_payout_gbp or 0)|round(2) }} <span class="text-xs {% if p.status == 'paid_out' %}text-emerald-400{% else %}text-amber-400{% endif %}">{{ p.status }}</span>{% endif %}{% endfor %}</td></tr>{% endfor %}
+              {% for j in jobs %}<tr class="border-b border-slate-800"><td class="py-2 pr-3">{{ j.id }}</td><td class="py-2 pr-3">V{{ j.vehicle_id }} · L{{ j.load_id }}</td><td class="py-2 pr-3">{% for l in loads %}{% if l.id == j.load_id %}<span class="font-mono text-emerald-200">{{ l.pickup_postcode }}</span> → <span class="font-mono text-slate-200">{{ l.delivery_postcode }}</span>{% endif %}{% endfor %}</td><td class="py-2 pr-3">{% for p in payments %}{% if p.backhaul_job_id == j.id %}£{{ (p.net_payout_gbp or 0)|round(2) }} <span class="text-xs {% if p.status == 'paid_out' %}text-emerald-400{% else %}text-amber-400{% endif %}">{{ p.status }}</span>{% endif %}{% endfor %}</td><td class="py-2"><a href="/track/{{ j.id }}" class="text-emerald-400 hover:underline text-xs mr-2">Track</a><form method="post" action="/delete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Cancel this job? The load and vehicle can then be deleted if needed.');"><button type="submit" class="text-red-400 hover:text-red-300 text-xs">Cancel job</button></form></td></tr>{% endfor %}
             </tbody>
           </table>
         </div>
-        {% if not jobs %}<p class="text-slate-500 text-sm py-2">No backhaul jobs yet.</p>{% endif %}
-        <p class="text-xs text-slate-500 mt-2">Platform fee {{ platform_fee_percent }}%.</p>
+        {% if not jobs %}<p class="text-slate-500 text-sm py-2">No backhaul jobs yet. Suggested matches become jobs when the loader accepts in Who's interested.</p>{% endif %}
+        <p class="text-xs text-slate-500 mt-2">Platform fee {{ platform_fee_percent }}%. To delete a load or vehicle that “has jobs”, cancel the job here first.</p>
+      </section>
+
+      <!-- Admin: create logins -->
+      <section class="section-panel {{ 'active' if initial_section == 'admin' else '' }}" data-section="admin">
+        <h2 class="text-lg font-semibold mb-3">Create logins</h2>
+        <p class="text-slate-400 text-sm mb-4">Link an account so a haulier or loader can log in. <strong>Haulier login:</strong> add a company first in the Vehicles tab (Add company), then pick it here.</p>
+        <div class="grid md:grid-cols-2 gap-6 mb-4">
+          <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+            <p class="text-slate-300 font-medium mb-2">Haulier login</p>
+            <form method="post" action="/create-haulier-login" class="space-y-2">
+              <select name="haulier_id" required class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="" disabled>— Pick company —</option>{% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }} ({{ h.contact_email }})</option>{% endfor %}</select>
+              <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <button type="submit" class="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Create haulier login</button>
+            </form>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+            <p class="text-slate-300 font-medium mb-2">Loader account (new company + login)</p>
+            <form method="post" action="/create-loader-account" class="space-y-2">
+              <input name="name" required placeholder="Company name" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <button type="submit" class="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Create loader account</button>
+            </form>
+          </div>
+        </div>
+        {% if create_login_error %}<p class="text-amber-400 text-sm">{{ create_login_error }}</p>{% endif %}
+        {% if create_login_ok %}<p class="text-emerald-400 text-sm">{{ create_login_ok }}</p>{% endif %}
       </section>
     </div>
 

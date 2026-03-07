@@ -1,0 +1,37 @@
+{% extends "base_auth.html" %}
+{% block title %}Register – Platoonix{% endblock %}
+{% block content %}
+  <h1 class="text-lg font-semibold text-slate-200 mb-1">Create an account</h1>
+  <p class="text-slate-400 text-sm mb-5">Choose whether you run lorries (haulier) or post loads (loader).</p>
+
+  {% if error %}<p class="text-amber-300 text-sm mb-3 rounded-lg bg-amber-900/30 px-3 py-2">{{ error }}</p>{% endif %}
+  {% if success %}<p class="text-emerald-400 text-sm mb-3 rounded-lg bg-emerald-900/20 px-3 py-2">{{ success }}</p>{% endif %}
+
+  <section class="rounded-xl border border-slate-700 bg-slate-900/60 p-4 mb-4">
+    <h2 class="text-sm font-semibold text-slate-300 mb-1">I run lorries (haulier)</h2>
+    <p class="text-slate-500 text-xs mb-3">Add vehicles, find backhaul loads, get paid when you deliver.</p>
+    <form method="post" action="/register-haulier" class="space-y-3">
+      <input name="name" required placeholder="Company name" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <input name="contact_email" type="email" required placeholder="Email (you’ll use this to log in)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <input name="contact_phone" placeholder="Phone (optional)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <input name="password" type="password" required minlength="6" placeholder="Password (min 6 characters)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <input name="password_confirm" type="password" required minlength="6" placeholder="Confirm password" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <button type="submit" class="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium btn-primary">Register as haulier</button>
+    </form>
+  </section>
+
+  <section class="rounded-xl border border-slate-700 bg-slate-900/60 p-4 mb-4">
+    <h2 class="text-sm font-semibold text-slate-300 mb-1">I post loads (loader)</h2>
+    <p class="text-slate-500 text-xs mb-3">Post one-off or recurring loads; hauliers can show interest and you accept to create a job.</p>
+    <form method="post" action="/register-loader" class="space-y-3">
+      <input name="name" required placeholder="Company name" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <input name="contact_email" type="email" required placeholder="Email (you’ll use this to log in)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <input name="contact_phone" placeholder="Phone (optional)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <input name="password" type="password" required minlength="6" placeholder="Password (min 6 characters)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <input name="password_confirm" type="password" required minlength="6" placeholder="Confirm password" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+      <button type="submit" class="w-full rounded-lg bg-amber-600 hover:bg-amber-500 px-4 py-2.5 text-sm text-white font-medium btn-primary">Register as loader</button>
+    </form>
+  </section>
+
+  <p class="text-slate-500 text-sm"><a href="/login" class="text-emerald-400 hover:underline">Already have an account? Log in</a></p>
+{% endblock %}

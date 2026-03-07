@@ -1,6 +1,10 @@
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, status, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -8,6 +12,87 @@ from app.database import get_db
 
 
 router = APIRouter()
+
+# ePOD uploads: saved under static so /static/uploads/pods/... is served
+POD_UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "uploads" / "pods"
+POD_ALLOWED_SUFFIXES = {".pdf", ".jpg", ".jpeg", ".png", ".heic"}
+POD_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+class ConfirmCollectionBody(BaseModel):
+    backhaul_job_id: int
+
+
+@router.post("/confirm-collection")
+def confirm_collection(
+    body: ConfirmCollectionBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Confirm collection (pickup): marks the job as collected and moves payment RESERVED -> CAPTURED.
+    Call this when the haulier has collected the load; delivery confirmation (ePOD) then releases pay.
+    """
+    job = db.get(models.BackhaulJob, body.backhaul_job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backhaul job not found")
+    if job.collected_at:
+        return {"ok": True, "message": "Collection already confirmed", "collected_at": job.collected_at}
+
+    job.collected_at = datetime.now(timezone.utc)
+    db.add(job)
+
+    payment = (
+        db.query(models.Payment)
+        .filter(models.Payment.backhaul_job_id == body.backhaul_job_id)
+        .order_by(models.Payment.created_at.asc())
+        .first()
+    )
+    if payment and payment.status == models.PaymentStatusEnum.RESERVED.value:
+        payment.status = models.PaymentStatusEnum.CAPTURED.value
+        db.add(payment)
+
+    db.commit()
+    db.refresh(job)
+    return {"ok": True, "collected_at": job.collected_at, "payment_status": payment.status if payment else None}
+
+
+@router.post("/upload", status_code=status.HTTP_201_CREATED)
+async def upload_epod_file(file: UploadFile = File(...)):
+    """
+    Upload an ePOD file (proof of delivery). Returns file_url to use in POST /api/pods (create POD).
+    Allowed: PDF, JPG, PNG, HEIC. Max 10 MB.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No filename")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in POD_ALLOWED_SUFFIXES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Allowed types: PDF, JPG, PNG, HEIC",
+        )
+    content = await file.read()
+    if len(content) > POD_MAX_SIZE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 10 MB)")
+
+    POD_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = f"{uuid.uuid4().hex}{suffix}"
+    path = POD_UPLOAD_DIR / safe_name
+    path.write_bytes(content)
+
+    file_url = f"/static/uploads/pods/{safe_name}"
+    return {"file_url": file_url}
+
+
+@router.get("/", response_model=list[schemas.PODRead])
+def list_pods(
+    backhaul_job_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+) -> list[models.POD]:
+    """List PODs, optionally filtered by backhaul_job_id."""
+    q = db.query(models.POD)
+    if backhaul_job_id is not None:
+        q = q.filter(models.POD.backhaul_job_id == backhaul_job_id)
+    return q.order_by(models.POD.created_at.desc()).all()
 
 
 @router.post("/", response_model=schemas.PODRead, status_code=status.HTTP_201_CREATED)
@@ -64,6 +149,13 @@ def confirm_pod(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Payment not collectable (status: {payment.status})",
+            )
+        from app.services.stripe_payout import try_payout_to_haulier
+        ok, err = try_payout_to_haulier(payment, db)
+        if not ok and err:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Payout failed: {err}. Check haulier payment account and Stripe config.",
             )
         payment.status = models.PaymentStatusEnum.PAID_OUT.value
         db.add(payment)

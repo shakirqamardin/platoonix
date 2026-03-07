@@ -182,7 +182,16 @@ When Step 6 is done, your code is on GitHub. Go to **https://github.com/YOUR-USE
 
 ---
 
-## Step 13: Add PLATFORM_FEE_PERCENT (for pilot)
+## Step 13: Add SESSION_SECRET_KEY (required for production)
+
+1. In the same **Variables** section, click **+ New Variable** again.
+2. **Variable name:** **SESSION_SECRET_KEY**
+3. **Value:** use a long random string (e.g. 32+ random letters and numbers). You can generate one at https://randomkeygen.com/ (CodeIgniter Encryption Keys) or run in Terminal: `openssl rand -hex 32` and paste the result.
+4. Save. Without this, everyone could share the same default session; set it so each deploy has its own secret.
+
+---
+
+## Step 14: Add PLATFORM_FEE_PERCENT (for pilot)
 
 1. In the same **Variables** section, click **+ New Variable** again.
 2. **Variable name:** **PLATFORM_FEE_PERCENT**
@@ -191,7 +200,7 @@ When Step 6 is done, your code is on GitHub. Go to **https://github.com/YOUR-USE
 
 ---
 
-## Step 14: Set the start command (so the app runs correctly)
+## Step 15: Set the start command (so the app runs correctly)
 
 1. Click your **app service** (the one with your repo name).
 2. Go to **Settings** (gear icon or **Settings** tab).
@@ -204,11 +213,11 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
 5. Save. Railway may redeploy again.
 
-(If you don’t see a start command box, skip this step; Railway might already use the Procfile in your project.)
+(If you don’t see a start command box, skip this step; Railway uses the **Procfile** in your project, which already runs the app correctly.)
 
 ---
 
-## Step 15: Create the database tables (one-time)
+## Step 16: Create the database tables (one-time)
 
 1. In Railway, click your **app service**.
 2. Find **Settings** or **Deploy** and look for **Run Command** or **One-off command** or **Shell**. (Some plans have “Run” or “Execute command”.)
@@ -225,11 +234,11 @@ python -c "from app.database import Base, engine; from app import models; Base.m
    railway run python -c "from app.database import Base, engine; from app import models; Base.metadata.create_all(bind=engine)"
    ```
 
-When this runs without errors, your tables are created.
+When this runs without errors, your tables are created. (The app also creates tables on startup if they’re missing; this step is a backup.)
 
 ---
 
-## Step 16: Get your public website URL
+## Step 17: Get your public website URL
 
 1. Click your **app service** (not Postgres).
 2. Open the **Settings** or **Networking** or **Deploy** tab.
@@ -240,26 +249,36 @@ When this runs without errors, your tables are created.
 
 ---
 
-## Step 17: Open your live site in the browser
+## Step 18: Open your live site in the browser
 
 1. Open a new browser tab.
 2. Paste the URL you copied (e.g. **https://platoonix-production-xxxx.up.railway.app**).
 3. Press **Enter**.
 
-You should see your **Backhaul Logistics Console** (same as on your Mac, but now on the internet).
+You should see the **login** page. Log in with the default admin: **admin@platoonix.local** / **change-me** (or the admin email/password you set with env vars). Then you’ll see the **Platoonix** console (same as on your Mac, but on the internet).
 
 ---
 
-## Step 18: Quick test
+## Step 19: Quick test
 
-1. On the live site, try **Add data** → **Hauliers & vehicles** → add one haulier (name, email, phone) and click **Add haulier**.
-2. If it saves and you see the haulier in the list, the app and database are working.
+1. On the live site, log in as admin (see Step 18).
+2. Open the **Vehicles** tab → add one **company** (Company, Email, Phone) and click **Add company**.
+3. If it saves and you see the company in the list, the app and database are working.
+
+---
+
+# Optional environment variables (set in Railway → app service → Variables)
+
+- **ADMIN_EMAIL** / **ADMIN_PASSWORD** – Override the default admin login (default: admin@platoonix.local / change-me). Set these in production so only you can log in as admin.
+- **STRIPE_SECRET_KEY** – If you use Stripe Connect for haulier payouts, paste your Stripe secret key here. Leave unset to skip payouts.
+- **SMTP_HOST**, **SMTP_PORT**, **SMTP_USER**, **SMTP_PASSWORD**, **SMTP_FROM_EMAIL** – For sending emails (e.g. match alerts to hauliers). Leave unset to skip email.
 
 ---
 
 # DONE
 
-Your app is deployed. You can send companies:
+Your app is deployed. You can share the URL and test with real users:
+
 
 - **Main site:** your Railway URL (e.g. **https://platoonix-production-xxxx.up.railway.app**)
 - **Find backhaul (example):** same URL + **/find-backhaul?vehicle_id=1&origin_postcode=B213NQ**
@@ -268,11 +287,24 @@ Do **not** send **http://127.0.0.1:8000** – that only works on your computer.
 
 ---
 
+# ePOD and payment flow (collection → delivery)
+
+Jobs can use a two-step proof flow that ties to payments:
+
+1. **Confirm collection (pickup)** – When the haulier has collected the load, call **POST /api/pods/confirm-collection** with `{"backhaul_job_id": <id>}`. This sets the job’s `collected_at` and moves the payment from **RESERVED** to **CAPTURED** (pay is “collected”).
+2. **Upload ePOD** – **POST /api/pods/upload** with a file (PDF, JPG, PNG, HEIC, max 10 MB). Use the returned `file_url` in the next step.
+3. **Create POD** – **POST /api/pods** with `backhaul_job_id`, `file_url`, and optional `notes`.
+4. **Confirm delivery** – **POST /api/pods/{pod_id}/confirm**. This marks the job completed and **releases pay** to the haulier (Stripe payout if configured).
+
+So: **collection confirmation** captures the pay; **delivery confirmation (ePOD)** releases the pay. List PODs with **GET /api/pods?backhaul_job_id=<id>**.
+
+---
+
 # If something goes wrong
 
-- **“Application failed to respond” or blank page:** Wait 1–2 minutes after deploy, then try again. If it still fails, check Step 14 (start command) and Step 12 (DATABASE_URL with **postgresql+psycopg2://**).
+- **“Application failed to respond” or blank page:** Wait 1–2 minutes after deploy, then try again. If it still fails, check Step 15 (start command) and Step 12 (DATABASE_URL with **postgresql+psycopg2://**).
 - **Build failed:** In Railway, click your app service and open **Deployments** → click the latest one → read the **Build logs**. Often it’s a typo in a variable name (e.g. DATABASE_URL).
-- **Tables missing / error when adding data:** Run Step 15 again (create tables) using the same DATABASE_URL the app uses.
+- **Tables missing / error when adding data:** Run Step 16 again (create tables), or just redeploy; the app creates tables on startup.
 - **Git push asked for password:** Use a GitHub **Personal Access Token** instead of your GitHub password (see note in Step 6).
 
 If you tell me the exact message or step number where you’re stuck, I can give you the next move in plain words.

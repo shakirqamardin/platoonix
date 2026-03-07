@@ -44,6 +44,40 @@ def collect_payment(
     return payment
 
 
+@router.post("/{payment_id}/payout", response_model=schemas.PaymentRead)
+def payout_to_haulier(
+    payment_id: int,
+    db: Session = Depends(get_db),
+) -> models.Payment:
+    """
+    Trigger Stripe Connect transfer to the haulier for this payment, then mark as paid_out.
+    Payment must be RESERVED or CAPTURED. Haulier must have payment_account_id (Stripe Connect acct_...).
+    """
+    payment = db.get(models.Payment, payment_id)
+    if not payment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
+    if payment.status not in (
+        models.PaymentStatusEnum.RESERVED.value,
+        models.PaymentStatusEnum.CAPTURED.value,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment not in RESERVED/CAPTURED state (current: {payment.status})",
+        )
+    from app.services.stripe_payout import try_payout_to_haulier
+    ok, err = try_payout_to_haulier(payment, db)
+    if not ok and err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Payout failed: {err}",
+        )
+    payment.status = models.PaymentStatusEnum.PAID_OUT.value
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
 @router.get("/", response_model=list[schemas.PaymentRead])
 def list_payments(
     db: Session = Depends(get_db),

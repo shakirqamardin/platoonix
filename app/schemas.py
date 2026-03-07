@@ -91,11 +91,44 @@ class BackhaulJobRead(BaseModel):
     load_id: int
     matched_at: datetime
     accepted_at: Optional[datetime]
+    collected_at: Optional[datetime]
     completed_at: Optional[datetime]
     ulez_caz_status: Optional[str]
 
     class Config:
         from_attributes = True
+
+
+class DriverJobRead(BaseModel):
+    """Job for driver app: timeline + load details + live GPS."""
+    id: int
+    vehicle_id: int
+    load_id: int
+    pickup_postcode: str
+    delivery_postcode: str
+    shipper_name: str
+    matched_at: datetime
+    reached_pickup_at: Optional[datetime] = None
+    collected_at: Optional[datetime] = None
+    departed_pickup_at: Optional[datetime] = None
+    reached_delivery_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    last_lat: Optional[float] = None
+    last_lng: Optional[float] = None
+    location_updated_at: Optional[datetime] = None
+    payment_status: Optional[str] = None
+
+
+class DriverLocationUpdate(BaseModel):
+    lat: float = Field(..., ge=-90, le=90)
+    lng: float = Field(..., ge=-180, le=180)
+
+
+class DriverStatusUpdate(BaseModel):
+    status: str = Field(
+        ...,
+        description="One of: reached_pickup, collected, departed_pickup, reached_delivery",
+    )
 
 
 class LoadMatchResult(BaseModel):

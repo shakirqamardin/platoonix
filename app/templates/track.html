@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Track Job #{{ job_id }} – Platoonix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="max-w-4xl mx-auto px-4 py-4">
+      <header class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <img src="/static/logo.png" alt="Platoonix" class="h-9 w-auto" />
+          <span class="text-lg font-semibold">Track Job #{{ job_id }}</span>
+        </div>
+        <a href="/" class="text-slate-400 hover:text-white text-sm">Back to console</a>
+      </header>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <h2 class="text-slate-300 font-medium mb-2">Load</h2>
+          <p class="font-mono text-emerald-200">{{ load.pickup_postcode if load else '' }} → {{ load.delivery_postcode if load else '' }}</p>
+          <p class="text-slate-500 text-sm">{{ load.shipper_name if load else '' }}</p>
+        </section>
+        <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <h2 class="text-slate-300 font-medium mb-2">Status</h2>
+          <div id="track-status" class="text-sm text-slate-400 space-y-1">
+            <p>Reached pickup: <span id="reached-pickup">—</span></p>
+            <p>Collected: <span id="collected">—</span></p>
+            <p>Departed: <span id="departed">—</span></p>
+            <p>Reached delivery: <span id="reached-delivery">—</span></p>
+            <p>Completed: <span id="completed">—</span></p>
+          </div>
+        </section>
+      </div>
+
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
+        <h2 class="text-slate-300 font-medium mb-2">Live position</h2>
+        <p id="driver-position-msg" class="text-slate-500 text-sm mb-2">Loading…</p>
+        <div id="map" class="w-full h-64 rounded-lg bg-slate-800"></div>
+      </section>
+    </div>
+
+    <script>
+(function () {
+  const jobId = {{ job_id }};
+  let map = null;
+  let driverMarker = null;
+
+  function initMap(lat, lng) {
+    if (map) return;
+    map = L.map('map').setView([lat || 54.0, lng || -2.5], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+    if (lat != null && lng != null) {
+      driverMarker = L.marker([lat, lng]).addTo(map).bindPopup('Driver');
+    }
+  }
+
+  function poll() {
+    fetch('/api/track/jobs/' + jobId, { credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) return;
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        document.getElementById('reached-pickup').textContent = data.reached_pickup_at ? new Date(data.reached_pickup_at).toLocaleString() : '—';
+        document.getElementById('collected').textContent = data.collected_at ? new Date(data.collected_at).toLocaleString() : '—';
+        document.getElementById('departed').textContent = data.departed_pickup_at ? new Date(data.departed_pickup_at).toLocaleString() : '—';
+        document.getElementById('reached-delivery').textContent = data.reached_delivery_at ? new Date(data.reached_delivery_at).toLocaleString() : '—';
+        document.getElementById('completed').textContent = data.completed_at ? new Date(data.completed_at).toLocaleString() : '—';
+
+        if (data.last_lat != null && data.last_lng != null) {
+          document.getElementById('driver-position-msg').textContent = 'Last update: ' + (data.location_updated_at ? new Date(data.location_updated_at).toLocaleTimeString() : '');
+          initMap(data.last_lat, data.last_lng);
+          if (driverMarker) {
+            driverMarker.setLatLng([data.last_lat, data.last_lng]);
+          } else {
+            driverMarker = L.marker([data.last_lat, data.last_lng]).addTo(map).bindPopup('Driver');
+          }
+          map.setView([data.last_lat, data.last_lng], 12);
+        } else {
+          document.getElementById('driver-position-msg').textContent = 'Driver has not shared location yet.';
+          initMap(null, null);
+        }
+      })
+      .catch(function () {});
+  }
+
+  poll();
+  setInterval(poll, 5000);
+})();
+    </script>
+  </body>
+</html>

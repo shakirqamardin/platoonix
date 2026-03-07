@@ -1,2 +1,6 @@
 shipper_name,pickup_postcode,delivery_postcode,pickup_window_start,pickup_window_end,weight_kg,volume_m3,budget_gbp
 Example Shipper,SW1A1AA,B11AA,2026-03-01 09:00,2026-03-01 11:00,10000,30,350
+Acme Logistics,M1 1AA,B2 4AA,,,5000,20,
+North Freight,NN4 5ET,LE1 1AA,,,8000,25,400
+Test Shipper,W1A 1AA,SW1A 1AA,,,12000,40,500
+Bulk Load Co,CV1 1AA,MK1 1AA,,,7500,28,

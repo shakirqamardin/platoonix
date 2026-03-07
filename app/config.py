@@ -30,6 +30,21 @@ class Settings(BaseSettings):
     # Platform fee: single 8% of job value (deducted from haulier payout)
     platform_fee_percent: float = 8.0
 
+    # Auth: session secret (set in production)
+    session_secret_key: str = "change-me-in-production-platoonix"
+    admin_email: str = "admin@platoonix.local"
+    admin_password: str = "change-me"
+
+    # Email (optional): leave unset to skip sending
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from_email: str = "noreply@platoonix.com"
+
+    # Stripe (optional): for payouts to hauliers via Connect. Leave unset to skip.
+    stripe_secret_key: Optional[str] = None
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

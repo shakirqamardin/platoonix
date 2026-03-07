@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Integer,
     JSON,
     String,
     Text,
@@ -13,6 +14,53 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+class UserRoleEnum(str, Enum):
+    HAULIER = "haulier"
+    LOADER = "loader"
+    ADMIN = "admin"
+
+
+class User(Base):
+    """Login account: links to one Haulier or one Loader, or is admin (both null)."""
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)  # haulier, loader, admin
+    haulier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("hauliers.id"), nullable=True)
+    loader_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loaders.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+
+
+class PasswordResetToken(Base):
+    """One-time token for forgot-password flow. Token stored as SHA-256 hash."""
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # sha256 hex
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+
+
+class Loader(Base):
+    """Loader/shipper company: owns loads and planned loads."""
+    __tablename__ = "loaders"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
 
 
 class Haulier(Base):
@@ -40,6 +88,7 @@ class Vehicle(Base):
     trailer_type: Mapped[Optional[str]] = mapped_column(String(50))  # curtain_sider, box, flatbed, refrigerated, tautliner, tanker, tipper, low_loader
     capacity_weight_kg: Mapped[Optional[float]] = mapped_column(Float)
     capacity_volume_m3: Mapped[Optional[float]] = mapped_column(Float)
+    base_postcode: Mapped[Optional[str]] = mapped_column(String(20))  # default empty location for automatic matching
 
     # DVLA / emissions
     euro_status: Mapped[Optional[str]] = mapped_column(String(20))
@@ -81,6 +130,7 @@ class Load(Base):
     __tablename__ = "loads"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    loader_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loaders.id"), nullable=True)  # who posted this load
     shipper_name: Mapped[str] = mapped_column(String(255), nullable=False)
     pickup_postcode: Mapped[str] = mapped_column(String(20), nullable=False)
     delivery_postcode: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -105,6 +155,7 @@ class PlannedLoad(Base):
     __tablename__ = "planned_loads"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    loader_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loaders.id"), nullable=True)
     shipper_name: Mapped[str] = mapped_column(String(255), nullable=False)
     pickup_postcode: Mapped[str] = mapped_column(String(20), nullable=False)
     delivery_postcode: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -150,6 +201,10 @@ class LoadInterest(Base):
 
 
 class BackhaulJob(Base):
+    """
+    Driver-led timeline: reached_pickup -> collected -> departed_pickup -> reached_delivery -> completed (ePOD).
+    Payment: RESERVED until collected (then CAPTURED), PAID_OUT when delivery confirmed.
+    """
     __tablename__ = "backhaul_jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -160,7 +215,16 @@ class BackhaulJob(Base):
         DateTime(timezone=True), default=datetime.utcnow
     )
     accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    reached_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    collected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    departed_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    reached_delivery_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # Live GPS (driver shares location; visible to admin/loader)
+    last_lat: Mapped[Optional[float]] = mapped_column(Float)
+    last_lng: Mapped[Optional[float]] = mapped_column(Float)
+    location_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     route_geometry: Mapped[Optional[dict]] = mapped_column(JSON)
     ulez_caz_status: Mapped[Optional[str]] = mapped_column(String(50))

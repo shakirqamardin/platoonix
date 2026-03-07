@@ -23,3 +23,6 @@ build/
 # Logs and temp
 *.log
 .cache/
+
+# Uploaded ePOD files (stored under static/uploads/pods/)
+static/uploads/

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Loader – Platoonix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#020617" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <header class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div class="flex items-center gap-2">
+          <img src="/static/logo.png" alt="Platoonix" class="h-9 w-auto" />
+          <div>
+            <span class="text-lg font-semibold block">Platoonix</span>
+            <span class="text-slate-400 text-xs">Loader · Backhaul logistics</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-shrink-0 flex-wrap">
+          {% if current_user_email %}<span class="text-slate-500 text-sm">Logged in as <strong class="text-slate-200">{{ current_user_email }}</strong></span>{% endif %}
+          <a href="/logout" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:text-white hover:border-slate-500 min-h-[2.5rem] inline-block">Switch user / Sign out</a>
+        </div>
+      </header>
+
+      {% if load_added %}<p class="mb-3 text-emerald-400 text-sm rounded-lg bg-emerald-900/20 px-3 py-2">Load posted.</p>{% endif %}
+      {% if planned_added %}<p class="mb-3 text-emerald-400 text-sm rounded-lg bg-emerald-900/20 px-3 py-2">Planned load added.</p>{% endif %}
+      {% if job_created %}<p class="mb-3 text-emerald-400 text-sm rounded-lg bg-emerald-900/20 px-3 py-2">Job created. The haulier can see it in their Backhaul jobs.</p>{% endif %}
+      {% if already_matched %}<p class="mb-3 text-slate-400 text-sm rounded bg-slate-800 px-3 py-2">That load was already matched to another job.</p>{% endif %}
+      {% if delete_error %}<p class="mb-3 text-amber-300 text-sm rounded-lg bg-amber-900/30 px-3 py-2">{{ delete_error }}</p>{% endif %}
+
+      <!-- My loads -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
+        <h2 class="text-lg font-semibold mb-1">My loads</h2>
+        <p class="text-slate-500 text-sm mb-3">Post one-off loads. Hauliers can find and show interest in matching vehicles.</p>
+        <form method="post" action="/loader/loads" class="flex flex-wrap gap-2 mb-3">
+          <input name="shipper_name" required placeholder="Shipper name" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-w-0 min-h-[2.5rem] placeholder-slate-500" />
+          <input name="pickup_postcode" required placeholder="Pickup postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
+          <input name="delivery_postcode" required placeholder="Delivery postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
+          <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Post load</button>
+        </form>
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm border-collapse min-w-[20rem]">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Shipper</th><th class="py-2 pr-2">From → To</th><th class="py-2 pr-2">Status</th><th class="py-2 w-14"></th></tr></thead>
+            <tbody>
+              {% for l in loads %}<tr class="border-b border-slate-800"><td class="py-2 pr-2">{{ l.shipper_name }}</td><td class="py-2 pr-2">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</td><td class="py-2 pr-2"><span class="rounded px-1.5 py-0.5 text-xs {% if l.status == 'open' %}bg-emerald-900/50 text-emerald-200{% else %}bg-slate-700 text-slate-300{% endif %}">{{ l.status }}</span></td><td class="py-2"><form method="post" action="/loader/delete-load/{{ l.id }}" class="inline" onsubmit="return confirm('Delete this load?');"><button type="submit" class="text-red-400 hover:text-red-300 text-sm py-1 min-h-[2rem]">Remove</button></form></td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not loads %}<p class="text-slate-500 text-sm py-2">No loads yet. Post one above.</p>{% endif %}
+        <p class="text-xs text-slate-500 mt-1">Open loads: {{ open_loads_count|default(0) }}</p>
+      </section>
+
+      <!-- Planned loads -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
+        <h2 class="text-lg font-semibold mb-1">Planned loads (recurring)</h2>
+        <p class="text-slate-500 text-sm mb-3">Weekly or monthly patterns so hauliers can match their empty legs.</p>
+        <form method="post" action="/loader/planned-loads" class="flex flex-wrap gap-2 mb-3">
+          <input name="shipper_name" required placeholder="Shipper" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-24 min-w-0 min-h-[2.5rem] placeholder-slate-500" />
+          <input name="pickup_postcode" required placeholder="From postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
+          <input name="delivery_postcode" required placeholder="To postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
+          <select name="day_of_week" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">{% for d in range(7) %}<option value="{{ d }}">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d] }}</option>{% endfor %}</select>
+          <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Add planned load</button>
+        </form>
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm border-collapse min-w-[16rem]">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Shipper</th><th class="py-2 pr-2">From → To</th><th class="py-2 pr-2">Day</th><th class="py-2 w-14"></th></tr></thead>
+            <tbody>
+              {% for pl in planned_loads %}<tr class="border-b border-slate-800"><td class="py-2 pr-2">{{ pl.shipper_name }}</td><td class="py-2 pr-2">{{ pl.pickup_postcode }} → {{ pl.delivery_postcode }}</td><td class="py-2 pr-2">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][pl.day_of_week] }}</td><td class="py-2"><form method="post" action="/loader/delete-planned/{{ pl.id }}" class="inline" onsubmit="return confirm('Delete this planned load?');"><button type="submit" class="text-red-400 hover:text-red-300 text-sm py-1 min-h-[2rem]">Remove</button></form></td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not planned_loads %}<p class="text-slate-500 text-sm py-2">No planned loads yet.</p>{% endif %}
+      </section>
+
+      <!-- Active jobs (your loads) -->
+      {% if jobs %}
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
+        <h2 class="text-lg font-semibold mb-1">Active jobs</h2>
+        <p class="text-slate-500 text-sm mb-3">Backhaul jobs for your loads. Track driver live.</p>
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm border-collapse min-w-[14rem]">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Job</th><th class="py-2 pr-2">Load</th><th class="py-2 w-20"></th></tr></thead>
+            <tbody>
+              {% for j in jobs %}<tr class="border-b border-slate-800"><td class="py-2 pr-2">#{{ j.id }}</td><td class="py-2 pr-2">Load {{ j.load_id }}</td><td class="py-2"><a href="/track/{{ j.id }}" class="text-emerald-400 hover:underline text-sm">Track</a></td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+
+      <!-- Who's interested -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+        <h2 class="text-lg font-semibold mb-1">Who’s interested</h2>
+        <p class="text-slate-500 text-sm mb-3">Hauliers who’ve shown interest in your loads. Accept to create a backhaul job.</p>
+        {% if load_interests %}
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm border-collapse min-w-[14rem]">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Load / Planned</th><th class="py-2 pr-2">Status</th><th class="py-2 w-20"></th></tr></thead>
+            <tbody>
+              {% for i in load_interests %}<tr class="border-b border-slate-800"><td class="py-2 pr-2">{% if i.load_id %}Load {{ i.load_id }}{% else %}Planned {{ i.planned_load_id }}{% endif %}</td><td class="py-2 pr-2"><span class="rounded px-1.5 py-0.5 text-xs {% if i.status == 'suggested' %}bg-amber-900/50 text-amber-200{% else %}bg-emerald-900/50 text-emerald-200{% endif %}">{{ i.status }}</span></td><td class="py-2">{% if i.status == 'expressed' %}<form method="post" action="/loader/show-interest" class="inline"><input type="hidden" name="load_interest_id" value="{{ i.id }}" /><button type="submit" class="rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-2 text-xs text-white font-medium min-h-[2rem]">Accept</button></form>{% endif %}</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}<p class="text-slate-500 text-sm">No interest yet. Hauliers will show interest from Find backhaul when they match your loads.</p>{% endif %}
+      </section>
+    </div>
+  </body>
+</html>

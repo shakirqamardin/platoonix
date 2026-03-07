@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Driver – Platoonix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#020617" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="max-w-lg mx-auto px-4 py-4">
+      <header class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <img src="/static/logo.png" alt="Platoonix" class="h-9 w-auto" />
+          <span class="text-lg font-semibold">Driver</span>
+        </div>
+        <a href="/haulier" class="text-slate-400 hover:text-white text-sm">Back to dashboard</a>
+      </header>
+
+      {% if request.query_params.get('epod_done') %}<p class="mb-3 text-emerald-400 text-sm rounded-lg bg-emerald-900/20 px-3 py-2">Delivery completed. Payment released.</p>{% endif %}
+      {% if request.query_params.get('done') %}<p class="mb-3 text-slate-400 text-sm rounded-lg bg-slate-800 px-3 py-2">Job already completed.</p>{% endif %}
+
+      {% if not active_job %}
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-center">
+        <p class="text-slate-400">No active job. When you’re assigned a backhaul, it will appear here.</p>
+        <p class="text-slate-500 text-sm mt-2">Use the haulier dashboard to find and accept loads.</p>
+      </section>
+      {% else %}
+      {% set j = active_job %}
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
+        <h1 class="text-lg font-semibold mb-2">Job #{{ j.id }}</h1>
+        <p class="text-slate-300 font-mono text-sm">{{ j.pickup_postcode }} → {{ j.delivery_postcode }}</p>
+        <p class="text-slate-500 text-sm">{{ j.shipper_name or 'Load' }}</p>
+      </section>
+
+      <!-- Live location -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-300 font-medium">Share live location</span>
+          <button type="button" id="share-location-btn" class="rounded-lg px-4 py-2 text-sm font-medium min-h-[2.5rem] bg-slate-600 hover:bg-slate-500 text-white">
+            Start
+          </button>
+        </div>
+        <p id="location-status" class="text-slate-500 text-xs">Off. Others can see your position when sharing.</p>
+      </section>
+
+      <!-- Status timeline: tap to update -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
+        <h2 class="text-slate-300 font-medium mb-3">Update status</h2>
+        <p class="text-slate-500 text-xs mb-3">Tap in order. Collection confirms pay is captured; delivery + ePOD releases payout.</p>
+        <div class="space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if j.reached_pickup_at %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">1</span>
+            <span class="text-slate-400 flex-1">Reached collection</span>
+            {% if not j.reached_pickup_at %}
+            <button type="button" data-status="reached_pickup" class="driver-status-btn rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">I’m here</button>
+            {% else %}
+            <span class="text-emerald-400 text-sm">{{ j.reached_pickup_at.strftime('%H:%M') if j.reached_pickup_at else '' }}</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if j.collected_at %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">2</span>
+            <span class="text-slate-400 flex-1">Collected (pay captured)</span>
+            {% if not j.collected_at %}
+            <button type="button" data-status="collected" class="driver-status-btn rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">Collected</button>
+            {% else %}
+            <span class="text-emerald-400 text-sm">{{ j.collected_at.strftime('%H:%M') if j.collected_at else '' }}</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if j.departed_pickup_at %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">3</span>
+            <span class="text-slate-400 flex-1">Departed</span>
+            {% if not j.departed_pickup_at %}
+            <button type="button" data-status="departed_pickup" class="driver-status-btn rounded-lg bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">Departed</button>
+            {% else %}
+            <span class="text-emerald-400 text-sm">{{ j.departed_pickup_at.strftime('%H:%M') if j.departed_pickup_at else '' }}</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if j.reached_delivery_at %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">4</span>
+            <span class="text-slate-400 flex-1">Reached delivery</span>
+            {% if not j.reached_delivery_at %}
+            <button type="button" data-status="reached_delivery" class="driver-status-btn rounded-lg bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">I’m here</button>
+            {% else %}
+            <span class="text-emerald-400 text-sm">{{ j.reached_delivery_at.strftime('%H:%M') if j.reached_delivery_at else '' }}</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if j.completed_at %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">5</span>
+            <span class="text-slate-400 flex-1">Delivered + ePOD (payout)</span>
+            {% if not j.completed_at %}
+            <a href="/driver/epod?job_id={{ j.id }}" class="rounded-lg bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem] inline-block">Upload ePOD</a>
+            {% else %}
+            <span class="text-emerald-400 text-sm">Done</span>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <p class="text-slate-500 text-xs">Admin and loader can watch live at <a href="/track/{{ j.id }}" class="text-emerald-500 hover:underline">Track job</a>.</p>
+      {% endif %}
+    </div>
+
+    <script>
+(function () {
+  const jobId = {{ active_job.id if active_job else 'null' }};
+  if (!jobId) return;
+
+  const shareBtn = document.getElementById('share-location-btn');
+  const statusEl = document.getElementById('location-status');
+  let watchId = null;
+
+  shareBtn.addEventListener('click', function () {
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      shareBtn.textContent = 'Start';
+      statusEl.textContent = 'Off. Others can see your position when sharing.';
+      return;
+    }
+    if (!navigator.geolocation) {
+      statusEl.textContent = 'Geolocation not supported.';
+      return;
+    }
+    shareBtn.textContent = 'Sharing…';
+    statusEl.textContent = 'Getting position…';
+    watchId = navigator.geolocation.watchPosition(
+      function (pos) {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        statusEl.textContent = 'Sharing live. Last: ' + new Date().toLocaleTimeString();
+        fetch('/api/driver/jobs/' + jobId + '/location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: lat, lng: lng }),
+          credentials: 'same-origin'
+        }).catch(function () {});
+      },
+      function () {
+        statusEl.textContent = 'Location unavailable. Check permissions.';
+      },
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 }
+    );
+    shareBtn.textContent = 'Stop';
+  });
+
+  document.querySelectorAll('.driver-status-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const status = this.getAttribute('data-status');
+      if (!status) return;
+      this.disabled = true;
+      this.textContent = '…';
+      fetch('/api/driver/jobs/' + jobId + '/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: status }),
+        credentials: 'same-origin'
+      })
+        .then(function (r) { if (r.ok) window.location.reload(); else this.disabled = false; })
+        .catch(function () { btn.disabled = false; btn.textContent = btn.getAttribute('data-status').replace('_', ' '); });
+    });
+  });
+})();
+    </script>
+  </body>
+</html>

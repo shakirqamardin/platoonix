@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Haulier – Platoonix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#020617" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <header class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div class="flex items-center gap-2">
+          <img src="/static/logo.png" alt="Platoonix" class="h-9 w-auto" />
+          <div>
+            <span class="text-lg font-semibold block">Platoonix</span>
+            <span class="text-slate-400 text-xs">Haulier · Backhaul logistics</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-shrink-0 flex-wrap">
+          {% if current_user_email %}<span class="text-slate-500 text-sm">Logged in as <strong class="text-slate-200">{{ current_user_email }}</strong></span>{% endif %}
+          <span class="text-slate-300 text-sm">Payouts: <strong>£{{ (total_payout or 0)|round(0) }}</strong></span>
+          <a href="/driver" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:text-white hover:border-slate-500 min-h-[2.5rem] inline-block">Driver</a>
+          <a href="/logout" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:text-white hover:border-slate-500 min-h-[2.5rem] inline-block">Switch user / Sign out</a>
+        </div>
+      </header>
+
+      {% if profile_updated %}<p class="mb-3 text-emerald-400 text-sm rounded-lg bg-emerald-900/20 px-3 py-2">Company details updated.</p>{% endif %}
+      {% if vehicle_added %}<p class="mb-3 text-emerald-400 text-sm rounded-lg bg-emerald-900/20 px-3 py-2">Vehicle added.</p>{% endif %}
+      {% if delete_error %}<p class="mb-3 text-amber-300 text-sm rounded-lg bg-amber-900/30 px-3 py-2">{{ delete_error }}</p>{% endif %}
+
+      <!-- My company -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
+        <h2 class="text-lg font-semibold mb-1">My company</h2>
+        <p class="text-slate-500 text-sm mb-3">Your details and payment account for receiving payouts.</p>
+        <form method="post" action="/haulier/profile" class="space-y-3 max-w-xl">
+          <div>
+            <label class="block text-slate-400 text-sm mb-1">Company name</label>
+            <input name="name" value="{{ haulier.name or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" placeholder="Your trading name" />
+          </div>
+          <div>
+            <label class="block text-slate-400 text-sm mb-1">Contact email</label>
+            <input name="contact_email" type="email" value="{{ haulier.contact_email or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+          </div>
+          <div>
+            <label class="block text-slate-400 text-sm mb-1">Phone</label>
+            <input name="contact_phone" value="{{ haulier.contact_phone or '' }}" class="w-full sm:w-48 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" placeholder="Optional" />
+          </div>
+          <div>
+            <label class="block text-slate-400 text-sm mb-1">Stripe Connect account ID</label>
+            <input name="payment_account_id" value="{{ haulier.payment_account_id or '' }}" placeholder="acct_… (optional, for payouts)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+          </div>
+          <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Save company details</button>
+        </form>
+      </section>
+
+      <!-- My vehicles -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
+        <h2 class="text-lg font-semibold mb-1">My vehicles</h2>
+        <p class="text-slate-500 text-sm mb-3">Add vehicles to search for matching backhaul loads. Set <strong>base postcode</strong> so loads near you match automatically and you get alerts.</p>
+        <form method="post" action="/haulier/vehicles" class="flex flex-wrap items-end gap-2 mb-3">
+          <input name="registration" required placeholder="Registration" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 sm:w-24 min-h-[2.5rem]" />
+          <input name="base_postcode" placeholder="Base postcode (for auto-match)" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-32 min-h-[2.5rem] placeholder-slate-500" title="Where you're usually empty; loads near here match automatically" />
+          <select name="vehicle_type" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">
+            <option value="artic">Artic</option>
+            <option value="rigid">Rigid</option>
+            <option value="van">Van</option>
+          </select>
+          <select name="trailer_type" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">
+            <option value="">Trailer</option>
+            <option value="curtain_sider">Curtain</option>
+            <option value="box">Box</option>
+            <option value="flatbed">Flatbed</option>
+            <option value="other">Other</option>
+          </select>
+          <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Add vehicle</button>
+        </form>
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm border-collapse min-w-[16rem]">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Reg</th><th class="py-2 pr-2">Type</th><th class="py-2 pr-2">Trailer</th><th class="py-2 w-14"></th></tr></thead>
+            <tbody>
+              {% for v in vehicles %}
+              <tr class="border-b border-slate-800">
+                <td class="py-2 pr-2">{{ v.registration }}</td>
+                <td class="py-2 pr-2">{{ v.vehicle_type }}</td>
+                <td class="py-2 pr-2">{{ v.trailer_type or "—" }}</td>
+                <td class="py-2"><form method="post" action="/haulier/delete-vehicle/{{ v.id }}" class="inline" onsubmit="return confirm('Delete this vehicle?');"><button type="submit" class="text-red-400 hover:text-red-300 text-sm py-1 min-h-[2rem]">Remove</button></form></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not vehicles %}<p class="text-slate-500 text-sm py-2">No vehicles yet. Add one above.</p>{% endif %}
+      </section>
+
+      <!-- Find backhaul -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
+        <h2 class="text-lg font-semibold mb-1">Find backhaul</h2>
+        <p class="text-slate-500 text-sm mb-3">Search for loads near your empty position (within 25 miles).</p>
+        <form method="get" action="/haulier/find-backhaul" class="flex flex-wrap items-center gap-2 mb-3">
+          <select name="vehicle_id" required class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-w-[10rem] min-h-[2.5rem]">
+            <option value="">Choose vehicle</option>
+            {% for v in vehicles %}
+            <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %}>{{ v.registration }} · {{ v.vehicle_type }}{% if v.trailer_type %} · {{ v.trailer_type }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <input name="origin_postcode" value="{{ find_origin_postcode or '' }}" placeholder="Your postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
+          <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Find loads</button>
+        </form>
+        {% if matching_results is not none %}
+        {% if matching_results %}
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm border-collapse min-w-[16rem]">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Load</th><th class="py-2 pr-2">From → To</th><th class="py-2 text-right">Match</th></tr></thead>
+            <tbody>
+              {% for m in matching_results %}
+              <tr class="border-b border-slate-800"><td class="py-2 pr-2">{{ m.load.shipper_name }}</td><td class="py-2 pr-2">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</td><td class="py-2 text-right text-emerald-400">{{ m.distance_miles }} mi ✓</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-slate-500 py-2">No matching loads for this postcode.</p>
+        {% if postcode_lookup_failed %}<p class="text-amber-300 text-xs rounded bg-amber-900/20 px-2 py-1">Postcode lookup failed. Use a full UK postcode.</p>{% endif %}
+        {% if match_diagnostic and match_diagnostic.loads %}
+        <div class="overflow-x-auto -mx-1 mt-2">
+          <table class="w-full text-sm border-collapse min-w-[16rem]"><thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Route</th><th class="py-2 pr-2">Why no match</th></tr></thead><tbody>
+            {% for row in match_diagnostic.loads %}<tr class="border-b border-slate-800"><td class="py-2 pr-2">{{ row.load.pickup_postcode }} → {{ row.load.delivery_postcode }}</td><td class="py-2 text-amber-400">{{ row.reason if row.reason else (row.distance_miles|default(0)|round(1)|string + " mi") }}</td></tr>{% endfor %}
+          </tbody></table>
+        </div>
+        {% endif %}
+        {% endif %}
+        {% endif %}
+      </section>
+
+      <!-- Planned routes -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
+        <h2 class="text-lg font-semibold mb-1">Planned routes (empty legs)</h2>
+        <p class="text-slate-500 text-sm mb-3">Where you’re empty each week — we’ll match you to loads nearby.</p>
+        <form method="post" action="/haulier/routes" class="flex flex-wrap gap-2 mb-3">
+          <select name="vehicle_id" required class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">{% for v in vehicles %}<option value="{{ v.id }}">{{ v.registration }}</option>{% endfor %}<option value="" disabled>Vehicle</option></select>
+          <input name="empty_at_postcode" required placeholder="Postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
+          <select name="day_of_week" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">{% for d in range(7) %}<option value="{{ d }}">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d] }}</option>{% endfor %}</select>
+          <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Add route</button>
+        </form>
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm border-collapse min-w-[14rem]">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Vehicle</th><th class="py-2 pr-2">Postcode</th><th class="py-2 pr-2">Day</th><th class="py-2 w-14"></th></tr></thead>
+            <tbody>
+              {% for r in routes %}<tr class="border-b border-slate-800"><td class="py-2 pr-2">{{ r.vehicle_id }}</td><td class="py-2 pr-2">{{ r.empty_at_postcode }}</td><td class="py-2 pr-2">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][r.day_of_week] }}</td><td class="py-2"><form method="post" action="/haulier/delete-route/{{ r.id }}" class="inline" onsubmit="return confirm('Remove this route?');"><button type="submit" class="text-red-400 hover:text-red-300 text-sm py-1 min-h-[2rem]">Remove</button></form></td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not routes %}<p class="text-slate-500 text-sm py-2">No planned routes yet.</p>{% endif %}
+      </section>
+
+      <!-- Jobs / payouts -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+        <h2 class="text-lg font-semibold mb-1">Backhaul jobs</h2>
+        <p class="text-slate-500 text-sm mb-3">Jobs you’ve been assigned. Payout after delivery (platform fee {{ platform_fee_percent }}%).</p>
+        {% if jobs %}
+        <ul class="text-sm space-y-2">
+          {% for j in jobs %}<li class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1">Job {{ j.id }} · Vehicle {{ j.vehicle_id }} · Load {{ j.load_id }}{% for p in payments %}{% if p.backhaul_job_id == j.id %} · <span class="text-emerald-300">£{{ (p.net_payout_gbp or 0)|round(2) }}</span> ({{ p.status }}){% endif %}{% endfor %}</li>{% endfor %}
+        </ul>
+        {% else %}<p class="text-slate-500 text-sm">No jobs yet. Find loads above and show interest to get assigned.</p>{% endif %}
+      </section>
+    </div>
+  </body>
+</html>
