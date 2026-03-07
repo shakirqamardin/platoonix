@@ -47,6 +47,11 @@
             <input name="contact_phone" value="{{ haulier.contact_phone or '' }}" class="w-full sm:w-48 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" placeholder="Optional" />
           </div>
           <div>
+            <label class="block text-slate-400 text-sm mb-1">Base postcode (default for route home)</label>
+            <input name="base_postcode" value="{{ haulier.base_postcode or '' }}" placeholder="e.g. MK1 1AA (optional)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+            <p class="text-slate-500 text-xs mt-1">Where you usually return to. Used for “loads on route home” if a vehicle has no base set. Driver can override on the Driver page.</p>
+          </div>
+          <div>
             <label class="block text-slate-400 text-sm mb-1">Stripe Connect account ID</label>
             <input name="payment_account_id" value="{{ haulier.payment_account_id or '' }}" placeholder="acct_… (optional, for payouts)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
           </div>
@@ -107,6 +112,32 @@
           <input name="origin_postcode" value="{{ find_origin_postcode or '' }}" placeholder="Your postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
           <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Find loads</button>
         </form>
+        <p class="text-slate-500 text-xs mb-2">Or find loads along your route home (e.g. delivery → base, within 25 miles of the whole route):</p>
+        <form method="get" action="/haulier/find-backhaul" class="flex flex-wrap items-center gap-2 mb-3">
+          <select name="vehicle_id" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-w-[10rem] min-h-[2.5rem]">
+            <option value="">Vehicle</option>
+            {% for v in vehicles %}
+            <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %}>{{ v.registration }}</option>
+            {% endfor %}
+          </select>
+          <input name="route_from" value="{{ find_route_from or '' }}" placeholder="From (e.g. delivery)" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
+          <span class="text-slate-500">→</span>
+          <input name="route_to" value="{{ find_route_to or '' }}" placeholder="To (e.g. base)" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
+          <button type="submit" class="rounded-lg bg-slate-600 hover:bg-slate-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Loads along route</button>
+        </form>
+        {% if route_matching_results is not none and route_matching_results %}
+        <p class="text-slate-400 text-sm mb-2">Loads along route (within 25 miles of corridor):</p>
+        <div class="overflow-x-auto -mx-1 mb-4">
+          <table class="w-full text-sm border-collapse min-w-[16rem]">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Load</th><th class="py-2 pr-2">Pickup → Delivery</th><th class="py-2 text-right">Mi</th></tr></thead>
+            <tbody>
+              {% for m in route_matching_results %}
+              <tr class="border-b border-slate-800"><td class="py-2 pr-2">{{ m.load.shipper_name }}</td><td class="py-2 pr-2">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</td><td class="py-2 text-right text-emerald-400">{{ m.distance_miles }} mi</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
         {% if matching_results is not none %}
         {% if matching_results %}
         <div class="overflow-x-auto -mx-1">

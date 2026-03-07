@@ -46,3 +46,12 @@ When a haulier is assigned a job, the **driver** controls the whole journey from
 4. **Track page**: admin and loader (and haulier) can open **Track** for a job to see live status and driver position on a map. From admin: **Matches** tab → **Track** next to the job. From loader: **Active jobs** → **Track**.
 
 Payment is tied to these steps: reserved when the job is created, captured when the driver taps **Collected**, and paid out when the driver uploads ePOD and completes delivery.
+
+---
+
+## Loads on your route home (return to base)
+
+When the driver is going **from the delivery location back to base**, the app finds open loads whose **pickup is within 25 miles of the whole route** (not just one point). For example: Manchester (delivery) → Milton Keynes (base) shows jobs anywhere along that corridor.
+
+- **Driver page:** If the vehicle has a **base postcode** set, you see a **“Loads on your route home”** section: open loads along delivery → base. Tap **Interest** to open Find backhaul and express interest.
+- **Haulier dashboard → Find backhaul:** Use **From** (e.g. delivery postcode) and **To** (e.g. base postcode), choose vehicle, then **Loads along route**. Same 25‑mile corridor; you can then show interest via the admin Matches tab or by using the single-postcode search with the load’s pickup.

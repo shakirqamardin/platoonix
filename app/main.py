@@ -70,6 +70,16 @@ def check_db_and_create_tables():
                 conn.rollback()
                 if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                     print("Migration vehicles.base_postcode: {!r}".format(e), file=sys.stderr)
+            # hauliers.base_postcode: company default base (route home); vehicle can override
+            try:
+                conn.execute(text(
+                    "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS base_postcode VARCHAR(20)"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print("Migration hauliers.base_postcode: {!r}".format(e), file=sys.stderr)
             # backhaul_jobs: driver timeline + live GPS
             for col, typ in (
                 ("reached_pickup_at", "TIMESTAMP WITH TIME ZONE"),

@@ -4,6 +4,7 @@ Driver-led flow: reached_pickup -> collected (captures payment) -> departed_pick
 Auth: session-based; haulier role only (driver is haulier's user).
 """
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -133,6 +134,33 @@ def update_job_location(
     db.commit()
     db.refresh(job)
     return _job_to_driver_read(job, db)
+
+
+@router.get("/route-home", response_model=list)
+def loads_on_route_home(
+    request: Request,
+    db: Session = Depends(get_db),
+    from_postcode: str = "",
+    to_postcode: str = "",
+    vehicle_id: Optional[int] = None,
+):
+    """
+    Find open loads within 25 miles of the route from from_postcode (e.g. delivery) to to_postcode (e.g. base).
+    Driver Manchester → Milton Keynes: returns jobs along that corridor.
+    Requires haulier auth; vehicle_id must belong to your haulier (or pass job_id to use job's vehicle + delivery/base).
+    """
+    _, haulier = _get_haulier_user(request, db)
+    if not from_postcode or not to_postcode:
+        return []
+    vid = vehicle_id
+    if vid is None:
+        return []
+    vehicle = db.get(models.Vehicle, vid)
+    if not vehicle or vehicle.haulier_id != haulier.id:
+        return []
+    from app.services.matching import find_matching_loads_along_route
+    pairs = find_matching_loads_along_route(vid, from_postcode.strip(), to_postcode.strip(), db)
+    return [{"load_id": l.id, "shipper_name": l.shipper_name, "pickup_postcode": l.pickup_postcode, "delivery_postcode": l.delivery_postcode, "distance_miles": d} for l, d in pairs]
 
 
 @router.post("/jobs/{job_id}/status", response_model=schemas.DriverJobRead)

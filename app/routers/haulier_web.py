@@ -40,7 +40,7 @@ def driver_page(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Driver-led view: one active job, status buttons, share live location. Haulier only."""
+    """Driver-led view: one active job, status buttons, share live location, loads on route home. Haulier only."""
     result = _haulier_or_redirect(request, db)
     if isinstance(result, RedirectResponse):
         return result
@@ -53,9 +53,37 @@ def driver_page(
         .order_by(models.BackhaulJob.matched_at.desc())
         .first()
     )
+    loads_on_route_home = []
+    show_route_home_hint = False
+    base_postcode_used = None
+    if active_job:
+        load = db.get(models.Load, active_job.load_id)
+        vehicle = db.get(models.Vehicle, active_job.vehicle_id)
+        if load and vehicle:
+            # Base: driver override (query) > vehicle base > company (haulier) base
+            return_to = (request.query_params.get("return_to") or "").strip().upper()
+            base = (return_to or (vehicle.base_postcode or "").strip() or (haulier.base_postcode or "").strip())
+            base_postcode_used = base or None
+            if base:
+                from app.services.matching import find_matching_loads_along_route
+                pairs = find_matching_loads_along_route(
+                    active_job.vehicle_id,
+                    load.delivery_postcode,
+                    base,
+                    db,
+                )
+                loads_on_route_home = [{"load": l, "distance_miles": d} for l, d in pairs]
+            else:
+                show_route_home_hint = True
     return templates.TemplateResponse(
         "driver.html",
-        {"request": request, "active_job": active_job},
+        {
+            "request": request,
+            "active_job": active_job,
+            "loads_on_route_home": loads_on_route_home,
+            "show_route_home_hint": show_route_home_hint,
+            "base_postcode_used": base_postcode_used,
+        },
     )
 
 
@@ -234,8 +262,11 @@ def haulier_find_backhaul(
     vehicle_id_raw = request.query_params.get("vehicle_id", "").strip()
     raw_postcode = (request.query_params.get("origin_postcode") or "").strip()
     origin_postcode = " ".join(raw_postcode.split()).strip() if raw_postcode else ""
+    route_from = (request.query_params.get("route_from") or "").strip().upper()
+    route_to = (request.query_params.get("route_to") or "").strip().upper()
 
     matching_results = None
+    route_matching_results = None
     postcode_lookup_failed = False
     match_diagnostic = None
 
@@ -256,6 +287,17 @@ def haulier_find_backhaul(
                         match_diagnostic = _match_diagnostic(vehicle_id, origin_postcode, db)
         except ValueError:
             matching_results = []
+
+    if vehicle_id_raw and route_from and route_to:
+        try:
+            vehicle_id = int(vehicle_id_raw)
+            vehicle = db.get(models.Vehicle, vehicle_id)
+            if vehicle and vehicle.haulier_id == haulier.id:
+                from app.services.matching import find_matching_loads_along_route
+                pairs = find_matching_loads_along_route(vehicle_id, route_from, route_to, db)
+                route_matching_results = [{"load": load, "distance_miles": dist} for load, dist in pairs]
+        except ValueError:
+            route_matching_results = []
 
     routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
     jobs = (
@@ -284,8 +326,11 @@ def haulier_find_backhaul(
             "total_payout": total_payout,
             "platform_fee_percent": get_settings().platform_fee_percent,
             "matching_results": matching_results,
+            "route_matching_results": route_matching_results,
             "find_vehicle_id": vehicle_id_raw,
             "find_origin_postcode": origin_postcode,
+            "find_route_from": route_from,
+            "find_route_to": route_to,
             "postcode_lookup_failed": postcode_lookup_failed,
             "match_diagnostic": match_diagnostic,
             "profile_updated": None,
@@ -310,6 +355,7 @@ async def haulier_update_profile(
     haulier.contact_email = (form.get("contact_email") or haulier.contact_email or "").strip()
     haulier.contact_phone = (form.get("contact_phone") or "").strip() or None
     haulier.payment_account_id = (form.get("payment_account_id") or "").strip() or None
+    haulier.base_postcode = (form.get("base_postcode") or "").strip().upper() or None
     db.commit()
     return RedirectResponse(url="/haulier?profile_updated=1", status_code=303)
 

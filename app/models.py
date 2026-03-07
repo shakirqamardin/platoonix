@@ -71,6 +71,7 @@ class Haulier(Base):
     contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
     contact_phone: Mapped[Optional[str]] = mapped_column(String(50))
     payment_account_id: Mapped[Optional[str]] = mapped_column(String(255))
+    base_postcode: Mapped[Optional[str]] = mapped_column(String(20))  # company default base (route home); vehicle can override
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

@@ -181,3 +181,83 @@ def find_route_matches(
             if planned_load_matches_route(pl, route, db):
                 results.append((pl, route))
     return results
+
+
+def _points_along_route(
+    from_lat: float, from_lon: float,
+    to_lat: float, to_lon: float,
+    num_points: int = 25,
+) -> List[Tuple[float, float]]:
+    """Return num_points (lat, lon) evenly spaced along the straight line from A to B."""
+    if num_points < 2:
+        return [(from_lat, from_lon), (to_lat, to_lon)]
+    points = []
+    for i in range(num_points):
+        t = i / (num_points - 1) if num_points > 1 else 0
+        lat = from_lat + t * (to_lat - from_lat)
+        lon = from_lon + t * (to_lon - from_lon)
+        points.append((lat, lon))
+    return points
+
+
+def find_matching_loads_along_route(
+    vehicle_id: int,
+    from_postcode: str,
+    to_postcode: str,
+    db: Session,
+    radius_miles: Optional[int] = None,
+) -> List[Tuple[models.Load, float]]:
+    """
+    Find open loads whose pickup is within radius_miles of any point along the
+    route from from_postcode (e.g. delivery) to to_postcode (e.g. base).
+    Driver going Manchester → Milton Keynes gets jobs anywhere along that corridor.
+    Returns list of (load, min_distance_miles) sorted by distance.
+    """
+    settings = get_settings()
+    radius = radius_miles if radius_miles is not None else settings.default_backhaul_radius_miles
+
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    if not vehicle:
+        return []
+
+    from_ll = get_lat_lon((from_postcode or "").strip().upper())
+    to_ll = get_lat_lon((to_postcode or "").strip().upper())
+    if not from_ll or not to_ll:
+        return []
+
+    points = _points_along_route(from_ll[0], from_ll[1], to_ll[0], to_ll[1], num_points=25)
+
+    open_loads = (
+        db.query(models.Load)
+        .filter(models.Load.status == models.LoadStatusEnum.OPEN.value)
+        .all()
+    )
+
+    results = []
+    for load in open_loads:
+        pickup_ll = get_lat_lon(load.pickup_postcode)
+        if not pickup_ll:
+            continue
+        min_dist = min(
+            haversine_miles(pickup_ll[0], pickup_ll[1], lat, lon)
+            for lat, lon in points
+        )
+        if min_dist > radius:
+            continue
+
+        req = load.requirements or {}
+        required_trailer = req.get("trailer_type") if isinstance(req, dict) else None
+        if required_trailer is not None and required_trailer != "":
+            if (vehicle.trailer_type or "").strip().lower() != str(required_trailer).strip().lower():
+                continue
+        if vehicle.capacity_weight_kg is not None and vehicle.capacity_weight_kg > 0:
+            if (load.weight_kg or 0) > vehicle.capacity_weight_kg:
+                continue
+        if vehicle.capacity_volume_m3 is not None and vehicle.capacity_volume_m3 > 0:
+            if (load.volume_m3 or 0) > vehicle.capacity_volume_m3:
+                continue
+
+        results.append((load, round(min_dist, 1)))
+
+    results.sort(key=lambda x: x[1])
+    return results
