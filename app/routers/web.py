@@ -21,6 +21,33 @@ templates = Jinja2Templates(directory="app/templates")
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "templates"
 
 
+@router.get("/terms", response_class=HTMLResponse)
+def terms_page(request: Request) -> HTMLResponse:
+    """Public Terms & Conditions page. No login required."""
+    return templates.TemplateResponse(
+        "terms.html",
+        {"request": request, "last_updated": "March 2026"},
+    )
+
+
+@router.get("/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request) -> HTMLResponse:
+    """Public Privacy Policy (UK GDPR). No login required."""
+    return templates.TemplateResponse(
+        "privacy.html",
+        {"request": request, "last_updated": "March 2026"},
+    )
+
+
+@router.get("/confidentiality", response_class=HTMLResponse)
+def confidentiality_page(request: Request) -> HTMLResponse:
+    """Public Confidentiality & Non-Disclosure page. No login required."""
+    return templates.TemplateResponse(
+        "confidentiality.html",
+        {"request": request, "last_updated": "March 2026"},
+    )
+
+
 @router.get("/download-templates/{name}", response_class=FileResponse)
 def download_template(name: str) -> FileResponse:
     """Download a CSV template (hauliers, vehicles, or loads). Saves to your Downloads folder."""
