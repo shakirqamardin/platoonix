@@ -2,7 +2,8 @@
 {% block title %}Log in – Platoonix{% endblock %}
 {% block content %}
   <h1 class="text-lg font-semibold text-slate-200 mb-1">Log in</h1>
-  <p class="text-slate-400 text-sm mb-4">Use the email and password for your haulier or loader account.</p>
+  <p class="text-slate-400 text-sm mb-4">Use the email and password for your account.</p>
+  <p class="text-slate-500 text-xs mb-4 rounded-lg bg-slate-800/80 px-3 py-2 border border-slate-700"><strong>Admin:</strong> Log in with <code class="text-emerald-300">admin@platoonix.local</code> and the admin password (default: <code class="text-slate-400">change-me</code>). Hauliers and loaders use the email/password your admin created for them.</p>
   {% if logout %}<p class="text-slate-300 text-sm mb-3 rounded-lg bg-slate-800 px-3 py-2">You are logged out. Log in with a different account below.</p>{% endif %}
   {% if password_reset %}<p class="text-emerald-400 text-sm mb-3 rounded-lg bg-emerald-900/20 px-3 py-2">Password updated. You can log in with your new password.</p>{% endif %}
   {% if error %}<p class="text-amber-300 text-sm mb-3 rounded-lg bg-amber-900/30 px-3 py-2">{{ error }}</p>{% endif %}

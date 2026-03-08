@@ -29,6 +29,7 @@
       </header>
 
       {% if delete_error %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-amber-200 bg-amber-900/40">{{ delete_error }}</div>{% endif %}
+      {% if create_login_error %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-amber-200 bg-amber-900/40">Create login: {{ create_login_error }}</div>{% endif %}
       {% if deleted %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-emerald-300 bg-emerald-900/30">{% if deleted == 'job' %}Job cancelled. You can now delete the load or vehicle if needed.{% else %}Deleted {{ deleted }}.{% endif %}</div>{% endif %}
       {% if uploaded is not none and uploaded > 0 %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-emerald-300 bg-emerald-900/30">Uploaded {{ uploaded }} {{ upload_type }}.{% if upload_type == 'loads' %} Matching runs automatically — check the Matches tab.{% endif %}</div>{% endif %}
       {% if upload_errors and upload_errors > 0 %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-amber-200 bg-amber-900/40">Upload had {{ upload_errors }} error(s).</div>{% endif %}
@@ -99,6 +100,7 @@
 
       <!-- Vehicles -->
       <section class="section-panel {{ 'active' if initial_section == 'vehicles' else '' }}" data-section="vehicles">
+        <p class="text-slate-500 text-sm mb-2">You're logged in as <strong>admin</strong>. Companies should <a href="/logout" class="text-emerald-400 hover:underline">switch user</a> and log in as haulier—then they only see their own company and vehicles (no re-entering). Below is for admin to add companies/vehicles on their behalf.</p>
         <div class="flex flex-wrap items-center gap-2 mb-3">
           <form method="post" action="/hauliers" class="inline-flex flex-wrap gap-2">
             <input name="name" required placeholder="Company" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-28" />
@@ -115,7 +117,18 @@
             <select name="trailer_type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="">Trailer</option><option value="curtain_sider">Curtain</option><option value="box">Box</option><option value="flatbed">Flatbed</option><option value="other">Other</option></select>
             <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add vehicle</button>
           </form>
-          <span class="text-slate-500 text-xs"><a href="/download-templates/vehicles" download target="_blank" class="template-download text-emerald-500 hover:underline">CSV</a> · <a href="/download-templates/hauliers" download target="_blank" class="template-download text-emerald-500 hover:underline">Hauliers CSV</a></span>
+          <span class="text-slate-500 text-xs">|</span>
+          <form method="post" action="/upload" enctype="multipart/form-data" class="inline-flex flex-wrap gap-2 items-center">
+            <input type="hidden" name="type" value="hauliers" />
+            <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300" required />
+            <button type="submit" class="rounded bg-slate-600 hover:bg-slate-500 px-2 py-1.5 text-sm text-white">Bulk upload companies</button>
+          </form>
+          <form method="post" action="/upload" enctype="multipart/form-data" class="inline-flex flex-wrap gap-2 items-center">
+            <input type="hidden" name="type" value="vehicles" />
+            <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300" required />
+            <button type="submit" class="rounded bg-slate-600 hover:bg-slate-500 px-2 py-1.5 text-sm text-white">Bulk upload vehicles</button>
+          </form>
+          <span class="text-slate-500 text-xs"><a href="/download-templates/vehicles" download target="_blank" class="template-download text-emerald-500 hover:underline">Vehicles CSV</a> · <a href="/download-templates/hauliers" download target="_blank" class="template-download text-emerald-500 hover:underline">Hauliers CSV</a></span>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm border-collapse">
@@ -219,29 +232,42 @@
       <!-- Admin: create logins -->
       <section class="section-panel {{ 'active' if initial_section == 'admin' else '' }}" data-section="admin">
         <h2 class="text-lg font-semibold mb-3">Create logins</h2>
-        <p class="text-slate-400 text-sm mb-4">Link an account so a haulier or loader can log in. <strong>Haulier login:</strong> add a company first in the Vehicles tab (Add company), then pick it here.</p>
+        <p class="text-slate-300 text-sm mb-2">You are logged in as <strong>admin</strong>. The forms below are for creating <strong>haulier</strong> and <strong>loader</strong> accounts—do not enter your admin email here. Use the email you want for each new company (e.g. <code class="text-slate-400">haulier@company.com</code>). To switch user or log in as admin again, use <a href="/logout" class="text-emerald-400 hover:underline">Switch user / Sign out</a> then log in at the login page with <code class="text-emerald-300">admin@platoonix.local</code>.</p>
+        <p class="text-slate-500 text-sm mb-4">Create a company and its login in one step. Or link a login to a company you already added in Vehicles.</p>
         <div class="grid md:grid-cols-2 gap-6 mb-4">
           <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-            <p class="text-slate-300 font-medium mb-2">Haulier login</p>
-            <form method="post" action="/create-haulier-login" class="space-y-2">
-              <select name="haulier_id" required class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="" disabled>— Pick company —</option>{% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }} ({{ h.contact_email }})</option>{% endfor %}</select>
-              <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
-              <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
-              <button type="submit" class="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Create haulier login</button>
-            </form>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-            <p class="text-slate-300 font-medium mb-2">Loader account (new company + login)</p>
-            <form method="post" action="/create-loader-account" class="space-y-2">
+            <p class="text-slate-300 font-medium mb-2">New haulier (company + login in one step)</p>
+            <form method="post" action="/create-haulier-account" class="space-y-2">
               <input name="name" required placeholder="Company name" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
               <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <input name="contact_phone" placeholder="Phone (optional)" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
               <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
-              <button type="submit" class="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Create loader account</button>
+              <button type="submit" class="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Create company + login</button>
+            </form>
+            <p class="text-slate-500 text-xs mt-2">They can log in and add vehicles straight away—no separate "Add company" step.</p>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+            <p class="text-slate-300 font-medium mb-2">Link login to existing company</p>
+            <p class="text-slate-500 text-xs mb-2">Only if you already added the company in the Vehicles tab and need a second login for them.</p>
+            <form method="post" action="/create-haulier-login" class="space-y-2" id="form-haulier-login">
+              <select name="haulier_id" required class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" id="select-haulier-for-login"><option value="" disabled>— Pick company —</option>{% for h in hauliers %}<option value="{{ h.id }}" data-email="{{ h.contact_email or '' }}">{{ h.name }} ({{ h.contact_email }})</option>{% endfor %}</select>
+              <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" id="input-haulier-login-email" />
+              <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <button type="submit" class="rounded bg-slate-600 px-3 py-1.5 text-sm text-white">Create haulier login</button>
             </form>
           </div>
         </div>
-        {% if create_login_error %}<p class="text-amber-400 text-sm">{{ create_login_error }}</p>{% endif %}
-        {% if create_login_ok %}<p class="text-emerald-400 text-sm">{{ create_login_ok }}</p>{% endif %}
+        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mt-4">
+          <p class="text-slate-300 font-medium mb-2">Loader (company + login)</p>
+          <form method="post" action="/create-loader-account" class="space-y-2">
+            <input name="name" required placeholder="Company name" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+            <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+            <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+            <button type="submit" class="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Create loader account</button>
+          </form>
+        </div>
+        {% if create_login_error %}<p class="text-amber-400 text-sm mt-2">{{ create_login_error }}</p>{% endif %}
+        {% if create_login_ok %}<p class="text-emerald-400 text-sm mt-2">{{ create_login_ok }}</p>{% endif %}
       </section>
     </div>
 
@@ -263,6 +289,20 @@
         }
         radios.forEach(function (r) { r.addEventListener('change', go); });
         go();
+        if (window.location.search.indexOf('section=admin') !== -1) {
+          var adminTab = document.querySelector('input[name="section"][value="admin"]');
+          if (adminTab && adminTab.closest('label')) adminTab.closest('label').scrollIntoView({ block: 'nearest' });
+        }
+        var selectHaulier = document.getElementById('select-haulier-for-login');
+        var inputEmail = document.getElementById('input-haulier-login-email');
+        if (selectHaulier && inputEmail) {
+          function setEmailFromSelect() {
+            var opt = selectHaulier.options[selectHaulier.selectedIndex];
+            if (opt && opt.getAttribute('data-email')) inputEmail.value = opt.getAttribute('data-email') || '';
+          }
+          selectHaulier.addEventListener('change', setEmailFromSelect);
+          setEmailFromSelect();
+        }
       })();
       (function () {
         var startBtn = document.getElementById('start-alerts-btn');

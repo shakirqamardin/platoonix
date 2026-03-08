@@ -4,7 +4,7 @@ Only for users with role=haulier; data filtered by haulier_id.
 """
 import uuid
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -87,7 +87,8 @@ def driver_page(
     )
 
 
-def _driver_job_for_haulier(job_id: int, haulier: models.Haulier, db: Session) -> models.BackhaulJob | None:
+def _driver_job_for_haulier(job_id: int, haulier: models.Haulier, db: Session) -> Optional[models.BackhaulJob]:
+    """Return the BackhaulJob if it belongs to this haulier, else None."""
     job = db.get(models.BackhaulJob, job_id)
     if not job:
         return None

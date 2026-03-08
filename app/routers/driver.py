@@ -40,7 +40,7 @@ def _get_haulier_user(request: Request, db: Session) -> tuple[models.User, model
     return (user, haulier)
 
 
-def _job_belongs_to_haulier(job_id: int, haulier: models.Haulier, db: Session) -> models.BackhaulJob | None:
+def _job_belongs_to_haulier(job_id: int, haulier: models.Haulier, db: Session) -> Optional[models.BackhaulJob]:
     job = db.get(models.BackhaulJob, job_id)
     if not job:
         return None

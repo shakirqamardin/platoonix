@@ -682,6 +682,44 @@ async def show_interest_form(
     return RedirectResponse(url="/", status_code=303)
 
 
+@router.post("/create-haulier-account", response_class=RedirectResponse)
+async def create_haulier_account(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+) -> RedirectResponse:
+    """Admin: create a new haulier (company) and their login in one step. No separate Add company needed."""
+    from urllib.parse import quote_plus
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    email = (form.get("email") or "").strip().lower()
+    contact_phone = (form.get("contact_phone") or "").strip() or None
+    password = form.get("password") or ""
+    base = "/?section=admin"
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&create_login_error=" + quote_plus(msg), status_code=303)
+    if not name or not email:
+        return redirect_error("Company name and email required")
+    if len(password) < 6:
+        return redirect_error("Password must be at least 6 characters")
+    if db.query(models.User).filter(models.User.email == email).first():
+        return redirect_error("Email already used")
+    haulier = models.Haulier(name=name, contact_email=email, contact_phone=contact_phone)
+    db.add(haulier)
+    db.commit()
+    db.refresh(haulier)
+    user = models.User(
+        email=email,
+        password_hash=hash_password(password),
+        role="haulier",
+        haulier_id=haulier.id,
+        loader_id=None,
+    )
+    db.add(user)
+    db.commit()
+    return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Company + login created. They can log in and add vehicles."), status_code=303)
+
+
 @router.post("/create-haulier-login", response_class=RedirectResponse)
 async def create_haulier_login(
     request: Request,
@@ -689,21 +727,24 @@ async def create_haulier_login(
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
     """Admin: create a login for an existing haulier."""
+    from urllib.parse import quote_plus
     form = await request.form()
     haulier_id = form.get("haulier_id")
     email = (form.get("email") or "").strip().lower()
     password = form.get("password") or ""
     base = "/?section=admin"
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&create_login_error=" + quote_plus(msg), status_code=303)
     if not haulier_id or not email or not password:
-        return RedirectResponse(url=base + "&create_login_error=Missing+fields", status_code=303)
+        return redirect_error("Missing fields")
     try:
         haulier_id = int(haulier_id)
     except (TypeError, ValueError):
-        return RedirectResponse(url=base + "&create_login_error=Invalid+haulier", status_code=303)
+        return redirect_error("Invalid haulier")
     if db.query(models.Haulier).filter(models.Haulier.id == haulier_id).first() is None:
-        return RedirectResponse(url=base + "&create_login_error=Haulier+not+found", status_code=303)
+        return redirect_error("Haulier not found")
     if db.query(models.User).filter(models.User.email == email).first():
-        return RedirectResponse(url=base + "&create_login_error=Email+already+used", status_code=303)
+        return redirect_error("Email already used")
     user = models.User(
         email=email,
         password_hash=hash_password(password),
@@ -713,7 +754,7 @@ async def create_haulier_login(
     )
     db.add(user)
     db.commit()
-    return RedirectResponse(url=base + "&create_login_ok=Haulier+login+created", status_code=303)
+    return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Haulier login created"), status_code=303)
 
 
 @router.post("/create-loader-account", response_class=RedirectResponse)
@@ -728,10 +769,13 @@ async def create_loader_account(
     email = (form.get("email") or "").strip().lower()
     password = form.get("password") or ""
     base = "/?section=admin"
+    from urllib.parse import quote_plus
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&create_login_error=" + quote_plus(msg), status_code=303)
     if not name or not email or not password:
-        return RedirectResponse(url=base + "&create_login_error=Missing+fields", status_code=303)
+        return redirect_error("Missing fields")
     if db.query(models.User).filter(models.User.email == email).first():
-        return RedirectResponse(url=base + "&create_login_error=Email+already+used", status_code=303)
+        return redirect_error("Email already used")
     loader = models.Loader(name=name, contact_email=email, contact_phone=None)
     db.add(loader)
     db.commit()
@@ -745,5 +789,5 @@ async def create_loader_account(
     )
     db.add(user)
     db.commit()
-    return RedirectResponse(url=base + "&create_login_ok=Loader+account+created", status_code=303)
+    return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Loader account created"), status_code=303)
 
