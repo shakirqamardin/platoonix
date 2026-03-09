@@ -411,6 +411,9 @@ async def create_load_form(
     delivery_postcode = (form.get("delivery_postcode") or "").strip().upper()
     weight_kg = _parse_float(form.get("weight_kg"))
     volume_m3 = _parse_float(form.get("volume_m3"))
+    pallets = _parse_float(form.get("pallets"))
+    if pallets is not None and pallets > 0:
+        volume_m3 = pallets * get_settings().pallet_volume_m3
     required_vehicle_type = (form.get("required_vehicle_type") or "").strip().lower() or None
     required_trailer_type = (form.get("required_trailer_type") or "").strip().lower() or None
     requirements = {}
@@ -429,6 +432,7 @@ async def create_load_form(
         pickup_window_end=datetime.utcnow(),
         weight_kg=weight_kg,
         volume_m3=volume_m3,
+        pallets=pallets,
         requirements=requirements,
     )
     db.add(load)

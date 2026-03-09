@@ -58,7 +58,7 @@ async def upload_loads(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    """Upload CSV or Excel to create loads. Columns: shipper_name, pickup_postcode, delivery_postcode; optional: pickup/delivery windows, weight_kg, volume_m3, budget_gbp."""
+    """Upload CSV or Excel to create loads. Columns: shipper_name, pickup_postcode, delivery_postcode; optional: pickup/delivery windows, weight_kg, pallets, volume_m3, budget_gbp. If pallets is set, volume_m3 is calculated (1.2 m³ per pallet)."""
     _check_file(file)
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:

@@ -145,6 +145,7 @@ class Load(Base):
     delivery_window_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     weight_kg: Mapped[Optional[float]] = mapped_column(Float)
     volume_m3: Mapped[Optional[float]] = mapped_column(Float)
+    pallets: Mapped[Optional[float]] = mapped_column(Float)  # if set, volume_m3 = pallets * 1.2 (display both)
     requirements: Mapped[Optional[dict]] = mapped_column(JSON)
     budget_gbp: Mapped[Optional[float]] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(20), default=LoadStatusEnum.OPEN.value)

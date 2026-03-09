@@ -94,6 +94,11 @@ def import_loads(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, List[str
             weight = float(weight) if weight is not None and str(weight).strip() else None
             volume = row.get("volume_m3")
             volume = float(volume) if volume is not None and str(volume).strip() else None
+            pallets_val = row.get("pallets")
+            pallets_val = float(pallets_val) if pallets_val is not None and str(pallets_val).strip() else None
+            if pallets_val is not None and pallets_val > 0:
+                from app.config import get_settings
+                volume = pallets_val * get_settings().pallet_volume_m3
             budget = row.get("budget_gbp")
             budget = float(budget) if budget is not None and str(budget).strip() else None
             req_vehicle = (str(row.get("required_vehicle_type") or "").strip().lower()) or None
@@ -118,6 +123,7 @@ def import_loads(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, List[str
                 delivery_window_end=delivery_end,
                 weight_kg=weight,
                 volume_m3=volume,
+                pallets=pallets_val,
                 budget_gbp=budget,
                 requirements=requirements,
             )

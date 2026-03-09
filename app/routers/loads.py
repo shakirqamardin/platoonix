@@ -13,6 +13,11 @@ def create_load(
     load_in: schemas.LoadCreate,
     db: Session = Depends(get_db),
 ) -> models.Load:
+    from app.config import get_settings
+    volume_m3 = load_in.volume_m3
+    pallets = load_in.pallets
+    if pallets is not None and pallets > 0:
+        volume_m3 = pallets * get_settings().pallet_volume_m3
     load = models.Load(
         shipper_name=load_in.shipper_name,
         pickup_postcode=load_in.pickup_postcode.upper(),
@@ -22,7 +27,8 @@ def create_load(
         delivery_window_start=load_in.delivery_window_start,
         delivery_window_end=load_in.delivery_window_end,
         weight_kg=load_in.weight_kg,
-        volume_m3=load_in.volume_m3,
+        volume_m3=volume_m3,
+        pallets=pallets,
         requirements=load_in.requirements,
         budget_gbp=load_in.budget_gbp,
     )

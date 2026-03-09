@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Matching defaults
     default_backhaul_radius_miles: int = 25
 
+    # Pallets → volume: 1 pallet = this many m³ (euro pallet ~1.2)
+    pallet_volume_m3: float = 1.2
+
     # Platform fee: single 8% of job value (deducted from haulier payout)
     platform_fee_percent: float = 8.0
 

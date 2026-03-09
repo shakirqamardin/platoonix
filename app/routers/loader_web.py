@@ -116,6 +116,16 @@ async def loader_add_load(
             volume_m3 = float(v)
     except (TypeError, ValueError):
         pass
+    pallets = None
+    try:
+        p = form.get("pallets")
+        if p is not None and str(p).strip():
+            pallets = float(p)
+            if pallets and pallets > 0:
+                from app.config import get_settings
+                volume_m3 = pallets * get_settings().pallet_volume_m3
+    except (TypeError, ValueError):
+        pass
     required_vehicle_type = (form.get("required_vehicle_type") or "").strip().lower() or None
     required_trailer_type = (form.get("required_trailer_type") or "").strip().lower() or None
     requirements = {}
@@ -134,6 +144,7 @@ async def loader_add_load(
         pickup_window_end=datetime.utcnow(),
         weight_kg=weight_kg,
         volume_m3=volume_m3,
+        pallets=pallets,
         requirements=requirements,
     )
     db.add(load)

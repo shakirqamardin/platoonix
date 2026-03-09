@@ -91,6 +91,16 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration hauliers.{col}: {e!r}", file=sys.stderr)
+            # loads.pallets: optional; when set, volume_m3 = pallets * 1.2 for display & matching
+            try:
+                conn.execute(text(
+                    "ALTER TABLE loads ADD COLUMN IF NOT EXISTS pallets DOUBLE PRECISION"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration loads.pallets: {e!r}", file=sys.stderr)
             # backhaul_jobs: driver timeline + live GPS
             for col, typ in (
                 ("reached_pickup_at", "TIMESTAMP WITH TIME ZONE"),

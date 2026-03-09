@@ -68,6 +68,7 @@ class LoadBase(BaseModel):
     delivery_window_end: Optional[datetime] = None
     weight_kg: Optional[float] = None
     volume_m3: Optional[float] = None
+    pallets: Optional[float] = None
     requirements: Optional[dict[str, Any]] = None
     budget_gbp: Optional[float] = None
 
