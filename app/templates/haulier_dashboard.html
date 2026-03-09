@@ -32,7 +32,7 @@
       <!-- My company -->
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
         <h2 class="text-lg font-semibold mb-1">My company</h2>
-        <p class="text-slate-500 text-sm mb-3">Your details and payment account for receiving payouts.</p>
+        <p class="text-slate-500 text-sm mb-3">All company and payment details in one place. You only enter these once; they're used for matching, payouts and contact.</p>
         <form method="post" action="/haulier/profile" class="space-y-3 max-w-xl">
           <div>
             <label class="block text-slate-400 text-sm mb-1">Company name</label>
@@ -51,9 +51,17 @@
             <input name="base_postcode" value="{{ haulier.base_postcode or '' }}" placeholder="e.g. MK1 1AA (optional)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
             <p class="text-slate-500 text-xs mt-1">Where you usually return to. Used for “loads on route home” if a vehicle has no base set. Driver can override on the Driver page.</p>
           </div>
+          <div class="pt-2 border-t border-slate-700">
+            <p class="text-slate-400 text-sm font-medium mb-2">Bank details (for payouts)</p>
+            <input name="bank_account_name" value="{{ haulier.bank_account_name or '' }}" placeholder="Account name" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500 mb-2" />
+            <div class="flex gap-2">
+              <input name="sort_code" value="{{ haulier.sort_code or '' }}" placeholder="Sort code (e.g. 12-34-56)" class="w-32 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" maxlength="8" />
+              <input name="account_number" value="{{ haulier.account_number or '' }}" placeholder="Account number" class="w-36 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" maxlength="8" />
+            </div>
+          </div>
           <div>
-            <label class="block text-slate-400 text-sm mb-1">Stripe Connect account ID</label>
-            <input name="payment_account_id" value="{{ haulier.payment_account_id or '' }}" placeholder="acct_… (optional, for payouts)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+            <label class="block text-slate-400 text-sm mb-1">Stripe Connect account ID (optional)</label>
+            <input name="payment_account_id" value="{{ haulier.payment_account_id or '' }}" placeholder="acct_… (if using Stripe for payouts)" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500" />
           </div>
           <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Save company details</button>
         </form>
@@ -63,15 +71,19 @@
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
         <h2 class="text-lg font-semibold mb-1">My vehicles</h2>
         <p class="text-slate-500 text-sm mb-3">Add vehicles to search for matching backhaul loads. Set <strong>base postcode</strong> so loads near you match automatically and you get alerts.</p>
-        <form method="post" action="/haulier/vehicles" class="flex flex-wrap items-end gap-2 mb-3">
-          <input name="registration" required placeholder="Registration" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 sm:w-24 min-h-[2.5rem]" />
+        <form method="post" action="/haulier/vehicles" class="flex flex-wrap items-end gap-2 mb-3" id="form-add-vehicle">
+          <div class="flex items-end gap-1">
+            <input name="registration" id="vehicle-reg" required placeholder="Registration" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 sm:w-24 min-h-[2.5rem]" />
+            <button type="button" id="btn-dvla-lookup" class="rounded-lg bg-slate-600 hover:bg-slate-500 px-2.5 py-2.5 text-sm text-white min-h-[2.5rem] whitespace-nowrap" title="Auto-fill from DVLA">Look up</button>
+          </div>
+          <span id="dvla-lookup-msg" class="text-slate-500 text-xs self-center hidden"></span>
           <input name="base_postcode" placeholder="Base postcode (for auto-match)" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-32 min-h-[2.5rem] placeholder-slate-500" title="Where you're usually empty; loads near here match automatically" />
-          <select name="vehicle_type" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">
+          <select name="vehicle_type" id="vehicle-type" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">
             <option value="artic">Artic</option>
             <option value="rigid">Rigid</option>
             <option value="van">Van</option>
           </select>
-          <select name="trailer_type" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">
+          <select name="trailer_type" id="vehicle-trailer" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">
             <option value="">Trailer</option>
             <option value="curtain_sider">Curtain</option>
             <option value="box">Box</option>
@@ -196,5 +208,36 @@
         {% else %}<p class="text-slate-500 text-sm">No jobs yet. Find loads above and show interest to get assigned.</p>{% endif %}
       </section>
     </div>
+    <script>
+      (function() {
+        var btn = document.getElementById('btn-dvla-lookup');
+        var regInput = document.getElementById('vehicle-reg');
+        var typeSelect = document.getElementById('vehicle-type');
+        var trailerSelect = document.getElementById('vehicle-trailer');
+        var msgEl = document.getElementById('dvla-lookup-msg');
+        if (!btn || !regInput || !typeSelect) return;
+        btn.addEventListener('click', function() {
+          var reg = (regInput.value || '').trim().replace(/\s/g, '');
+          if (reg.length < 2) { msgEl.textContent = 'Enter a registration first'; msgEl.classList.remove('hidden'); return; }
+          msgEl.textContent = 'Looking up…'; msgEl.classList.remove('hidden'); msgEl.classList.remove('text-amber-400'); msgEl.classList.add('text-slate-500');
+          btn.disabled = true;
+          fetch('/api/dvla-lookup?reg=' + encodeURIComponent(reg))
+            .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+            .then(function(o) {
+              btn.disabled = false;
+              if (o.ok && o.data.vehicle_type) {
+                typeSelect.value = o.data.vehicle_type;
+                if (o.data.trailer_type && trailerSelect.querySelector('option[value="' + o.data.trailer_type + '"]')) trailerSelect.value = o.data.trailer_type;
+                msgEl.textContent = (o.data.make || o.data.model) ? (o.data.make || '') + ' ' + (o.data.model || '') : 'Details filled from DVLA';
+                msgEl.classList.remove('text-amber-400');
+              } else {
+                msgEl.textContent = o.data.error || 'Not found';
+                msgEl.classList.add('text-amber-400');
+              }
+            })
+            .catch(function() { btn.disabled = false; msgEl.textContent = 'Lookup failed'; msgEl.classList.add('text-amber-400'); });
+        });
+      })();
+    </script>
   </body>
 </html>

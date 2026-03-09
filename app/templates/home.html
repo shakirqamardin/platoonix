@@ -100,7 +100,7 @@
 
       <!-- Vehicles -->
       <section class="section-panel {{ 'active' if initial_section == 'vehicles' else '' }}" data-section="vehicles">
-        <p class="text-slate-500 text-sm mb-2">You're logged in as <strong>admin</strong>. Companies should <a href="/logout" class="text-emerald-400 hover:underline">switch user</a> and log in as haulier—then they only see their own company and vehicles (no re-entering). Below is for admin to add companies/vehicles on their behalf.</p>
+        <p class="text-slate-500 text-sm mb-2">You're logged in as <strong>admin</strong>. Companies should <a href="/logout" class="text-emerald-400 hover:underline">switch user</a> and log in as haulier—then they only see their own company and vehicles (no re-entering). <strong>Add company</strong> below is only for adding a company record without a login; to give them access, use <strong>Admin → Create company + login</strong> so they enter their details once in My company.</p>
         <div class="flex flex-wrap items-center gap-2 mb-3">
           <form method="post" action="/hauliers" class="inline-flex flex-wrap gap-2">
             <input name="name" required placeholder="Company" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-28" />
@@ -109,12 +109,13 @@
             <button type="submit" class="rounded bg-slate-600 px-2 py-1.5 text-sm">Add company</button>
           </form>
           <span class="text-slate-500 text-xs">|</span>
-          <form method="post" action="/vehicles" class="inline-flex flex-wrap gap-2">
+          <form method="post" action="/vehicles" class="inline-flex flex-wrap gap-2" id="admin-form-add-vehicle">
             <select name="haulier_id" required class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm">{% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}<option value="" disabled>Company</option></select>
-            <input name="registration" required placeholder="Reg" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+            <input name="registration" id="admin-vehicle-reg" required placeholder="Reg" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+            <button type="button" id="admin-btn-dvla-lookup" class="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm hover:bg-slate-600" title="Auto-fill from DVLA">Look up</button>
             <input name="base_postcode" placeholder="Base postcode (for auto-match)" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-32" title="Where this vehicle is usually empty; loads near here will match automatically" />
-            <select name="vehicle_type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="artic">Artic</option><option value="rigid">Rigid</option><option value="van">Van</option></select>
-            <select name="trailer_type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="">Trailer</option><option value="curtain_sider">Curtain</option><option value="box">Box</option><option value="flatbed">Flatbed</option><option value="other">Other</option></select>
+            <select name="vehicle_type" id="admin-vehicle-type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="artic">Artic</option><option value="rigid">Rigid</option><option value="van">Van</option></select>
+            <select name="trailer_type" id="admin-vehicle-trailer" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="">Trailer</option><option value="curtain_sider">Curtain</option><option value="box">Box</option><option value="flatbed">Flatbed</option><option value="other">Other</option></select>
             <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add vehicle</button>
           </form>
           <span class="text-slate-500 text-xs">|</span>
@@ -340,6 +341,28 @@
         if (stopBtn) stopBtn.addEventListener('click', function () { if (eventSource) eventSource.close(); eventSource = null; document.getElementById('start-alerts-btn').classList.remove('hidden'); stopBtn.classList.add('hidden'); });
       })();
       document.querySelectorAll('.template-download').forEach(function(a) { a.addEventListener('click', function once() { a.style.pointerEvents = 'none'; a.style.opacity = '0.6'; setTimeout(function() { a.style.pointerEvents = ''; a.style.opacity = ''; }, 2000); a.removeEventListener('click', once); }); });
+      (function() {
+        var btn = document.getElementById('admin-btn-dvla-lookup');
+        var regInput = document.getElementById('admin-vehicle-reg');
+        var typeSelect = document.getElementById('admin-vehicle-type');
+        var trailerSelect = document.getElementById('admin-vehicle-trailer');
+        if (!btn || !regInput || !typeSelect) return;
+        btn.addEventListener('click', function() {
+          var reg = (regInput.value || '').trim().replace(/\s/g, '');
+          if (reg.length < 2) return;
+          btn.disabled = true;
+          fetch('/api/dvla-lookup?reg=' + encodeURIComponent(reg))
+            .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+            .then(function(o) {
+              btn.disabled = false;
+              if (o.ok && o.data.vehicle_type) {
+                typeSelect.value = o.data.vehicle_type;
+                if (o.data.trailer_type && trailerSelect.querySelector('option[value="' + o.data.trailer_type + '"]')) trailerSelect.value = o.data.trailer_type;
+              }
+            })
+            .catch(function() { btn.disabled = false; });
+        });
+      })();
     </script>
     <footer class="mt-8 pt-4 border-t border-slate-800 text-center text-slate-500 text-sm">
       <a href="/terms" class="text-slate-500 hover:text-slate-400">Terms</a>

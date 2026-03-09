@@ -2,8 +2,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -46,6 +46,29 @@ def confidentiality_page(request: Request) -> HTMLResponse:
         "confidentiality.html",
         {"request": request, "last_updated": "March 2026"},
     )
+
+
+@router.get("/api/dvla-lookup")
+def dvla_lookup(
+    request: Request,
+    reg: str = Query(..., min_length=2),
+    db: Session = Depends(get_db),
+):
+    """DVLA lookup by registration; returns suggested vehicle_type and details for auto-filling add-vehicle form. Requires login."""
+    from app.services.dvla import DvlaError, lookup_vehicle_by_registration, suggest_vehicle_form_from_dvla
+    user = get_current_user_optional(request, db)
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+    reg = (reg or "").strip().upper().replace(" ", "")
+    if len(reg) < 2:
+        return JSONResponse({"error": "Registration required"}, status_code=400)
+    try:
+        data = lookup_vehicle_by_registration(reg)
+    except DvlaError as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+    if not data:
+        return JSONResponse({"error": "Vehicle not found", "vehicle_type": "rigid"}, status_code=200)
+    return JSONResponse(suggest_vehicle_form_from_dvla(data))
 
 
 @router.get("/download-templates/{name}", response_class=FileResponse)

@@ -44,3 +44,40 @@ def lookup_vehicle_by_registration(registration: str) -> Optional[Dict[str, Any]
 
     return response.json()
 
+
+def suggest_vehicle_form_from_dvla(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Map DVLA API response to form fields: vehicle_type (artic/rigid/van), optional trailer hint.
+    DVLA returns revenueWeight (kg), wheelplan (e.g. "2 axle rigid", "3 or more axle artic"), make, model, fuelType.
+    """
+    out: Dict[str, Any] = {
+        "vehicle_type": "rigid",
+        "trailer_type": None,
+        "make": data.get("make"),
+        "model": data.get("model"),
+        "fuel_type": data.get("fuelType"),
+        "revenue_weight_kg": data.get("revenueWeight"),
+    }
+    rev_kg = None
+    try:
+        rw = data.get("revenueWeight")
+        if rw is not None:
+            rev_kg = int(rw)
+    except (TypeError, ValueError):
+        pass
+    wheelplan = (data.get("wheelplan") or "").lower()
+    if rev_kg is not None:
+        if rev_kg >= 18000 or "artic" in wheelplan or "3 or more" in wheelplan:
+            out["vehicle_type"] = "artic"
+        elif rev_kg >= 3500 or "rigid" in wheelplan or "2 axle" in wheelplan:
+            out["vehicle_type"] = "rigid"
+        else:
+            out["vehicle_type"] = "van"
+    elif "artic" in wheelplan or "3 or more" in wheelplan:
+        out["vehicle_type"] = "artic"
+    elif "rigid" in wheelplan or "2 axle" in wheelplan:
+        out["vehicle_type"] = "rigid"
+    else:
+        out["vehicle_type"] = "van"
+    return out
+

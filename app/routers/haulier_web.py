@@ -357,6 +357,9 @@ async def haulier_update_profile(
     haulier.contact_phone = (form.get("contact_phone") or "").strip() or None
     haulier.payment_account_id = (form.get("payment_account_id") or "").strip() or None
     haulier.base_postcode = (form.get("base_postcode") or "").strip().upper() or None
+    haulier.bank_account_name = (form.get("bank_account_name") or "").strip() or None
+    haulier.sort_code = (form.get("sort_code") or "").strip().replace(" ", "") or None
+    haulier.account_number = (form.get("account_number") or "").strip().replace(" ", "") or None
     db.commit()
     return RedirectResponse(url="/haulier?profile_updated=1", status_code=303)
 

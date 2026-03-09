@@ -72,6 +72,10 @@ class Haulier(Base):
     contact_phone: Mapped[Optional[str]] = mapped_column(String(50))
     payment_account_id: Mapped[Optional[str]] = mapped_column(String(255))
     base_postcode: Mapped[Optional[str]] = mapped_column(String(20))  # company default base (route home); vehicle can override
+    # Bank details (for payouts if not using Stripe Connect)
+    bank_account_name: Mapped[Optional[str]] = mapped_column(String(255))
+    sort_code: Mapped[Optional[str]] = mapped_column(String(20))
+    account_number: Mapped[Optional[str]] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

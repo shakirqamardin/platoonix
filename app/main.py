@@ -80,6 +80,17 @@ def check_db_and_create_tables():
                 conn.rollback()
                 if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                     print("Migration hauliers.base_postcode: {!r}".format(e), file=sys.stderr)
+            # hauliers bank details (captured once in My company)
+            for col, typ in (("bank_account_name", "VARCHAR(255)"), ("sort_code", "VARCHAR(20)"), ("account_number", "VARCHAR(20)")):
+                try:
+                    conn.execute(text(
+                        f"ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS {col} {typ}"
+                    ))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration hauliers.{col}: {e!r}", file=sys.stderr)
             # backhaul_jobs: driver timeline + live GPS
             for col, typ in (
                 ("reached_pickup_at", "TIMESTAMP WITH TIME ZONE"),
