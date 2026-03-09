@@ -99,13 +99,42 @@ async def loader_add_load(
     user, loader = result
     form = await request.form()
     from datetime import datetime
+    shipper_name = (form.get("shipper_name") or "").strip()
+    pickup_postcode = (form.get("pickup_postcode") or "").strip().upper()
+    delivery_postcode = (form.get("delivery_postcode") or "").strip().upper()
+    weight_kg = None
+    volume_m3 = None
+    try:
+        w = form.get("weight_kg")
+        if w is not None and str(w).strip():
+            weight_kg = float(w)
+    except (TypeError, ValueError):
+        pass
+    try:
+        v = form.get("volume_m3")
+        if v is not None and str(v).strip():
+            volume_m3 = float(v)
+    except (TypeError, ValueError):
+        pass
+    required_vehicle_type = (form.get("required_vehicle_type") or "").strip().lower() or None
+    required_trailer_type = (form.get("required_trailer_type") or "").strip().lower() or None
+    requirements = {}
+    if required_vehicle_type and required_vehicle_type != "any":
+        requirements["vehicle_type"] = required_vehicle_type
+    if required_trailer_type and required_trailer_type != "any":
+        requirements["trailer_type"] = required_trailer_type
+    requirements = requirements if requirements else None
+
     load = models.Load(
         loader_id=loader.id,
-        shipper_name=(form.get("shipper_name") or "").strip(),
-        pickup_postcode=(form.get("pickup_postcode") or "").strip().upper(),
-        delivery_postcode=(form.get("delivery_postcode") or "").strip().upper(),
+        shipper_name=shipper_name,
+        pickup_postcode=pickup_postcode,
+        delivery_postcode=delivery_postcode,
         pickup_window_start=datetime.utcnow(),
         pickup_window_end=datetime.utcnow(),
+        weight_kg=weight_kg,
+        volume_m3=volume_m3,
+        requirements=requirements,
     )
     db.add(load)
     db.commit()

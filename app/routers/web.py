@@ -390,6 +390,15 @@ async def create_vehicle_form(
     return RedirectResponse(url="/?section=vehicles", status_code=303)
 
 
+def _parse_float(s, default=None):
+    if s is None or (isinstance(s, str) and not s.strip()):
+        return default
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return default
+
+
 @router.post("/loads", response_class=HTMLResponse)
 async def create_load_form(
     request: Request,
@@ -397,9 +406,20 @@ async def create_load_form(
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
     form = dict(await request.form())
-    shipper_name = form.get("shipper_name") or ""
-    pickup_postcode = (form.get("pickup_postcode") or "").upper()
-    delivery_postcode = (form.get("delivery_postcode") or "").upper()
+    shipper_name = (form.get("shipper_name") or "").strip()
+    pickup_postcode = (form.get("pickup_postcode") or "").strip().upper()
+    delivery_postcode = (form.get("delivery_postcode") or "").strip().upper()
+    weight_kg = _parse_float(form.get("weight_kg"))
+    volume_m3 = _parse_float(form.get("volume_m3"))
+    required_vehicle_type = (form.get("required_vehicle_type") or "").strip().lower() or None
+    required_trailer_type = (form.get("required_trailer_type") or "").strip().lower() or None
+    requirements = {}
+    if required_vehicle_type and required_vehicle_type != "any":
+        requirements["vehicle_type"] = required_vehicle_type
+    if required_trailer_type and required_trailer_type != "any":
+        requirements["trailer_type"] = required_trailer_type
+    if not requirements:
+        requirements = None
 
     load = models.Load(
         shipper_name=shipper_name,
@@ -407,6 +427,9 @@ async def create_load_form(
         delivery_postcode=delivery_postcode,
         pickup_window_start=datetime.utcnow(),
         pickup_window_end=datetime.utcnow(),
+        weight_kg=weight_kg,
+        volume_m3=volume_m3,
+        requirements=requirements,
     )
     db.add(load)
     db.commit()

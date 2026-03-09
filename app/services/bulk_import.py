@@ -96,6 +96,18 @@ def import_loads(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, List[str
             volume = float(volume) if volume is not None and str(volume).strip() else None
             budget = row.get("budget_gbp")
             budget = float(budget) if budget is not None and str(budget).strip() else None
+            req_vehicle = (str(row.get("required_vehicle_type") or "").strip().lower()) or None
+            req_trailer = (str(row.get("required_trailer_type") or "").strip().lower()) or None
+            if req_vehicle == "any":
+                req_vehicle = None
+            if req_trailer == "any":
+                req_trailer = None
+            requirements = {}
+            if req_vehicle:
+                requirements["vehicle_type"] = req_vehicle
+            if req_trailer:
+                requirements["trailer_type"] = req_trailer
+            requirements = requirements if requirements else None
             load = models.Load(
                 shipper_name=str(row["shipper_name"]).strip(),
                 pickup_postcode=str(row["pickup_postcode"]).strip().upper(),
@@ -107,6 +119,7 @@ def import_loads(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, List[str
                 weight_kg=weight,
                 volume_m3=volume,
                 budget_gbp=budget,
+                requirements=requirements,
             )
             db.add(load)
             db.commit()

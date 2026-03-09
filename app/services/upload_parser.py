@@ -37,6 +37,8 @@ LOAD_COLS = {
     "weight_kg": ["weight_kg", "weight"],
     "volume_m3": ["volume_m3", "volume"],
     "budget_gbp": ["budget_gbp", "budget", "price"],
+    "required_vehicle_type": ["required_vehicle_type", "vehicle_type", "vehicle type"],
+    "required_trailer_type": ["required_trailer_type", "trailer_type", "trailer type", "trailer"],
 }
 
 

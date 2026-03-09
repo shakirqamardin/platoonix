@@ -50,11 +50,17 @@ def find_matching_loads(
         if distance > radius:
             continue
 
-        # Trailer type: if load specifies requirements.trailer_type, vehicle must match
+        # Load criteria: vehicle type and trailer type must match when load specifies them
         req = load.requirements or {}
-        required_trailer = req.get("trailer_type") if isinstance(req, dict) else None
-        if required_trailer is not None and required_trailer != "":
-            if (vehicle.trailer_type or "").strip().lower() != str(required_trailer).strip().lower():
+        if not isinstance(req, dict):
+            req = {}
+        required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
+        if required_vehicle_type:
+            if (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
+                continue
+        required_trailer = (req.get("trailer_type") or "").strip().lower()
+        if required_trailer:
+            if (vehicle.trailer_type or "").strip().lower() != required_trailer:
                 continue
 
         # Capacity: load must fit vehicle capacity when vehicle has limits
@@ -105,10 +111,14 @@ def load_matches_vehicle(
         return False
 
     req = load.requirements or {}
-    required_trailer = req.get("trailer_type") if isinstance(req, dict) else None
-    if required_trailer is not None and required_trailer != "":
-        if (vehicle.trailer_type or "").strip().lower() != str(required_trailer).strip().lower():
-            return False
+    if not isinstance(req, dict):
+        req = {}
+    required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
+    if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
+        return False
+    required_trailer = (req.get("trailer_type") or "").strip().lower()
+    if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
+        return False
 
     if vehicle.capacity_weight_kg is not None and vehicle.capacity_weight_kg > 0:
         if (load.weight_kg or 0) > vehicle.capacity_weight_kg:
@@ -153,10 +163,14 @@ def planned_load_matches_route(
         return False
 
     req = planned_load.requirements or {}
-    required_trailer = req.get("trailer_type") if isinstance(req, dict) else None
-    if required_trailer is not None and required_trailer != "":
-        if (vehicle.trailer_type or "").strip().lower() != str(required_trailer).strip().lower():
-            return False
+    if not isinstance(req, dict):
+        req = {}
+    required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
+    if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
+        return False
+    required_trailer = (req.get("trailer_type") or "").strip().lower()
+    if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
+        return False
     if vehicle.capacity_weight_kg is not None and vehicle.capacity_weight_kg > 0:
         if (planned_load.weight_kg or 0) > vehicle.capacity_weight_kg:
             return False
@@ -246,10 +260,14 @@ def find_matching_loads_along_route(
             continue
 
         req = load.requirements or {}
-        required_trailer = req.get("trailer_type") if isinstance(req, dict) else None
-        if required_trailer is not None and required_trailer != "":
-            if (vehicle.trailer_type or "").strip().lower() != str(required_trailer).strip().lower():
-                continue
+        if not isinstance(req, dict):
+            req = {}
+        required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
+        if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
+            continue
+        required_trailer = (req.get("trailer_type") or "").strip().lower()
+        if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
+            continue
         if vehicle.capacity_weight_kg is not None and vehicle.capacity_weight_kg > 0:
             if (load.weight_kg or 0) > vehicle.capacity_weight_kg:
                 continue
