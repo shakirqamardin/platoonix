@@ -33,7 +33,7 @@ def check_db_and_create_tables():
     try:
         from app.database import Base, engine, SessionLocal
         from app import models  # noqa: F401 - register models with Base
-        from app.auth import hash_password
+        from app.auth import hash_password, verify_password
         from app.config import get_settings
         engine.connect().close()
         Base.metadata.create_all(bind=engine)
@@ -109,11 +109,12 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration backhaul_jobs.{col}: {e!r}", file=sys.stderr)
-        # Create default admin if no users exist
+        # Create or sync admin from ADMIN_EMAIL / ADMIN_PASSWORD
         db = SessionLocal()
         try:
+            settings = get_settings()
+            admin_user = db.query(models.User).filter(models.User.role == "admin").first()
             if db.query(models.User).count() == 0:
-                settings = get_settings()
                 admin = models.User(
                     email=settings.admin_email,
                     password_hash=hash_password(settings.admin_password),
@@ -124,6 +125,12 @@ def check_db_and_create_tables():
                 db.add(admin)
                 db.commit()
                 print(f"Created default admin: {settings.admin_email}", file=sys.stderr)
+            elif admin_user and (admin_user.email != settings.admin_email or not verify_password(settings.admin_password, admin_user.password_hash)):
+                # Sync existing admin to env vars so Render ADMIN_EMAIL/ADMIN_PASSWORD work
+                admin_user.email = settings.admin_email
+                admin_user.password_hash = hash_password(settings.admin_password)
+                db.commit()
+                print(f"Synced admin to: {settings.admin_email}", file=sys.stderr)
         finally:
             db.close()
     except Exception as e:
