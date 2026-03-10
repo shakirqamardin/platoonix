@@ -226,19 +226,22 @@ def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
 
 
 @router.get("/find-backhaul", response_class=HTMLResponse)
-def find_backhaul_page(
+ # codef find_backhaul_page(
     request: Request,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> HTMLResponse:
-    """Run smart matching and render home with matching_results (vehicle_id + origin_postcode from query)."""
+    """Run smart matching and render home with matching_results (vehicle_id + origin_postcode + optional destination_postcode from query)."""
     from app.auth import get_current_user_optional
     from app.services.geocode import get_lat_lon
+    from app.services.matching import find_matching_loads_along_route
     current_user = get_current_user_optional(request, db)
 
     vehicle_id_raw = request.query_params.get("vehicle_id", "").strip()
-    raw_postcode = (request.query_params.get("origin_postcode") or "").strip()
-    origin_postcode = " ".join(raw_postcode.split()).strip() if raw_postcode else ""  # collapse spaces, keep one for display
+    raw_origin = (request.query_params.get("origin_postcode") or "").strip()
+    raw_dest = (request.query_params.get("destination_postcode") or "").strip()
+    origin_postcode = " ".join(raw_origin.split()).strip() if raw_origin else ""
+    destination_postcode = " ".join(raw_dest.split()).strip() if raw_dest else ""llapse spaces, keep one for display
 
     matching_results = None
     postcode_lookup_failed = False
@@ -246,7 +249,11 @@ def find_backhaul_page(
     if vehicle_id_raw and origin_postcode:
         try:
             vehicle_id = int(vehicle_id_raw)
-            pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+            # Smart route corridor matching if destination provided, otherwise simple radius
+            if destination_postcode:
+                pairs = find_matching_loads_along_route(vehicle_id, origin_postcode, destination_postcode, db)
+            else:
+                pairs = find_matching_loads(vehicle_id, origin_postcode, db)
             matching_results = [{"load": load, "distance_miles": dist} for load, dist in pairs]
             if not matching_results:
                 open_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
@@ -300,6 +307,7 @@ def find_backhaul_page(
             "matching_results": matching_results,
             "find_vehicle_id": vehicle_id_raw,
             "find_origin_postcode": origin_postcode,
+            "find_destination_postcode": destination_postcode,
             "postcode_lookup_failed": postcode_lookup_failed,
             "match_diagnostic": match_diagnostic,
             "platform_fee_percent": get_settings().platform_fee_percent,

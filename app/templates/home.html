@@ -345,31 +345,69 @@
         <!-- Find Backhaul Section -->
         <section class="section-panel {{ 'active' if initial_section == 'find' else '' }}" data-section="find">
             <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
-                <h2 class="text-2xl font-display font-bold mb-6 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
+                <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
                     Find Available Loads
                 </h2>
                 
-                <form method="get" action="/find-backhaul" class="flex flex-wrap items-end gap-4 mb-6">
-                    <div class="flex-1 min-w-[200px]">
-                        <label class="block text-sm font-medium text-slate-300 mb-2">Select Vehicle</label>
-                        <select id="find-vehicle-id" name="vehicle_id" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all">
-                            <option value="">Choose vehicle...</option>
-                            {% for v in vehicles %}
-                            <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %}>
-                                {{ v.registration }} • {{ v.vehicle_type }}{% if v.trailer_type %} • {{ v.trailer_type }}{% endif %}
-                            </option>
-                            {% endfor %}
-                        </select>
+                <div class="glass-card rounded-xl p-4 mb-6 border border-teal-500/20">
+                    <p class="text-slate-300 text-sm">
+                        <span class="text-teal-400 font-semibold">💡 Smart Route Matching:</span> 
+                        Enter where you're empty and optionally where you're heading. 
+                        We'll find loads within 25 miles along your entire journey!
+                    </p>
+                </div>
+                
+                <form method="get" action="/find-backhaul" class="mb-6">
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <div class="lg:col-span-2">
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Select Vehicle</label>
+                            <select id="find-vehicle-id" name="vehicle_id" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all">
+                                <option value="">Choose vehicle...</option>
+                                {% for v in vehicles %}
+                                <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %}>
+                                    {{ v.registration }} • {{ v.vehicle_type }}{% if v.trailer_type %} • {{ v.trailer_type }}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">
+                                Currently Empty At
+                                <span class="text-xs text-slate-500">(required)</span>
+                            </label>
+                            <input 
+                                id="find-origin-postcode" 
+                                name="origin_postcode" 
+                                value="{{ find_origin_postcode or '' }}" 
+                                placeholder="e.g. M1 1AA" 
+                                required
+                                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm uppercase focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" 
+                            />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">
+                                Returning To
+                                <span class="text-xs text-teal-400">(optional)</span>
+                            </label>
+                            <input 
+                                id="find-destination-postcode" 
+                                name="destination_postcode" 
+                                value="{{ find_destination_postcode or '' }}" 
+                                placeholder="e.g. MK1 1AA" 
+                                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm uppercase focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" 
+                            />
+                        </div>
                     </div>
                     
-                    <div class="w-40">
-                        <label class="block text-sm font-medium text-slate-300 mb-2">Postcode</label>
-                        <input id="find-origin-postcode" name="origin_postcode" value="{{ find_origin_postcode or '' }}" placeholder="e.g. M1 1AA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm uppercase focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" />
-                    </div>
-                    
-                    <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg">
-                        🔍 Find Loads
-                    </button>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg flex items-center gap-2">
+                            <span>🔍</span>
+                            <span>Find Loads</span>
+                        </button>
+                        
+                        <div class="h-6 w-px bg-slate-700"></div>
                     
                     <button type="button" id="start-alerts-btn" class="px-6 py-3 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-lg transition-all">
                         🔔 Live Alerts
@@ -931,7 +969,7 @@
                         <span class="text-amber-400">ℹ️</span> You are logged in as <strong>admin</strong>. 
                         The forms below create <strong>haulier</strong> and <strong>loader</strong> accounts. 
                         To switch user, use <a href="/logout" class="text-teal-400 hover:underline">Switch user / Sign out</a> 
-                        then log in with <code class="text-emerald-300 bg-slate-900 px-2 py-1 rounded">admin@platoonix.local</code>.
+                        then log in with <code class="text-emerald-300 bg-slate-900 px-2 py-1 rounded"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a1c0c5ccc8cfe1d1cdc0d5cececfc8d98fcdcec2c0cd">[email&#160;protected]</a></code>.
                     </p>
                 </div>
                 
@@ -1034,7 +1072,7 @@
     </div>
 
     <!-- JavaScript -->
-    <script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
         // Tab switching
         (function () {
             var radios = document.querySelectorAll('input[name="section"]');
@@ -1183,12 +1221,3 @@
                             }
                         }
                     })
-                    .catch(function() {
-                        btn.disabled = false;
-                        btn.textContent = '🔍 DVLA Lookup';
-                    });
-            });
-        })();
-    </script>
-</body>
-</html>
