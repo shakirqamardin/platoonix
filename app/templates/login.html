@@ -1,32 +1,101 @@
 {% extends "base_auth.html" %}
 {% block title %}Log in – Platoonix{% endblock %}
 {% block content %}
-  <h1 class="text-lg font-semibold text-slate-200 mb-1">Log in</h1>
-  <p class="text-slate-400 text-sm mb-4">Use the email and password for your account.</p>
-  <p class="text-slate-500 text-xs mb-4 rounded-lg bg-slate-800/80 px-3 py-2 border border-slate-700"><strong>Admin:</strong> Log in with <code class="text-emerald-300">admin@platoonix.local</code> and the admin password (default: <code class="text-slate-400">change-me</code>). Hauliers and loaders use the email/password your admin created for them.</p>
-  {% if logout %}<p class="text-slate-300 text-sm mb-3 rounded-lg bg-slate-800 px-3 py-2">You are logged out. Log in with a different account below.</p>{% endif %}
-  {% if password_reset %}<p class="text-emerald-400 text-sm mb-3 rounded-lg bg-emerald-900/20 px-3 py-2">Password updated. You can log in with your new password.</p>{% endif %}
-  {% if error %}<p class="text-amber-300 text-sm mb-3 rounded-lg bg-amber-900/30 px-3 py-2">{{ error }}</p>{% endif %}
-  <form method="post" action="/login" class="space-y-4">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token or '' }}" />
-    <div>
-      <label for="email" class="block text-sm font-medium text-slate-400 mb-1">Email</label>
-      <input id="email" name="email" type="email" required autocomplete="email"
-             class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-             value="{{ email or '' }}" placeholder="you@company.com" />
+    <h1 class="text-2xl font-display font-bold text-center mb-2 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
+        Welcome Back
+    </h1>
+    <p class="text-slate-400 text-sm text-center mb-6">Sign in to your Platoonix account</p>
+    
+    <!-- Admin Info -->
+    <div class="glass-card rounded-xl px-4 py-3 mb-6 border border-teal-500/20">
+        <p class="text-slate-400 text-xs">
+            <span class="font-semibold text-teal-400">Admin:</span> Use 
+            <code class="text-emerald-300 bg-slate-900 px-2 py-0.5 rounded">admin@platoonix.local</code>
+        </p>
+        <p class="text-slate-500 text-xs mt-1">
+            Hauliers and loaders: use your company email
+        </p>
     </div>
-    <div>
-      <label for="password" class="block text-sm font-medium text-slate-400 mb-1">Password</label>
-      <input id="password" name="password" type="password" required autocomplete="current-password"
-             class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-             placeholder="••••••••" />
+    
+    <!-- Messages -->
+    {% if logout %}
+    <div class="glass-card rounded-xl px-4 py-3 mb-4 border-l-4 border-teal-500">
+        <div class="flex items-center gap-2">
+            <span class="text-lg">👋</span>
+            <span class="text-slate-300 text-sm">You've been logged out</span>
+        </div>
     </div>
-    <button type="submit" class="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-white font-medium btn-primary transition">Log in</button>
-  </form>
-  <p class="text-slate-500 text-sm mt-4">
-    <a href="/forgot-password" class="text-emerald-400 hover:underline">Forgot password?</a>
-    &nbsp;·&nbsp;
-    <a href="/register" class="text-emerald-400 hover:underline">Register</a>
-  </p>
-  <p class="text-slate-500 text-xs mt-3">Don’t have access? Ask your admin to create a haulier or loader account for you.</p>
+    {% endif %}
+    
+    {% if password_reset %}
+    <div class="glass-card rounded-xl px-4 py-3 mb-4 border-l-4 border-emerald-500">
+        <div class="flex items-center gap-2">
+            <span class="text-lg">✅</span>
+            <span class="text-emerald-300 text-sm">Password updated successfully!</span>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if error %}
+    <div class="glass-card rounded-xl px-4 py-3 mb-4 border-l-4 border-amber-500">
+        <div class="flex items-center gap-2">
+            <span class="text-lg">⚠️</span>
+            <span class="text-amber-300 text-sm">{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Login Form -->
+    <form method="post" action="/login" class="space-y-5">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token or '' }}" />
+        
+        <div>
+            <label for="email" class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+            <input 
+                id="email" 
+                name="email" 
+                type="email" 
+                required 
+                autocomplete="email"
+                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+                value="{{ email or '' }}" 
+                placeholder="your@company.com" 
+            />
+        </div>
+        
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <label for="password" class="block text-sm font-medium text-slate-300">Password</label>
+                <a href="/forgot-password" class="text-xs text-teal-400 hover:text-teal-300 transition-colors">
+                    Forgot password?
+                </a>
+            </div>
+            <input 
+                id="password" 
+                name="password" 
+                type="password" 
+                required 
+                autocomplete="current-password"
+                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+                placeholder="••••••••" 
+            />
+        </div>
+        
+        <button type="submit" class="btn-primary w-full px-4 py-3.5 text-white font-semibold rounded-lg shadow-lg">
+            Sign In
+        </button>
+    </form>
+    
+    <!-- Footer Links -->
+    <div class="mt-6 text-center">
+        <p class="text-slate-500 text-sm">
+            Don't have an account? 
+            <a href="/register" class="text-teal-400 hover:text-teal-300 font-medium transition-colors">
+                Register
+            </a>
+        </p>
+        <p class="text-slate-600 text-xs mt-3">
+            Need access? Ask your admin to create an account
+        </p>
+    </div>
 {% endblock %}

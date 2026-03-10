@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Platoonix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <style>
+      .section-panel { display: none; }
+      .section-panel.active { display: block; }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-100 bg-slate-950">
+    <div class="max-w-5xl mx-auto px-4 py-4">
+      <!-- Header + one-line status -->
+      <header class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <img src="/static/logo.png" alt="Platoonix" class="h-10 w-auto" />
+          <span class="text-lg font-semibold">Platoonix</span>
+        </div>
+        <div class="flex items-center gap-4 text-sm flex-wrap">
+          {% if current_user_email %}<span class="text-slate-500">Logged in as <strong class="text-slate-200">{{ current_user_email }}</strong></span>{% endif %}
+          <span class="text-slate-400">Open: <strong class="text-white">{{ open_loads_count|default(0) }}</strong></span>
+          <span class="text-slate-400">Vehicles: <strong class="text-white">{{ vehicles|length }}</strong></span>
+          <span class="text-slate-400">Matched: <strong class="text-white">{{ jobs|length }}</strong></span>
+          <span class="text-slate-400">Payouts: <strong class="text-white">£{{ (total_payout|default(0))|round(0) }}</strong></span>
+          <a href="/logout" class="text-slate-400 hover:text-white">Switch user / Sign out</a>
+        </div>
+      </header>
+
+      {% if delete_error %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-amber-200 bg-amber-900/40">{{ delete_error }}</div>{% endif %}
+      {% if create_login_error %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-amber-200 bg-amber-900/40">Create login: {{ create_login_error }}</div>{% endif %}
+      {% if deleted %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-emerald-300 bg-emerald-900/30">{% if deleted == 'job' %}Job cancelled. You can now delete the load or vehicle if needed.{% else %}Deleted {{ deleted }}.{% endif %}</div>{% endif %}
+      {% if uploaded is not none and uploaded > 0 %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-emerald-300 bg-emerald-900/30">Uploaded {{ uploaded }} {{ upload_type }}.{% if upload_type == 'loads' %} Matching runs automatically — check the Matches tab.{% endif %}</div>{% endif %}
+      {% if upload_errors and upload_errors > 0 %}<div class="mb-3 rounded px-3 py-1.5 text-sm text-amber-200 bg-amber-900/40">Upload had {{ upload_errors }} error(s).</div>{% endif %}
+
+      {% set initial_section = request.query_params.get("section", "find") %}
+      <!-- Category tabs -->
+      <nav class="flex flex-wrap gap-1 mb-4 border-b border-slate-700 pb-2">
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'find' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="find" {{ 'checked' if initial_section == 'find' else '' }} /> Find backhaul
+        </label>
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'vehicles' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="vehicles" {{ 'checked' if initial_section == 'vehicles' else '' }} /> Vehicles
+        </label>
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'loads' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="loads" {{ 'checked' if initial_section == 'loads' else '' }} /> Loads
+        </label>
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'routes' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="routes" {{ 'checked' if initial_section == 'routes' else '' }} /> Routes
+        </label>
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'matches' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="matches" {{ 'checked' if initial_section == 'matches' else '' }} /> Matches
+        </label>
+        <label class="section-tab px-3 py-1.5 text-sm rounded cursor-pointer {{ 'bg-emerald-800/60 text-emerald-100 border border-slate-600' if initial_section == 'admin' else 'bg-slate-800/60 text-slate-300 border border-transparent hover:bg-slate-700' }}">
+          <input type="radio" name="section" class="sr-only" value="admin" {{ 'checked' if initial_section == 'admin' else '' }} /> Admin
+        </label>
+      </nav>
+
+      <!-- Find backhaul -->
+      <section class="section-panel {{ 'active' if initial_section == 'find' else '' }}" data-section="find">
+        <form method="get" action="/find-backhaul" class="flex flex-wrap items-center gap-2 mb-4">
+          <select id="find-vehicle-id" name="vehicle_id" required class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm min-w-[10rem]">
+            <option value="">Vehicle</option>
+            {% for v in vehicles %}
+            <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %}>{{ v.registration }} · {{ v.vehicle_type }}{% if v.trailer_type %} · {{ v.trailer_type }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <input id="find-origin-postcode" name="origin_postcode" value="{{ find_origin_postcode or '' }}" placeholder="Postcode" class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm w-28" />
+          <button type="submit" class="rounded bg-emerald-600 px-4 py-2 text-sm text-white">Find loads</button>
+          <button type="button" id="start-alerts-btn" class="rounded bg-amber-600 px-4 py-2 text-sm text-white">Live alerts</button>
+          <button type="button" id="stop-alerts-btn" class="rounded border border-slate-600 px-4 py-2 text-sm hidden">Stop</button>
+        </form>
+        <div id="alerts-list" class="mb-3 space-y-1 max-h-20 overflow-auto text-sm hidden"></div>
+        {% if matching_results is not none %}
+        <div class="overflow-x-auto">
+          {% if matching_results %}
+          <table class="w-full text-sm border-collapse">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-4">Load</th><th class="py-2 pr-4">From → To</th><th class="py-2 text-right">Match</th></tr></thead>
+            <tbody>
+              {% for m in matching_results %}
+              <tr class="border-b border-slate-800"><td class="py-1.5 pr-4">{{ m.load.shipper_name }}</td><td class="py-1.5 pr-4">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</td><td class="py-1.5 text-right text-emerald-400">{{ m.distance_miles }} mi ✓</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="text-slate-500 py-2">No matching loads.</p>
+          {% if postcode_lookup_failed %}<p class="text-amber-400 text-xs">Your postcode (vehicle location) couldn’t be looked up. Use a full UK postcode, e.g. M1 1AA or NN8 4RR. If it still fails, try from a different network or check the live site can reach the internet.</p>{% endif %}
+          {% if match_diagnostic and not match_diagnostic.origin_ok %}<p class="text-amber-400 text-xs">{{ match_diagnostic.origin_reason }}</p>{% endif %}
+          {% if match_diagnostic and match_diagnostic.origin_ok and match_diagnostic.loads %}
+          <table class="w-full text-sm border-collapse mt-2"><thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2">Route</th><th class="py-2">Why no match</th></tr></thead><tbody>
+            {% for row in match_diagnostic.loads %}<tr class="border-b border-slate-800"><td class="py-1">{{ row.load.pickup_postcode }} → {{ row.load.delivery_postcode }}</td><td class="py-1 text-amber-400">{{ row.reason if row.reason else (row.distance_miles|default(0)|round(1)|string + " mi") }}</td></tr>{% endfor %}
+          </tbody></table>
+          <p class="text-slate-500 text-xs mt-1">If “Pickup postcode lookup failed”, the load’s pickup postcode isn’t in our database—check for typos or use another UK postcode.</p>
+          {% endif %}
+          {% endif %}
+        </div>
+        {% endif %}
+      </section>
+
+      <!-- Vehicles -->
+      <section class="section-panel {{ 'active' if initial_section == 'vehicles' else '' }}" data-section="vehicles">
+        <p class="text-slate-500 text-sm mb-2">You're logged in as <strong>admin</strong>. Companies should <a href="/logout" class="text-emerald-400 hover:underline">switch user</a> and log in as haulier—then they only see their own company and vehicles (no re-entering). <strong>Add company</strong> below is only for adding a company record without a login; to give them access, use <strong>Admin → Create company + login</strong> so they enter their details once in My company.</p>
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <form method="post" action="/hauliers" class="inline-flex flex-wrap gap-2">
+            <input name="name" required placeholder="Company" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-28" />
+            <input name="contact_email" type="email" required placeholder="Email" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-36" />
+            <input name="contact_phone" placeholder="Phone" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+            <button type="submit" class="rounded bg-slate-600 px-2 py-1.5 text-sm">Add company</button>
+          </form>
+          <span class="text-slate-500 text-xs">|</span>
+          <form method="post" action="/vehicles" class="inline-flex flex-wrap gap-2" id="admin-form-add-vehicle">
+            <select name="haulier_id" required class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm">{% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}<option value="" disabled>Company</option></select>
+            <input name="registration" id="admin-vehicle-reg" required placeholder="Reg" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+            <button type="button" id="admin-btn-dvla-lookup" class="rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-sm hover:bg-slate-600" title="Auto-fill from DVLA">Look up</button>
+            <input name="base_postcode" placeholder="Base postcode (for auto-match)" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-32" title="Where this vehicle is usually empty; loads near here will match automatically" />
+            <select name="vehicle_type" id="admin-vehicle-type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="artic">Artic</option><option value="rigid">Rigid</option><option value="van">Van</option></select>
+            <select name="trailer_type" id="admin-vehicle-trailer" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="">Trailer</option><option value="curtain_sider">Curtain</option><option value="box">Box</option><option value="flatbed">Flatbed</option><option value="other">Other</option></select>
+            <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add vehicle</button>
+          </form>
+          <span class="text-slate-500 text-xs">|</span>
+          <form method="post" action="/upload" enctype="multipart/form-data" class="inline-flex flex-wrap gap-2 items-center">
+            <input type="hidden" name="type" value="hauliers" />
+            <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300" required />
+            <button type="submit" class="rounded bg-slate-600 hover:bg-slate-500 px-2 py-1.5 text-sm text-white">Bulk upload companies</button>
+          </form>
+          <form method="post" action="/upload" enctype="multipart/form-data" class="inline-flex flex-wrap gap-2 items-center">
+            <input type="hidden" name="type" value="vehicles" />
+            <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300" required />
+            <button type="submit" class="rounded bg-slate-600 hover:bg-slate-500 px-2 py-1.5 text-sm text-white">Bulk upload vehicles</button>
+          </form>
+          <span class="text-slate-500 text-xs"><a href="/download-templates/vehicles" download target="_blank" class="template-download text-emerald-500 hover:underline">Vehicles CSV</a> · <a href="/download-templates/hauliers" download target="_blank" class="template-download text-emerald-500 hover:underline">Hauliers CSV</a></span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-4">Company</th><th class="py-2 pr-4">Reg</th><th class="py-2 pr-4">Type</th><th class="py-2 pr-4">Trailer</th><th class="py-2 w-14"></th></tr></thead>
+            <tbody>
+              {% for v in vehicles %}<tr class="border-b border-slate-800"><td class="py-1.5 pr-4">{% for h in hauliers %}{% if h.id == v.haulier_id %}{{ h.name }}{% endif %}{% endfor %}</td><td class="py-1.5 pr-4">{{ v.registration }}</td><td class="py-1.5 pr-4">{{ v.vehicle_type }}</td><td class="py-1.5 pr-4">{{ v.trailer_type or "—" }}</td><td class="py-1.5"><form method="post" action="/delete-vehicle/{{ v.id }}" class="inline" onsubmit="return confirm('Delete?');"><button type="submit" class="text-red-400 text-xs">Delete</button></form></td></tr>{% endfor %}
+              {% for h in hauliers %}{% if not vehicles or not vehicles|selectattr('haulier_id', 'equalto', h.id)|list %}<tr class="border-b border-slate-800"><td class="py-1.5 pr-4">{{ h.name }}</td><td class="py-1.5 pr-4 text-slate-500">—</td><td class="py-1.5 pr-4 text-slate-500">—</td><td class="py-1.5 pr-4 text-slate-500">—</td><td class="py-1.5"><form method="post" action="/delete-haulier/{{ h.id }}" class="inline" onsubmit="return confirm('Delete company?');"><button type="submit" class="text-red-400 text-xs">Delete</button></form></td></tr>{% endif %}{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not hauliers and not vehicles %}<p class="text-slate-500 text-sm py-2">Add a company then a vehicle above.</p>{% endif %}
+      </section>
+
+      <!-- Loads -->
+      <section class="section-panel {{ 'active' if initial_section == 'loads' else '' }}" data-section="loads">
+        <p class="text-slate-500 text-sm mb-2">When you add a load with criteria (weight, vehicle type, trailer), matching runs automatically and only <strong>suitable vehicles</strong> are suggested in the Matches tab.</p>
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <form method="post" action="/loads" class="inline-flex flex-wrap gap-2 items-end">
+            <input name="shipper_name" required placeholder="Shipper" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-28" />
+            <input name="pickup_postcode" required placeholder="Pickup" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+            <input name="delivery_postcode" required placeholder="Delivery" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+            <input name="weight_kg" type="number" step="0.1" min="0" placeholder="Weight kg" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-20" title="Load weight – only vehicles with enough capacity will match" />
+            <input name="pallets" type="number" step="0.1" min="0" placeholder="Pallets" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-16" title="If entered, volume (m³) is calculated (1.2 m³ per pallet)" />
+            <input name="volume_m3" type="number" step="0.1" min="0" placeholder="Vol m³" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-16" title="Load volume – or leave blank when using Pallets" />
+            <select name="required_vehicle_type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="any">Any vehicle</option><option value="artic">Artic</option><option value="rigid">Rigid</option><option value="van">Van</option></select>
+            <select name="required_trailer_type" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm"><option value="any">Any trailer</option><option value="curtain_sider">Curtain</option><option value="box">Box</option><option value="flatbed">Flatbed</option><option value="other">Other</option></select>
+            <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add load</button>
+          </form>
+          <span class="text-slate-500 text-xs">|</span>
+          <form method="post" action="/upload" enctype="multipart/form-data" class="inline-flex flex-wrap gap-2 items-center">
+            <input type="hidden" name="type" value="loads" />
+            <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300" required />
+            <button type="submit" class="rounded bg-slate-600 hover:bg-slate-500 px-2 py-1.5 text-sm text-white">Bulk upload loads</button>
+          </form>
+          <span class="text-slate-500 text-xs"><a href="/download-templates/loads" download target="_blank" class="template-download text-emerald-500 hover:underline">CSV template</a> (several rows = matching runs for each)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-4">Shipper</th><th class="py-2 pr-4">From → To</th><th class="py-2 pr-4">Pallets</th><th class="py-2 pr-4">m³</th><th class="py-2 pr-4">Status</th><th class="py-2 w-14"></th></tr></thead>
+            <tbody>
+              {% for l in loads %}<tr class="border-b border-slate-800"><td class="py-1.5 pr-4">{{ l.shipper_name }}</td><td class="py-1.5 pr-4">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</td><td class="py-1.5 pr-4 text-slate-300">{% if l.pallets %}{{ "%.0f"|format(l.pallets) }}{% else %}—{% endif %}</td><td class="py-1.5 pr-4 text-slate-300">{% if l.volume_m3 %}{{ "%.1f"|format(l.volume_m3) }}{% else %}—{% endif %}</td><td class="py-1.5 pr-4"><span class="rounded px-1.5 py-0.5 text-xs {% if l.status == 'open' %}bg-emerald-900/50 text-emerald-200{% else %}bg-slate-700 text-slate-300{% endif %}">{{ l.status }}</span></td><td class="py-1.5"><form method="post" action="/delete-load/{{ l.id }}" class="inline" onsubmit="return confirm('Delete?');"><button type="submit" class="text-red-400 text-xs">Delete</button></form></td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not loads %}<p class="text-slate-500 text-sm py-2">No loads. Add above.</p>{% endif %}
+      </section>
+
+      <!-- Routes -->
+      <section class="section-panel {{ 'active' if initial_section == 'routes' else '' }}" data-section="routes">
+        <p class="text-slate-400 text-sm mb-2">Haulier: where I’m empty · Loader: recurring load</p>
+        <div class="grid md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <form method="post" action="/haulier-routes" class="flex flex-wrap gap-2 mb-2">
+              <select name="haulier_id" required class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm">{% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}<option value="" disabled>Company</option></select>
+              <select name="vehicle_id" required class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm">{% for v in vehicles %}<option value="{{ v.id }}">{{ v.registration }}</option>{% endfor %}<option value="" disabled>Vehicle</option></select>
+              <input name="empty_at_postcode" required placeholder="Postcode" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+              <select name="day_of_week" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm">{% for d in range(7) %}<option value="{{ d }}">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d] }}</option>{% endfor %}</select>
+              <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add route</button>
+            </form>
+            <table class="w-full text-sm border-collapse"><thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2">Vehicle</th><th class="py-2">Postcode</th><th class="py-2">Day</th></tr></thead><tbody>
+              {% for r in haulier_routes %}<tr class="border-b border-slate-800"><td class="py-1">{{ r.vehicle_id }}</td><td class="py-1">{{ r.empty_at_postcode }}</td><td class="py-1">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][r.day_of_week] }}</td></tr>{% endfor %}
+            </tbody></table>
+          </div>
+          <div>
+            <form method="post" action="/planned-loads" class="flex flex-wrap gap-2 mb-2">
+              <input name="shipper_name" required placeholder="Shipper" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-24" />
+              <input name="pickup_postcode" required placeholder="From" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-20" />
+              <input name="delivery_postcode" required placeholder="To" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm w-20" />
+              <select name="day_of_week" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm">{% for d in range(7) %}<option value="{{ d }}">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d] }}</option>{% endfor %}</select>
+              <button type="submit" class="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white">Add planned</button>
+            </form>
+            <table class="w-full text-sm border-collapse"><thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2">Shipper</th><th class="py-2">From → To</th><th class="py-2">Day</th></tr></thead><tbody>
+              {% for pl in planned_loads %}<tr class="border-b border-slate-800"><td class="py-1">{{ pl.shipper_name }}</td><td class="py-1">{{ pl.pickup_postcode }} → {{ pl.delivery_postcode }}</td><td class="py-1">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][pl.day_of_week] }}</td></tr>{% endfor %}
+            </tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Matches -->
+      <section class="section-panel {{ 'active' if initial_section == 'matches' else '' }}" data-section="matches">
+        <h2 class="text-lg font-semibold mb-1">Matches</h2>
+        <p class="text-slate-400 text-sm mb-4">Suggested loads show <strong>collection</strong> and <strong>delivery</strong> postcodes. Click Interest to express interest; loader accepts to create a job. Jobs below are confirmed backhauls.</p>
+
+        <p class="text-slate-300 font-medium text-sm mb-2">Suggested matches</p>
+        <div class="overflow-x-auto mb-4">
+          <table class="w-full text-sm border-collapse">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-3">Shipper</th><th class="py-2 pr-3">Collection (pickup)</th><th class="py-2 pr-3">Delivery</th><th class="py-2 pr-3">Status</th><th class="py-2 w-24"></th></tr></thead>
+            <tbody>
+              {% for row in load_interests_display %}<tr class="border-b border-slate-800"><td class="py-2 pr-3">{{ row.shipper or row.label }}</td><td class="py-2 pr-3 font-mono text-emerald-200">{{ row.collection }}</td><td class="py-2 pr-3 font-mono text-slate-200">{{ row.delivery }}</td><td class="py-2 pr-3"><span class="rounded px-1.5 py-0.5 text-xs {% if row.interest.status == 'suggested' %}bg-amber-900/50 text-amber-200{% else %}bg-emerald-900/50 text-emerald-200{% endif %}">{{ row.interest.status }}</span></td><td class="py-2">{% if row.interest.status == 'suggested' %}<form method="post" action="/show-interest" class="inline"><input type="hidden" name="haulier_id" value="{{ row.interest.haulier_id }}" /><input type="hidden" name="vehicle_id" value="{{ row.interest.vehicle_id }}" />{% if row.interest.planned_load_id %}<input type="hidden" name="planned_load_id" value="{{ row.interest.planned_load_id }}" />{% endif %}{% if row.interest.load_id %}<input type="hidden" name="load_id" value="{{ row.interest.load_id }}" />{% endif %}<button type="submit" class="rounded bg-amber-600 hover:bg-amber-500 px-2 py-1 text-xs text-white">Interest</button></form>{% endif %}</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not load_interests_display %}<p class="text-slate-500 text-sm mb-4">No suggested matches. Add loads and vehicles with base postcodes (or planned routes) so they match automatically.</p>{% endif %}
+        <p class="text-slate-300 font-medium text-sm mb-2">Backhaul jobs (confirmed)</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse">
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-3">Job</th><th class="py-2 pr-3">Vehicle · Load</th><th class="py-2 pr-3">Collection → Delivery</th><th class="py-2 pr-3">Payment</th><th class="py-2 w-20"></th></tr></thead>
+            <tbody>
+              {% for j in jobs %}<tr class="border-b border-slate-800"><td class="py-2 pr-3">{{ j.id }}</td><td class="py-2 pr-3">V{{ j.vehicle_id }} · L{{ j.load_id }}</td><td class="py-2 pr-3">{% for l in loads %}{% if l.id == j.load_id %}<span class="font-mono text-emerald-200">{{ l.pickup_postcode }}</span> → <span class="font-mono text-slate-200">{{ l.delivery_postcode }}</span>{% endif %}{% endfor %}</td><td class="py-2 pr-3">{% for p in payments %}{% if p.backhaul_job_id == j.id %}£{{ (p.net_payout_gbp or 0)|round(2) }} <span class="text-xs {% if p.status == 'paid_out' %}text-emerald-400{% else %}text-amber-400{% endif %}">{{ p.status }}</span>{% endif %}{% endfor %}</td><td class="py-2"><a href="/track/{{ j.id }}" class="text-emerald-400 hover:underline text-xs mr-2">Track</a><form method="post" action="/delete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Cancel this job? The load and vehicle can then be deleted if needed.');"><button type="submit" class="text-red-400 hover:text-red-300 text-xs">Cancel job</button></form></td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not jobs %}<p class="text-slate-500 text-sm py-2">No backhaul jobs yet. Suggested matches become jobs when the loader accepts in Who's interested.</p>{% endif %}
+        <p class="text-xs text-slate-500 mt-2">Platform fee {{ platform_fee_percent }}%. To delete a load or vehicle that “has jobs”, cancel the job here first.</p>
+      </section>
+
+      <!-- Admin: create logins -->
+      <section class="section-panel {{ 'active' if initial_section == 'admin' else '' }}" data-section="admin">
+        <h2 class="text-lg font-semibold mb-3">Create logins</h2>
+        <p class="text-slate-300 text-sm mb-2">You are logged in as <strong>admin</strong>. The forms below are for creating <strong>haulier</strong> and <strong>loader</strong> accounts—do not enter your admin email here. Use the email you want for each new company (e.g. <code class="text-slate-400">haulier@company.com</code>). To switch user or log in as admin again, use <a href="/logout" class="text-emerald-400 hover:underline">Switch user / Sign out</a> then log in at the login page with <code class="text-emerald-300">admin@platoonix.local</code>.</p>
+        <p class="text-slate-500 text-sm mb-4">Create a company and its login in one step. Or link a login to a company you already added in Vehicles.</p>
+        <div class="grid md:grid-cols-2 gap-6 mb-4">
+          <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+            <p class="text-slate-300 font-medium mb-2">New haulier (company + login in one step)</p>
+            <form method="post" action="/create-haulier-account" class="space-y-2">
+              <input name="name" required placeholder="Company name" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <input name="contact_phone" placeholder="Phone (optional)" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <button type="submit" class="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Create company + login</button>
+            </form>
+            <p class="text-slate-500 text-xs mt-2">They can log in and add vehicles straight away—no separate "Add company" step.</p>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+            <p class="text-slate-300 font-medium mb-2">Link login to existing company</p>
+            <p class="text-slate-500 text-xs mb-2">Only if you already added the company in the Vehicles tab and need a second login for them.</p>
+            <form method="post" action="/create-haulier-login" class="space-y-2" id="form-haulier-login">
+              <select name="haulier_id" required class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" id="select-haulier-for-login"><option value="" disabled>— Pick company —</option>{% for h in hauliers %}<option value="{{ h.id }}" data-email="{{ h.contact_email or '' }}">{{ h.name }} ({{ h.contact_email }})</option>{% endfor %}</select>
+              <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" id="input-haulier-login-email" />
+              <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+              <button type="submit" class="rounded bg-slate-600 px-3 py-1.5 text-sm text-white">Create haulier login</button>
+            </form>
+          </div>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mt-4">
+          <p class="text-slate-300 font-medium mb-2">Loader (company + login)</p>
+          <form method="post" action="/create-loader-account" class="space-y-2">
+            <input name="name" required placeholder="Company name" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+            <input name="email" type="email" required placeholder="Login email" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+            <input name="password" type="password" required placeholder="Password" class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" />
+            <button type="submit" class="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Create loader account</button>
+          </form>
+        </div>
+        {% if create_login_error %}<p class="text-amber-400 text-sm mt-2">{{ create_login_error }}</p>{% endif %}
+        {% if create_login_ok %}<p class="text-emerald-400 text-sm mt-2">{{ create_login_ok }}</p>{% endif %}
+      </section>
+    </div>
+
+    <script>
+      (function () {
+        var radios = document.querySelectorAll('input[name="section"]');
+        var panels = document.querySelectorAll('.section-panel');
+        var tabs = document.querySelectorAll('.section-tab');
+        function go() {
+          var v = document.querySelector('input[name="section"]:checked');
+          var section = v ? v.value : 'find';
+          panels.forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-section') === section); });
+          tabs.forEach(function (t) {
+            var r = t.querySelector('input');
+            var on = r && r.value === section;
+            t.classList.toggle('bg-emerald-800/60', on); t.classList.toggle('text-emerald-100', on); t.classList.toggle('border-slate-600', on);
+            t.classList.toggle('bg-slate-800/60', !on); t.classList.toggle('text-slate-300', !on); t.classList.toggle('border-transparent', !on);
+          });
+        }
+        radios.forEach(function (r) { r.addEventListener('change', go); });
+        go();
+        if (window.location.search.indexOf('section=admin') !== -1) {
+          var adminTab = document.querySelector('input[name="section"][value="admin"]');
+          if (adminTab && adminTab.closest('label')) adminTab.closest('label').scrollIntoView({ block: 'nearest' });
+        }
+        var selectHaulier = document.getElementById('select-haulier-for-login');
+        var inputEmail = document.getElementById('input-haulier-login-email');
+        if (selectHaulier && inputEmail) {
+          function setEmailFromSelect() {
+            var opt = selectHaulier.options[selectHaulier.selectedIndex];
+            if (opt && opt.getAttribute('data-email')) inputEmail.value = opt.getAttribute('data-email') || '';
+          }
+          selectHaulier.addEventListener('change', setEmailFromSelect);
+          setEmailFromSelect();
+        }
+      })();
+      (function () {
+        var startBtn = document.getElementById('start-alerts-btn');
+        var stopBtn = document.getElementById('stop-alerts-btn');
+        var listEl = document.getElementById('alerts-list');
+        var vehicleSelect = document.getElementById('find-vehicle-id');
+        var postcodeInput = document.getElementById('find-origin-postcode');
+        var eventSource = null;
+        if (startBtn) {
+          startBtn.addEventListener('click', function () {
+            var vehicleId = vehicleSelect && vehicleSelect.value;
+            var postcode = postcodeInput && postcodeInput.value && postcodeInput.value.trim();
+            if (!vehicleId || !postcode) return;
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource('/api/alerts/stream?vehicle_id=' + encodeURIComponent(vehicleId) + '&origin_postcode=' + encodeURIComponent(postcode));
+            if (listEl) listEl.classList.remove('hidden');
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+            var days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+            eventSource.onmessage = function (e) {
+              try {
+                var d = JSON.parse(e.data);
+                if (listEl && (d.type === 'new_load' || d.type === 'planned_load_match')) {
+                  var li = document.createElement('li');
+                  li.className = 'border border-slate-700 rounded px-2 py-1 bg-slate-800/80';
+                  if (d.type === 'new_load') li.textContent = 'New load ' + d.load_id + ' ' + (d.pickup_postcode || '') + '→' + (d.delivery_postcode || '');
+                  else li.textContent = 'Planned ' + (days[d.day_of_week] || '') + ' ' + (d.pickup_postcode || '') + '→' + (d.delivery_postcode || '');
+                  listEl.insertBefore(li, listEl.firstChild);
+                }
+              } catch (err) {}
+            };
+            eventSource.onerror = function () { if (eventSource) eventSource.close(); eventSource = null; startBtn.classList.remove('hidden'); stopBtn.classList.add('hidden'); };
+          });
+        }
+        if (stopBtn) stopBtn.addEventListener('click', function () { if (eventSource) eventSource.close(); eventSource = null; document.getElementById('start-alerts-btn').classList.remove('hidden'); stopBtn.classList.add('hidden'); });
+      })();
+      document.querySelectorAll('.template-download').forEach(function(a) { a.addEventListener('click', function once() { a.style.pointerEvents = 'none'; a.style.opacity = '0.6'; setTimeout(function() { a.style.pointerEvents = ''; a.style.opacity = ''; }, 2000); a.removeEventListener('click', once); }); });
+      (function() {
+        var btn = document.getElementById('admin-btn-dvla-lookup');
+        var regInput = document.getElementById('admin-vehicle-reg');
+        var typeSelect = document.getElementById('admin-vehicle-type');
+        var trailerSelect = document.getElementById('admin-vehicle-trailer');
+        if (!btn || !regInput || !typeSelect) return;
+        btn.addEventListener('click', function() {
+          var reg = (regInput.value || '').trim().replace(/\s/g, '');
+          if (reg.length < 2) return;
+          btn.disabled = true;
+          fetch('/api/dvla-lookup?reg=' + encodeURIComponent(reg))
+            .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+            .then(function(o) {
+              btn.disabled = false;
+              if (o.ok && o.data.vehicle_type) {
+                typeSelect.value = o.data.vehicle_type;
+                if (o.data.trailer_type && trailerSelect.querySelector('option[value="' + o.data.trailer_type + '"]')) trailerSelect.value = o.data.trailer_type;
+              }
+            })
+            .catch(function() { btn.disabled = false; });
+        });
+      })();
+    </script>
+    <footer class="mt-8 pt-4 border-t border-slate-800 text-center text-slate-500 text-sm">
+      <a href="/terms" class="text-slate-500 hover:text-slate-400">Terms</a>
+      <span class="mx-2">·</span>
+      <a href="/privacy" class="text-slate-500 hover:text-slate-400">Privacy</a>
+      <span class="mx-2">·</span>
+      <a href="/confidentiality" class="text-slate-500 hover:text-slate-400">Confidentiality &amp; NDA</a>
+    </footer>
+  </body>
+</html>

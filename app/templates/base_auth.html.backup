@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}Platoonix{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#020617" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <style>
+      /* Touch-friendly: minimum tap target */
+      .btn-primary { min-height: 2.75rem; }
+      input, select, button { -webkit-tap-highlight-color: transparent; }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6">
+    <div class="w-full max-w-md">
+      <!-- Brand -->
+      <a href="/login" class="flex items-center gap-2 mb-6 no-underline text-slate-100">
+        <img src="/static/logo.png" alt="Platoonix" class="h-10 w-auto" />
+        <div>
+          <span class="text-xl font-semibold block">Platoonix</span>
+          <span class="text-slate-400 text-xs font-normal">Backhaul logistics</span>
+        </div>
+      </a>
+      {% block content %}{% endblock %}
+      <p class="text-slate-600 text-xs mt-6 text-center">
+        <a href="/terms" class="text-slate-500 hover:text-slate-400">Terms</a>
+        &nbsp;·&nbsp;
+        <a href="/privacy" class="text-slate-500 hover:text-slate-400">Privacy</a>
+        &nbsp;·&nbsp;
+        <a href="/confidentiality" class="text-slate-500 hover:text-slate-400">Confidentiality &amp; NDA</a>
+      </p>
+    </div>
+  </body>
+</html>
