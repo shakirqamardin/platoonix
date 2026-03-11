@@ -1232,3 +1232,26 @@
     </script>
 </body>
 </html>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.section-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                var input = this.querySelector('input[type="radio"]');
+                if (input) {
+                    input.checked = true;
+                    var section = input.value;
+                    document.querySelectorAll('.section-panel').forEach(function(p) {
+                        if (p.getAttribute('data-section') === section) {
+                            p.classList.add('active');
+                        } else {
+                            p.classList.remove('active');
+                        }
+                    });
+                }
+            });
+        });
+    });
+    </script>
+</body>
+</html>
