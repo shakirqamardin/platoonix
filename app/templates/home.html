@@ -293,7 +293,7 @@
         <nav class="glass-card rounded-2xl p-2 mb-6 animate-fade-in" style="animation-delay: 0.1s">
             <div class="flex flex-wrap gap-2">
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'find' else 'text-slate-300 hover:bg-slate-800/50' }}">
-                    <input type="radio" name="section" class="sr-only" value="find" {{ 'checked' if initial_section == 'find' else '' }} />
+                    <input type="radio" name="section" class="hidden" value="find" {{ 'checked' if initial_section == 'find' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>🔍</span>
                         <span>Find Backhaul</span>
@@ -301,7 +301,7 @@
                 </label>
                 
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'vehicles' else 'text-slate-300 hover:bg-slate-800/50' }}">
-                    <input type="radio" name="section" class="sr-only" value="vehicles" {{ 'checked' if initial_section == 'vehicles' else '' }} />
+                    <input type="radio" name="section" class="hidden" value="vehicles" {{ 'checked' if initial_section == 'vehicles' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>🚛</span>
                         <span>Vehicles</span>
@@ -309,7 +309,7 @@
                 </label>
                 
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'loads' else 'text-slate-300 hover:bg-slate-800/50' }}">
-                    <input type="radio" name="section" class="sr-only" value="loads" {{ 'checked' if initial_section == 'loads' else '' }} />
+                    <input type="radio" name="section" class="hidden" value="loads" {{ 'checked' if initial_section == 'loads' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>📦</span>
                         <span>Loads</span>
@@ -317,7 +317,7 @@
                 </label>
                 
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'routes' else 'text-slate-300 hover:bg-slate-800/50' }}">
-                    <input type="radio" name="section" class="sr-only" value="routes" {{ 'checked' if initial_section == 'routes' else '' }} />
+                    <input type="radio" name="section" class="hidden" value="routes" {{ 'checked' if initial_section == 'routes' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>🗺️</span>
                         <span>Routes</span>
@@ -325,7 +325,7 @@
                 </label>
                 
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'matches' else 'text-slate-300 hover:bg-slate-800/50' }}">
-                    <input type="radio" name="section" class="sr-only" value="matches" {{ 'checked' if initial_section == 'matches' else '' }} />
+                    <input type="radio" name="section" class="hidden" value="matches" {{ 'checked' if initial_section == 'matches' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>✨</span>
                         <span>Matches</span>
@@ -333,7 +333,7 @@
                 </label>
                 
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'admin' else 'text-slate-300 hover:bg-slate-800/50' }}">
-                    <input type="radio" name="section" class="sr-only" value="admin" {{ 'checked' if initial_section == 'admin' else '' }} />
+                    <input type="radio" name="section" class="hidden" value="admin" {{ 'checked' if initial_section == 'admin' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>⚙️</span>
                         <span>Admin</span>
@@ -1072,7 +1072,8 @@
     </div>
 
     <!-- JavaScript -->
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+    <script>
         // Tab switching
         (function () {
             var radios = document.querySelectorAll('input[name="section"]');
@@ -1221,3 +1222,13 @@
                             }
                         }
                     })
+                    })
+                    .catch(function() {
+                        btn.disabled = false;
+                        btn.textContent = "🔍 DVLA Lookup";
+                    });
+            });
+        })();
+    </script>
+</body>
+</html>
