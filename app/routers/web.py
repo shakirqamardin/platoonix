@@ -231,7 +231,7 @@ def find_backhaul_page(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> HTMLResponse:
-   """Run smart matching and render home with matching_results (vehicle_id + origin_postcode + optional destination_postcode from query)."""
+    """Run smart matching and render home with matching_results (vehicle_id + origin_postcode + optional destination_postcode from query)."""
     from app.auth import get_current_user_optional
     from app.services.geocode import get_lat_lon
     from app.services.matching import find_matching_loads_along_route
