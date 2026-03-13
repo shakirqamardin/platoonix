@@ -1,7 +1,7 @@
 -- Driver location tracking table
 CREATE TABLE IF NOT EXISTS driver_locations (
     id SERIAL PRIMARY KEY,
-    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    job_id INTEGER NOT NULL REFERENCES backhaul_jobs(id) ON DELETE CASCADE,
     driver_id INTEGER NOT NULL,
     latitude NUMERIC(10, 7) NOT NULL,
     longitude NUMERIC(10, 7) NOT NULL,
@@ -23,5 +23,5 @@ ALTER TABLE loaders ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255);
 ALTER TABLE loaders ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50);
 
 -- Add tracking status to jobs
-ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tracking_active BOOLEAN DEFAULT FALSE;
-ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tracking_started_at TIMESTAMP;
+ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS tracking_active BOOLEAN DEFAULT FALSE;
+ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS tracking_started_at TIMESTAMP;
