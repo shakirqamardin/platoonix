@@ -6,8 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
-from app.routers import alerts, hauliers, vehicles, loads, matches, planned_routes, pods, payments, upload, web, auth_web, haulier_web, loader_web, driver
-
+from app.routers import alerts, hauliers, vehicles, loads, matches, planned_routes, pods, payments, upload, web, auth_web, haulier_web, loader_web, driver, tracking
 app = FastAPI(
     title="Backhaul Logistics Platform",
     description="API for automated backhaul matching, ULEZ/CAZ-aware routing, and instant payouts.",
@@ -167,4 +166,4 @@ app.include_router(auth_web.router, tags=["auth"])
 app.include_router(haulier_web.router, tags=["haulier-web"])
 app.include_router(loader_web.router, tags=["loader-web"])
 app.include_router(driver.router)
-
+app.include_router(tracking.router)

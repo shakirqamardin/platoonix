@@ -49,7 +49,6 @@ class PasswordResetToken(Base):
         DateTime(timezone=True), default=datetime.utcnow
     )
 
-
 class Loader(Base):
     """Loader/shipper company: owns loads and planned loads."""
     __tablename__ = "loaders"
@@ -61,7 +60,11 @@ class Loader(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
+    contact_name: Mapped[Optional[str]] = mapped_column(String(255))
 
+    loads: Mapped[list["Load"]] = relationship("Load", back_populates="loader")
+    planned_loads: Mapped[list["PlannedLoad"]] = relationship("PlannedLoad", back_populates="loader")
+    
 
 class Haulier(Base):
     __tablename__ = "hauliers"
@@ -71,7 +74,7 @@ class Haulier(Base):
     contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
     contact_phone: Mapped[Optional[str]] = mapped_column(String(50))
     payment_account_id: Mapped[Optional[str]] = mapped_column(String(255))
-    base_postcode: Mapped[Optional[str]] = mapped_column(String(20))  # company default base (route home); vehicle can override
+    base_postcode: Mapped[Optional[str]] = mapped_column(String(20))
     # Bank details (for payouts if not using Stripe Connect)
     bank_account_name: Mapped[Optional[str]] = mapped_column(String(255))
     sort_code: Mapped[Optional[str]] = mapped_column(String(20))
@@ -79,7 +82,9 @@ class Haulier(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
-
+    contact_name: Mapped[Optional[str]] = mapped_column(String(255))
+    driver_photo_url: Mapped[Optional[str]] = mapped_column(String(500))
+    
     vehicles: Mapped[list["Vehicle"]] = relationship("Vehicle", back_populates="haulier")
 
 
@@ -283,4 +288,18 @@ class Payment(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
+class DriverLocation(Base):
+    __tablename__ = "driver_locations"
 
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("backhaul_jobs.id"), nullable=False)
+    driver_id: Mapped[int] = mapped_column(nullable=False)
+    latitude: Mapped[float] = mapped_column(Numeric(10, 7), nullable=False)
+    longitude: Mapped[float] = mapped_column(Numeric(10, 7), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="en_route_to_pickup")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
