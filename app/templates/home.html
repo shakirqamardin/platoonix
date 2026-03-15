@@ -516,25 +516,38 @@
                     </form>
                     
                     <!-- Bulk Upload -->
-                    <div class="flex flex-wrap gap-3 items-center">
-                        <form method="post" action="/upload" enctype="multipart/form-data" class="flex items-center gap-2">
-                            <input type="hidden" name="type" value="hauliers" />
-                            <label class="block text-sm font-medium text-slate-300 mb-2">Bulk Upload</label>
-                            <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-600/20 file:text-teal-300 hover:file:bg-teal-600/30" required />
-                            <button type="submit" class="px-4 py-2 text-sm font-semibold border border-slate-600 rounded-lg hover:bg-slate-800 transition-all">Upload Companies</button>
-                        </form>
-                        <form method="post" action="/upload" enctype="multipart/form-data" class="flex items-center gap-2">
-                            <input type="hidden" name="type" value="vehicles" />
-                            <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-600/20 file:text-teal-300 hover:file:bg-teal-600/30" required />
-                            <button type="submit" class="px-4 py-2 text-sm font-semibold border border-slate-600 rounded-lg hover:bg-slate-800 transition-all">Upload Vehicles</button>
-                        </form>
-                        <div class="text-sm text-slate-500">
-                            Templates: 
-                            <a href="/download-templates/vehicles" download class="template-download text-teal-400 hover:underline">Vehicles CSV</a> • 
-                            <a href="/download-templates/hauliers" download class="template-download text-teal-400 hover:underline">Hauliers CSV</a>
+                    <div class="card p-6">
+                        <h3 class="text-lg font-semibold mb-4 text-teal-400">📤 Bulk Upload</h3>
+                        
+                        <!-- Consolidated Upload (Recommended) -->
+                        <div class="mb-6 p-4 bg-teal-500/10 border border-teal-500/30 rounded-lg">
+                            <h4 class="text-sm font-semibold text-teal-300 mb-2">✨ Recommended: One-File Upload</h4>
+                            <p class="text-xs text-slate-400 mb-3">Upload companies and vehicles together in a single CSV file.</p>
+                            
+                            <form action="/api/upload/hauliers-vehicles" method="post" enctype="multipart/form-data" class="space-y-3">
+                                <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-600 file:text-white hover:file:bg-teal-700 cursor-pointer" />
+                                <div class="flex gap-2">
+                                    <button type="submit" class="px-4 py-2 text-sm font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all">Upload Companies + Vehicles</button>
+                                    <a href="/static/templates/hauliers_vehicles.csv" download class="px-4 py-2 text-sm font-semibold border border-slate-600 rounded-lg hover:bg-slate-800 transition-all">📥 Download Template</a>
+                                </div>
+                            </form>
                         </div>
+                        
+                        <!-- Separate Uploads (Legacy) -->
+                        <details class="text-sm">
+                            <summary class="cursor-pointer text-slate-400 hover:text-slate-300 mb-3">Or upload separately (legacy)</summary>
+                            <div class="space-y-4 pl-4">
+                                <form action="/api/upload/hauliers" method="post" enctype="multipart/form-data" class="flex gap-2">
+                                    <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="flex-1 text-sm" />
+                                    <button type="submit" class="px-4 py-2 text-sm border border-slate-600 rounded-lg hover:bg-slate-800">Upload Companies Only</button>
+                                </form>
+                                <form action="/api/upload/vehicles" method="post" enctype="multipart/form-data" class="flex gap-2">
+                                    <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="flex-1 text-sm" />
+                                    <button type="submit" class="px-4 py-2 text-sm border border-slate-600 rounded-lg hover:bg-slate-800">Upload Vehicles Only</button>
+                                </form>
+                            </div>
+                        </details>
                     </div>
-                </div>
                 
                 <!-- Vehicles Table -->
                 <div class="overflow-x-auto">
@@ -661,14 +674,31 @@
                 </div>
                 
                 <!-- Bulk Upload -->
-                <div class="mb-6">
-                    <form method="post" action="/upload" enctype="multipart/form-data" class="flex flex-wrap items-center gap-3">
-                        <input type="hidden" name="type" value="loads" />
-                        <label class="text-sm font-medium text-slate-300">Or bulk upload:</label>
-                        <input type="file" name="file" accept=".csv,.xlsx,.xls" class="text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-600/20 file:text-teal-300 hover:file:bg-teal-600/30" required />
-                        <button type="submit" class="px-4 py-2 text-sm font-semibold border border-slate-600 rounded-lg hover:bg-slate-800 transition-all">Bulk Upload Loads</button>
-                        <a href="/download-templates/loads" download class="text-sm text-teal-400 hover:underline">Download CSV Template</a>
-                    </form>
+                <div class="card p-6">
+                    <h3 class="text-lg font-semibold mb-4 text-teal-400">📤 Bulk Upload</h3>
+                    
+                    <!-- Consolidated Upload (Recommended) -->
+                    <div class="mb-6 p-4 bg-teal-500/10 border border-teal-500/30 rounded-lg">
+                        <h4 class="text-sm font-semibold text-teal-300 mb-2">✨ Recommended: One-File Upload</h4>
+                        <p class="text-xs text-slate-400 mb-3">Upload loader companies and loads together in a single CSV file.</p>
+                        
+                        <form action="/api/upload/loaders-loads" method="post" enctype="multipart/form-data" class="space-y-3">
+                            <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-600 file:text-white hover:file:bg-teal-700 cursor-pointer" />
+                            <div class="flex gap-2">
+                                <button type="submit" class="px-4 py-2 text-sm font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all">Upload Loaders + Loads</button>
+                                <a href="/static/templates/loaders_loads.csv" download class="px-4 py-2 text-sm font-semibold border border-slate-600 rounded-lg hover:bg-slate-800 transition-all">📥 Download Template</a>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Separate Upload (Legacy) -->
+                    <details class="text-sm">
+                        <summary class="cursor-pointer text-slate-400 hover:text-slate-300 mb-3">Or upload loads only (legacy)</summary>
+                        <form action="/api/upload/loads" method="post" enctype="multipart/form-data" class="flex gap-2 pl-4">
+                            <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="flex-1 text-sm" />
+                            <button type="submit" class="px-4 py-2 text-sm border border-slate-600 rounded-lg hover:bg-slate-800">Bulk Upload Loads</button>
+                        </form>
+                    </details>
                 </div>
                 
                 <!-- Loads Table -->
