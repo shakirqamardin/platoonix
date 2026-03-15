@@ -235,6 +235,7 @@ def haulier_dashboard(
             "matching_results": None,
             "find_vehicle_id": "",
             "find_origin_postcode": "",
+            "find_destination_postcode": "",
             "postcode_lookup_failed": False,
             "match_diagnostic": None,
             "profile_updated": request.query_params.get("profile_updated"),
@@ -261,13 +262,12 @@ def haulier_find_backhaul(
         .all()
     )
     vehicle_id_raw = request.query_params.get("vehicle_id", "").strip()
-    raw_postcode = (request.query_params.get("origin_postcode") or "").strip()
-    origin_postcode = " ".join(raw_postcode.split()).strip() if raw_postcode else ""
-    route_from = (request.query_params.get("route_from") or "").strip().upper()
-    route_to = (request.query_params.get("route_to") or "").strip().upper()
+    raw_origin = (request.query_params.get("origin_postcode") or "").strip()
+    raw_dest = (request.query_params.get("destination_postcode") or "").strip()
+    origin_postcode = " ".join(raw_origin.split()).strip() if raw_origin else ""
+    destination_postcode = " ".join(raw_dest.split()).strip() if raw_dest else ""
 
     matching_results = None
-    route_matching_results = None
     postcode_lookup_failed = False
     match_diagnostic = None
 
@@ -276,8 +276,28 @@ def haulier_find_backhaul(
             vehicle_id = int(vehicle_id_raw)
             vehicle = db.get(models.Vehicle, vehicle_id)
             if vehicle and vehicle.haulier_id == haulier.id:
-                pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+                # UNIFIED SMART SEARCH: Find loads near pickup + loads along route home
+                if destination_postcode:
+                    # Route search: finds loads along entire journey corridor
+                    from app.services.matching import find_matching_loads_along_route
+                    route_pairs = find_matching_loads_along_route(vehicle_id, origin_postcode, destination_postcode, db)
+                    # Also find loads near origin
+                    origin_pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+                    # Merge and deduplicate
+                    all_pairs = route_pairs + origin_pairs
+                    seen_load_ids = set()
+                    unique_pairs = []
+                    for load, dist in all_pairs:
+                        if load.id not in seen_load_ids:
+                            seen_load_ids.add(load.id)
+                            unique_pairs.append((load, dist))
+                    pairs = unique_pairs
+                else:
+                    # Just origin search if no destination
+                    pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+                
                 matching_results = [{"load": load, "distance_miles": dist} for load, dist in pairs]
+                
                 if not matching_results:
                     from app.services.geocode import get_lat_lon
                     from app.routers.web import _match_diagnostic
@@ -288,17 +308,6 @@ def haulier_find_backhaul(
                         match_diagnostic = _match_diagnostic(vehicle_id, origin_postcode, db)
         except ValueError:
             matching_results = []
-
-    if vehicle_id_raw and route_from and route_to:
-        try:
-            vehicle_id = int(vehicle_id_raw)
-            vehicle = db.get(models.Vehicle, vehicle_id)
-            if vehicle and vehicle.haulier_id == haulier.id:
-                from app.services.matching import find_matching_loads_along_route
-                pairs = find_matching_loads_along_route(vehicle_id, route_from, route_to, db)
-                route_matching_results = [{"load": load, "distance_miles": dist} for load, dist in pairs]
-        except ValueError:
-            route_matching_results = []
 
     routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
     jobs = (
@@ -327,11 +336,9 @@ def haulier_find_backhaul(
             "total_payout": total_payout,
             "platform_fee_percent": get_settings().platform_fee_percent,
             "matching_results": matching_results,
-            "route_matching_results": route_matching_results,
             "find_vehicle_id": vehicle_id_raw,
             "find_origin_postcode": origin_postcode,
-            "find_route_from": route_from,
-            "find_route_to": route_to,
+            "find_destination_postcode": destination_postcode,
             "postcode_lookup_failed": postcode_lookup_failed,
             "match_diagnostic": match_diagnostic,
             "profile_updated": None,
