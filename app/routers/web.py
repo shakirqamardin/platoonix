@@ -882,9 +882,13 @@ async def express_interest(
     load_id: int = Form(...),
     vehicle_id: int = Form(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
 ):
     """Haulier expresses interest in a load - creates a match suggestion."""
+    # Get current user
+    current_user = get_current_user_optional(request, db)
+    if not current_user or current_user.role != "haulier":
+        raise HTTPException(status_code=403, detail="Haulier login required")
+    
     # Verify the vehicle belongs to this haulier
     vehicle = db.get(models.Vehicle, vehicle_id)
     if not vehicle or vehicle.haulier_id != current_user.haulier_id:
