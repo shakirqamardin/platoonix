@@ -158,7 +158,7 @@ class Load(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
-    
+        
     loader: Mapped[Optional["Loader"]] = relationship("Loader", back_populates="loads")
 
 
@@ -182,6 +182,8 @@ class PlannedLoad(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
+    
+    loader: Mapped[Optional["Loader"]] = relationship("Loader", back_populates="planned_loads")
 
 
 class HaulierRoute(Base):
