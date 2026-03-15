@@ -249,11 +249,25 @@ def find_backhaul_page(
     if vehicle_id_raw and origin_postcode:
         try:
             vehicle_id = int(vehicle_id_raw)
-            # Smart route corridor matching if destination provided, otherwise simple radius
+            # UNIFIED SMART SEARCH: Find loads near pickup + loads along route home
             if destination_postcode:
-                pairs = find_matching_loads_along_route(vehicle_id, origin_postcode, destination_postcode, db)
+                # Route search: finds loads along entire journey corridor
+                route_pairs = find_matching_loads_along_route(vehicle_id, origin_postcode, destination_postcode, db)
+                # Also find loads near origin (might catch some the route missed)
+                origin_pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+                # Merge and deduplicate by load_id
+                all_pairs = route_pairs + origin_pairs
+                seen_load_ids = set()
+                unique_pairs = []
+                for load, dist in all_pairs:
+                    if load.id not in seen_load_ids:
+                        seen_load_ids.add(load.id)
+                        unique_pairs.append((load, dist))
+                pairs = unique_pairs
             else:
+                # Just origin search if no destination
                 pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+            
             matching_results = [{"load": load, "distance_miles": dist} for load, dist in pairs]
             if not matching_results:
                 open_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
