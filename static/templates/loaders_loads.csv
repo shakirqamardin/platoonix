@@ -1,0 +1,4 @@
+company_name,contact_email,contact_phone,contact_name,pickup_postcode,delivery_postcode,weight_kg,pallets,pickup_date,vehicle_type_required,trailer_type_required
+Tesco Distribution,loads@tesco.com,08001234567,Sarah Jones,NN1 2BP,MK1 1AA,15000,10,2026-03-20,any,any
+Tesco Distribution,loads@tesco.com,08001234567,Sarah Jones,B8 2LU,MK9 4AN,20000,15,2026-03-21,artic,curtain
+Sainsburys Logistics,transport@sainsburys.com,08009876543,Mike Brown,B1 1AA,MK1 1AA,12000,8,2026-03-22,any,any

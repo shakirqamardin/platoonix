@@ -1,0 +1,4 @@
+company_name,contact_email,contact_phone,contact_name,registration,vehicle_type,trailer_type,capacity_weight_kg,capacity_pallets,base_postcode
+ABC Haulage,john@abc.com,07700900123,John Smith,EF18NXU,van,box,3500,8,M1 1AA
+ABC Haulage,john@abc.com,07700900123,John Smith,XX10CJH,artic,curtain,26000,26,M1 1AA
+XYZ Transport,sarah@xyz.com,07700900456,Sarah Jones,AB12CDE,rigid,flatbed,18000,20,B1 1AA
