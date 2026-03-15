@@ -876,3 +876,37 @@ async def create_loader_account(
     db.commit()
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Loader account created"), status_code=303)
 
+@router.post("/interest")
+async def express_interest(
+    request: Request,
+    load_id: int = Form(...),
+    vehicle_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Haulier expresses interest in a load - creates a match suggestion."""
+    # Verify the vehicle belongs to this haulier
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    if not vehicle or vehicle.haulier_id != current_user.entity_id:
+        raise HTTPException(status_code=403, detail="Not your vehicle")
+    
+    # Check if match already exists
+    existing = db.query(models.Match).filter(
+        models.Match.load_id == load_id,
+        models.Match.vehicle_id == vehicle_id
+    ).first()
+    
+    if existing:
+        return RedirectResponse(url="/?tab=find-backhaul&msg=already_interested", status_code=303)
+    
+    # Create match suggestion
+    match = models.Match(
+        load_id=load_id,
+        vehicle_id=vehicle_id,
+        haulier_id=current_user.entity_id,
+        status="pending",
+    )
+    db.add(match)
+    db.commit()
+    
+    return RedirectResponse(url="/?tab=matches&msg=interest_sent", status_code=303)
