@@ -423,12 +423,13 @@
                 {% if matching_results is not none %}
                 <div class="overflow-x-auto">
                     {% if matching_results %}
-                    <<table class="w-full text-sm">
+                    <table class="w-full text-sm">
                         <thead>
                             <tr class="border-b border-slate-700">
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Load</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Route</th>
                                 <th class="py-3 px-4 text-right font-semibold text-slate-400">Distance</th>
+                                <th class="py-3 px-4 text-center font-semibold text-slate-400">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -437,7 +438,16 @@
                                 <td class="py-3 px-4 font-medium">{{ m.load.shipper_name }}</td>
                                 <td class="py-3 px-4 text-slate-300">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</td>
                                 <td class="py-3 px-4 text-right">
-                                    <span class="badge badge-success">{{ m.distance_miles }} mi ✓</span>
+                                    <span class="badge badge-success">{{ m.distance_miles }} mi</span>
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <form method="post" action="/interest" style="display:inline;">
+                                        <input type="hidden" name="load_id" value="{{ m.load.id }}">
+                                        <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
+                                        <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700">
+                                            ✓ Interest
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
