@@ -20,10 +20,6 @@ templates = Jinja2Templates(directory="app/templates")
 @router.post("/api/tracking/update")
 async def update_location(
     request: Request,
-    job_id: int,
-    latitude: float,
-    longitude: float,
-    status: Optional[str] = "en_route_to_pickup",
     db: Session = Depends(get_db),
 ):
     """Driver updates their GPS location for an active job."""
