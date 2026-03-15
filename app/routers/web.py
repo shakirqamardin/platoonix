@@ -882,12 +882,12 @@ async def express_interest(
     load_id: int = Form(...),
     vehicle_id: int = Form(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Haulier expresses interest in a load - creates a match suggestion."""
     # Verify the vehicle belongs to this haulier
     vehicle = db.get(models.Vehicle, vehicle_id)
-    if not vehicle or vehicle.haulier_id != current_user.entity_id:
+    if not vehicle or vehicle.haulier_id != current_user.haulier_id:
         raise HTTPException(status_code=403, detail="Not your vehicle")
     
     # Check if match already exists
@@ -903,7 +903,7 @@ async def express_interest(
     match = models.Match(
         load_id=load_id,
         vehicle_id=vehicle_id,
-        haulier_id=current_user.entity_id,
+        haulier_id=current_user.haulier_id,
         status="pending",
     )
     db.add(match)
