@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Delivery - Platoonix</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAF5-SHORQnkmOqrsvQaxToDFf36Jjk-nM&libraries=geometry"></script>
+    <style>
+        .card { @apply rounded-xl border border-slate-800 bg-slate-900/60; }
+        #map { height: 400px; border-radius: 12px; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="max-w-3xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <img src="/static/logo.png" alt="Platoonix" class="h-9 w-auto">
+                <div>
+                    <h1 class="text-xl font-semibold">Track Your Delivery</h1>
+                    <p class="text-sm text-slate-400">Job #{{ job.id }}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full" id="live-indicator"></div>
+                <span class="text-sm text-slate-400" id="live-status">Connecting...</span>
+            </div>
+        </div>
+
+        <!-- Map -->
+        <div class="card p-4 mb-6">
+            <div id="map"></div>
+        </div>
+
+        <!-- Status & Info -->
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+            <!-- Current Status -->
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold mb-4">Driver Status</h2>
+                <div class="space-y-3">
+                    <div id="status-display" class="px-4 py-3 rounded-lg bg-slate-800/50 text-center">
+                        <span class="text-sm" id="status-text">🚚 En route to pickup</span>
+                    </div>
+                    <div class="text-sm text-slate-400">
+                        <div class="flex justify-between mb-2">
+                            <span>Last updated:</span>
+                            <span id="last-update" class="text-slate-300">—</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Distance to pickup:</span>
+                            <span id="distance-pickup" class="text-slate-300">—</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Driver Contact -->
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold mb-4">Driver Contact</h2>
+                {% if driver_name or driver_phone %}
+                <div class="space-y-3 text-sm">
+                    {% if driver_name %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Driver:</span>
+                        <span>{{ driver_name }}</span>
+                    </div>
+                    {% endif %}
+                    {% if driver_phone %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Phone:</span>
+                        <a href="tel:{{ driver_phone }}" class="text-teal-400 hover:underline">{{ driver_phone }}</a>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Vehicle:</span>
+                        <span class="font-mono">{{ vehicle.registration }}</span>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-sm text-slate-400">Contact details not available</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Route Details -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold mb-4">Route Details</h2>
+            <div class="grid sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <span class="text-slate-400 block mb-1">Pickup</span>
+                    <span class="font-mono text-lg">{{ load.pickup_postcode }}</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block mb-1">Delivery</span>
+                    <span class="font-mono text-lg">{{ load.delivery_postcode }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const jobId = {{ job.id }};
+        let map, driverMarker, pickupMarker, deliveryMarker, routeLine;
+        let pickupLocation, deliveryLocation;
+
+        const statusText = document.getElementById('status-text');
+        const liveIndicator = document.getElementById('live-indicator');
+        const liveStatus = document.getElementById('live-status');
+        const lastUpdate = document.getElementById('last-update');
+        const distancePickup = document.getElementById('distance-pickup');
+
+        const statusLabels = {
+            'en_route_to_pickup': '🚚 En route to pickup',
+            'arrived_at_pickup': '📍 Arrived at pickup',
+            'loaded': '📦 Loaded - delivering',
+            'arrived_at_delivery': '✓ Arrived at delivery',
+            'delivered': '✅ Delivered'
+        };
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 10,
+                center: { lat: 52.5, lng: -1.5 },
+                styles: [
+                    { elementType: "geometry", stylers: [{ color: "#1e293b" }] },
+                    { elementType: "labels.text.fill", stylers: [{ color: "#94a3b8" }] },
+                    { featureType: "road", elementType: "geometry", stylers: [{ color: "#334155" }] }
+                ]
+            });
+
+            pickupMarker = new google.maps.Marker({
+                map: map,
+                label: { text: 'P', color: '#fff' },
+                title: 'Pickup: {{ load.pickup_postcode }}'
+            });
+
+            deliveryMarker = new google.maps.Marker({
+                map: map,
+                label: { text: 'D', color: '#fff' },
+                title: 'Delivery: {{ load.delivery_postcode }}'
+            });
+
+            driverMarker = new google.maps.Marker({
+                map: map,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: "#14b8a6",
+                    fillOpacity: 1,
+                    strokeColor: "#fff",
+                    strokeWeight: 3
+                },
+                title: 'Driver location'
+            });
+
+            routeLine = new google.maps.Polyline({
+                map: map,
+                strokeColor: '#14b8a6',
+                strokeOpacity: 0.6,
+                strokeWeight: 3
+            });
+
+            geocodeLocations();
+            fetchDriverLocation();
+            setInterval(fetchDriverLocation, 10000); // Update every 10 seconds
+        }
+
+        async function geocodeLocations() {
+            const geocoder = new google.maps.Geocoder();
+            
+            geocoder.geocode({ address: '{{ load.pickup_postcode }}, UK' }, (results, status) => {
+                if (status === 'OK') {
+                    pickupLocation = results[0].geometry.location;
+                    pickupMarker.setPosition(pickupLocation);
+                    fitMapBounds();
+                }
+            });
+
+            geocoder.geocode({ address: '{{ load.delivery_postcode }}, UK' }, (results, status) => {
+                if (status === 'OK') {
+                    deliveryLocation = results[0].geometry.location;
+                    deliveryMarker.setPosition(deliveryLocation);
+                    fitMapBounds();
+                }
+            });
+        }
+
+        async function fetchDriverLocation() {
+            try {
+                const response = await fetch(`/api/tracking/location/${jobId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.latitude && data.longitude) {
+                        const pos = { lat: data.latitude, lng: data.longitude };
+                        driverMarker.setPosition(pos);
+                        
+                        // Update status
+                        statusText.textContent = statusLabels[data.status] || data.status;
+                        lastUpdate.textContent = new Date(data.updated_at).toLocaleTimeString();
+                        
+                        // Calculate distance to pickup
+                        if (pickupLocation) {
+                            const distance = google.maps.geometry.spherical.computeDistanceBetween(
+                                new google.maps.LatLng(pos),
+                                pickupLocation
+                            );
+                            distancePickup.textContent = (distance / 1609.34).toFixed(1) + ' miles';
+                        }
+                        
+                        // Draw route line
+                        if (pickupLocation && deliveryLocation) {
+                            routeLine.setPath([pos, pickupLocation, deliveryLocation]);
+                        }
+                        
+                        liveIndicator.className = 'w-3 h-3 rounded-full bg-emerald-500';
+                        liveStatus.textContent = 'Live';
+                        
+                        fitMapBounds();
+                    }
+                }
+            } catch (error) {
+                liveIndicator.className = 'w-3 h-3 rounded-full bg-red-500';
+                liveStatus.textContent = 'Connection lost';
+                console.error('Fetch error:', error);
+            }
+        }
+
+        function fitMapBounds() {
+            const bounds = new google.maps.LatLngBounds();
+            if (driverMarker.getPosition()) bounds.extend(driverMarker.getPosition());
+            if (pickupMarker.getPosition()) bounds.extend(pickupMarker.getPosition());
+            if (deliveryMarker.getPosition()) bounds.extend(deliveryMarker.getPosition());
+            if (!bounds.isEmpty()) map.fitBounds(bounds);
+        }
+
+        initMap();
+    </script>
+</body>
+</html>
