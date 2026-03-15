@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app import models
-from app.auth import get_current_admin, get_current_user_optional, hash_password
+from app.auth import get_current_admin, get_current_user, get_current_user_optional, hash_password
 from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
