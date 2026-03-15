@@ -158,6 +158,8 @@ class Load(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
+    
+    loader: Mapped[Optional["Loader"]] = relationship("Loader", back_populates="loads")
 
 
 # ---- Planned routes: loaders and hauliers enter weekly/monthly patterns ----
