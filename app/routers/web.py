@@ -826,11 +826,15 @@ async def accept_interest(
         pass
     
     return RedirectResponse(url="/?section=matches", status_code=303)
+
+
+@router.post("/create-haulier-account", response_class=RedirectResponse)
+async def create_haulier_account(
     request: Request,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
-    """Haulier: express interest in a suggested load or planned load."""
+    """Admin: create a new haulier (company) and their login in one step. No separate Add company needed."""
     form = dict(await request.form())
     haulier_id = int(form.get("haulier_id"))
     vehicle_id = int(form.get("vehicle_id"))
