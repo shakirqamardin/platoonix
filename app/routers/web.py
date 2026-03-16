@@ -818,13 +818,6 @@ async def accept_interest(
             load.status = models.LoadStatusEnum.MATCHED.value
             db.commit()
     
-    # Create payment record
-    from app.services.payment import create_payment_for_job
-    try:
-        create_payment_for_job(job, db)
-    except Exception:
-        pass
-    
     return RedirectResponse(url="/?section=matches", status_code=303)
 
 
