@@ -912,18 +912,27 @@
                                         {% endif %}
                                     </td>
                                     <td class="py-3 px-4 text-right">
-                                        {% if row.interest.status == 'suggested' %}
-                                        <form method="post" action="/show-interest" class="inline">
-                                            <input type="hidden" name="haulier_id" value="{{ row.interest.haulier_id }}" />
-                                            <input type="hidden" name="vehicle_id" value="{{ row.interest.vehicle_id }}" />
-                                            {% if row.interest.planned_load_id %}<input type="hidden" name="planned_load_id" value="{{ row.interest.planned_load_id }}" />{% endif %}
-                                            {% if row.interest.load_id %}<input type="hidden" name="load_id" value="{{ row.interest.load_id }}" />{% endif %}
-                                            <button type="submit" class="px-4 py-2 text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all">
-                                                👋 Show Interest
-                                            </button>
-                                        </form>
-                                        {% endif %}
-                                    </td>
+                                            {% if row.interest.status == 'suggested' %}
+                                            <form method="post" action="/show-interest" class="inline">
+                                                <input type="hidden" name="haulier_id" value="{{ row.interest.haulier_id }}" />
+                                                <input type="hidden" name="vehicle_id" value="{{ row.interest.vehicle_id }}" />
+                                                {% if row.interest.planned_load_id %}<input type="hidden" name="planned_load_id" value="{{ row.interest.planned_load_id }}" />{% endif %}
+                                                {% if row.interest.load_id %}<input type="hidden" name="load_id" value="{{ row.interest.load_id }}" />{% endif %}
+                                                <button type="submit" class="px-4 py-2 text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all">
+                                                    👋 Show Interest
+                                                </button>
+                                            </form>
+                                            {% elif row.interest.status == 'expressed' %}
+                                            <form method="post" action="/accept-interest" class="inline">
+                                                <input type="hidden" name="interest_id" value="{{ row.interest.id }}" />
+                                                <button type="submit" class="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all">
+                                                    ✅ Accept Job
+                                                </button>
+                                            </form>
+                                            {% elif row.interest.status == 'accepted' %}
+                                            <span class="text-emerald-400 text-sm font-medium">✓ Job Created</span>
+                                            {% endif %}
+                                        </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

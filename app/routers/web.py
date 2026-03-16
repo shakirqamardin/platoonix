@@ -781,6 +781,103 @@ async def show_interest_form(
     return RedirectResponse(url="/", status_code=303)
 
 
+@router.post("/accept-interest", response_class=RedirectResponse)
+async def accept_interest(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+) -> RedirectResponse:
+    """Loader: accept haulier's interest and create a backhaul job."""
+    form = dict(await request.form())
+    interest_id = int(form.get("interest_id"))
+    
+    # Get the interest record
+    interest = db.get(models.LoadInterest, interest_id)
+    if not interest:
+        return RedirectResponse(url="/?section=matches", status_code=303)
+    
+    # Update status to accepted
+    interest.status = "accepted"
+    db.commit()
+    
+    # Create the BackhaulJob
+    from datetime import datetime, timezone
+    job = models.BackhaulJob(
+        vehicle_id=interest.vehicle_id,
+        load_id=interest.load_id,
+        matched_at=datetime.now(timezone.utc),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    
+    # Update load status to matched
+    if interest.load_id:
+        load = db.get(models.Load, interest.load_id)
+        if load:
+            load.status = models.LoadStatusEnum.MATCHED.value
+            db.commit()
+    
+    # Create payment record
+    from app.services.payment import create_payment_for_job
+    try:
+        create_payment_for_job(job, db)
+    except Exception:
+        pass
+    
+    return RedirectResponse(url="/?section=matches", status_code=303)
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+) -> RedirectResponse:
+    """Haulier: express interest in a suggested load or planned load."""
+    form = dict(await request.form())
+    haulier_id = int(form.get("haulier_id"))
+    vehicle_id = int(form.get("vehicle_id"))
+    planned_load_id = form.get("planned_load_id")
+    load_id = form.get("load_id")
+    if planned_load_id:
+        planned_load_id = int(planned_load_id)
+    else:
+        planned_load_id = None
+    if load_id:
+        load_id = int(load_id)
+    else:
+        load_id = None
+    if not planned_load_id and not load_id:
+        return RedirectResponse(url="/", status_code=303)
+    existing = (
+        db.query(models.LoadInterest)
+        .filter(
+            models.LoadInterest.haulier_id == haulier_id,
+            models.LoadInterest.vehicle_id == vehicle_id,
+            models.LoadInterest.planned_load_id == planned_load_id,
+            models.LoadInterest.load_id == load_id,
+        )
+        .first()
+    )
+    if existing:
+        existing.status = "expressed"
+        db.commit()
+        interest = existing
+    else:
+        interest = models.LoadInterest(
+            haulier_id=haulier_id,
+            vehicle_id=vehicle_id,
+            load_id=load_id,
+            planned_load_id=planned_load_id,
+            status="expressed",
+        )
+        db.add(interest)
+        db.commit()
+    try:
+        from app.services.email_sender import email_loader_interest
+        email_loader_interest(interest, db)
+    except Exception:
+        pass
+    return RedirectResponse(url="/", status_code=303)
+
+
 @router.post("/create-haulier-account", response_class=RedirectResponse)
 async def create_haulier_account(
     request: Request,
