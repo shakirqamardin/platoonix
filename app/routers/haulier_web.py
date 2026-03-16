@@ -192,58 +192,12 @@ def haulier_dashboard(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """Redirect hauliers to main dashboard - same interface for everyone."""
     result = _haulier_or_redirect(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
-    vehicles = (
-        db.query(models.Vehicle)
-        .filter(models.Vehicle.haulier_id == haulier.id)
-        .order_by(models.Vehicle.registration)
-        .all()
-    )
-    routes = (
-        db.query(models.HaulierRoute)
-        .filter(models.HaulierRoute.haulier_id == haulier.id)
-        .all()
-    )
-    jobs = (
-        db.query(models.BackhaulJob)
-        .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
-        .filter(models.Vehicle.haulier_id == haulier.id)
-        .order_by(models.BackhaulJob.matched_at.desc())
-        .all()
-    )
-    payments = []
-    for j in jobs:
-        p = db.query(models.Payment).filter(models.Payment.backhaul_job_id == j.id).first()
-        if p:
-            payments.append(p)
-    total_payout = sum((p.net_payout_gbp or 0) for p in payments)
-
-    return templates.TemplateResponse(
-        "haulier_dashboard.html",
-        {
-            "request": request,
-            "haulier": haulier,
-            "vehicles": vehicles,
-            "routes": routes,
-            "jobs": jobs,
-            "payments": payments,
-            "total_payout": total_payout,
-            "platform_fee_percent": get_settings().platform_fee_percent,
-            "matching_results": None,
-            "find_vehicle_id": "",
-            "find_origin_postcode": "",
-            "find_destination_postcode": "",
-            "postcode_lookup_failed": False,
-            "match_diagnostic": None,
-            "profile_updated": request.query_params.get("profile_updated"),
-            "vehicle_added": request.query_params.get("vehicle_added"),
-            "delete_error": request.query_params.get("delete_error"),
-            "current_user_email": user.email,
-        },
-    )
+    # Redirect to main dashboard
+    return RedirectResponse(url="/", status_code=302)
 
 
 @router.get("/haulier/find-backhaul", response_class=HTMLResponse)
@@ -251,102 +205,14 @@ def haulier_find_backhaul(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """Redirect to main dashboard find-backhaul - same interface for everyone."""
     result = _haulier_or_redirect(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
-    vehicles = (
-        db.query(models.Vehicle)
-        .filter(models.Vehicle.haulier_id == haulier.id)
-        .order_by(models.Vehicle.registration)
-        .all()
-    )
-    vehicle_id_raw = request.query_params.get("vehicle_id", "").strip()
-    raw_origin = (request.query_params.get("origin_postcode") or "").strip()
-    raw_dest = (request.query_params.get("destination_postcode") or "").strip()
-    origin_postcode = " ".join(raw_origin.split()).strip() if raw_origin else ""
-    destination_postcode = " ".join(raw_dest.split()).strip() if raw_dest else ""
-
-    matching_results = None
-    postcode_lookup_failed = False
-    match_diagnostic = None
-
-    if vehicle_id_raw and origin_postcode:
-        try:
-            vehicle_id = int(vehicle_id_raw)
-            vehicle = db.get(models.Vehicle, vehicle_id)
-            if vehicle and vehicle.haulier_id == haulier.id:
-                # UNIFIED SMART SEARCH: Find loads near pickup + loads along route home
-                if destination_postcode:
-                    # Route search: finds loads along entire journey corridor
-                    from app.services.matching import find_matching_loads_along_route
-                    route_pairs = find_matching_loads_along_route(vehicle_id, origin_postcode, destination_postcode, db)
-                    # Also find loads near origin
-                    origin_pairs = find_matching_loads(vehicle_id, origin_postcode, db)
-                    # Merge and deduplicate
-                    all_pairs = route_pairs + origin_pairs
-                    seen_load_ids = set()
-                    unique_pairs = []
-                    for load, dist in all_pairs:
-                        if load.id not in seen_load_ids:
-                            seen_load_ids.add(load.id)
-                            unique_pairs.append((load, dist))
-                    pairs = unique_pairs
-                else:
-                    # Just origin search if no destination
-                    pairs = find_matching_loads(vehicle_id, origin_postcode, db)
-                
-                matching_results = [{"load": load, "distance_miles": dist} for load, dist in pairs]
-                
-                if not matching_results:
-                    from app.services.geocode import get_lat_lon
-                    from app.routers.web import _match_diagnostic
-                    open_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
-                    if open_count > 0:
-                        if get_lat_lon(origin_postcode) is None:
-                            postcode_lookup_failed = True
-                        match_diagnostic = _match_diagnostic(vehicle_id, origin_postcode, db)
-        except ValueError:
-            matching_results = []
-
-    routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
-    jobs = (
-        db.query(models.BackhaulJob)
-        .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
-        .filter(models.Vehicle.haulier_id == haulier.id)
-        .order_by(models.BackhaulJob.matched_at.desc())
-        .all()
-    )
-    payments = []
-    for j in jobs:
-        p = db.query(models.Payment).filter(models.Payment.backhaul_job_id == j.id).first()
-        if p:
-            payments.append(p)
-    total_payout = sum((p.net_payout_gbp or 0) for p in payments)
-
-    return templates.TemplateResponse(
-        "haulier_dashboard.html",
-        {
-            "request": request,
-            "haulier": haulier,
-            "vehicles": vehicles,
-            "routes": routes,
-            "jobs": jobs,
-            "payments": payments,
-            "total_payout": total_payout,
-            "platform_fee_percent": get_settings().platform_fee_percent,
-            "matching_results": matching_results,
-            "find_vehicle_id": vehicle_id_raw,
-            "find_origin_postcode": origin_postcode,
-            "find_destination_postcode": destination_postcode,
-            "postcode_lookup_failed": postcode_lookup_failed,
-            "match_diagnostic": match_diagnostic,
-            "profile_updated": None,
-            "vehicle_added": None,
-            "delete_error": request.query_params.get("delete_error"),
-            "current_user_email": user.email,
-        },
-    )
+    # Forward all query params to main find-backhaul
+    query_string = str(request.query_params)
+    redirect_url = f"/find-backhaul?{query_string}" if query_string else "/find-backhaul"
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
 @router.post("/haulier/profile", response_class=RedirectResponse)
