@@ -227,9 +227,60 @@ def home(
             "current_user_email": (current_user.email if current_user else ""),
         },
     )
+@router.post("/loads", response_class=RedirectResponse)
+async def create_load(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Create a new load. Loaders create loads, admin can create for any loader."""
+    from app.auth import get_current_user_optional
+    current_user = get_current_user_optional(request, db)
+    
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    form = await request.form()
+    shipper_name = (form.get("shipper_name") or "").strip()
+    pickup_postcode = (form.get("pickup_postcode") or "").strip().upper()
+    delivery_postcode = (form.get("delivery_postcode") or "").strip().upper()
+    vehicle_type_required = (form.get("vehicle_type_required") or "").strip() or None
+    trailer_type_required = (form.get("trailer_type_required") or "").strip() or None
+    pallets = form.get("pallets")
+    cubic_metres = form.get("cubic_metres")
+    
+    if not shipper_name or not pickup_postcode or not delivery_postcode:
+        return RedirectResponse(url="/?section=loads&error=Missing+required+fields", status_code=303)
+    
+    # Determine loader_id
+    loader_id = None
+    if current_user.loader_id:
+        # Loader creating their own load
+        loader_id = current_user.loader_id
+    elif current_user.role == "admin":
+        # Admin can create loads (won't have loader_id set, we'll leave it None or admin can specify)
+        loader_id = None
+    else:
+        return RedirectResponse(url="/?section=loads&error=Not+authorized", status_code=303)
+    
+    load = models.Load(
+        loader_id=loader_id,
+        shipper_name=shipper_name,
+        pickup_postcode=pickup_postcode,
+        delivery_postcode=delivery_postcode,
+        vehicle_type_required=vehicle_type_required,
+        trailer_type_required=trailer_type_required,
+        pallets=int(pallets) if pallets and str(pallets).isdigit() else None,
+        cubic_metres=float(cubic_metres) if cubic_metres else None,
+        status=models.LoadStatusEnum.OPEN.value,
+   )
+    db.add(load)
+    db.commit()
+    
+    return RedirectResponse(url="/?section=loads&load_added=1", status_code=303)
 
 
 def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
+    """Explain why each open load did or didn't match (for 'no matches' debugging)."""
     """Explain why each open load did or didn't match (for 'no matches' debugging)."""
     from app.services.geocode import get_lat_lon
     from app.services.distance import haversine_miles
