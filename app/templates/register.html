@@ -24,64 +24,91 @@
     </div>
     {% endif %}
     
-    <!-- Register Form -->
-    <form method="post" action="/register" class="space-y-4">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token or '' }}" />
-        
-        <div>
-            <label for="company_name" class="block text-sm font-medium text-slate-300 mb-2">Company Name</label>
-            <input 
-                id="company_name" 
-                name="company_name" 
-                type="text" 
-                required
-                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
-                value="{{ company_name or '' }}" 
-                placeholder="ABC Haulage Ltd" 
-            />
-        </div>
-        
-        <div>
-            <label for="email" class="block text-sm font-medium text-slate-300 mb-2">Email</label>
-            <input 
-                id="email" 
-                name="email" 
-                type="email" 
-                required 
-                autocomplete="email"
-                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
-                value="{{ email or '' }}" 
-                placeholder="contact@company.com" 
-            />
-        </div>
-        
-        <div>
-            <label for="password" class="block text-sm font-medium text-slate-300 mb-2">Password</label>
-            <input 
-                id="password" 
-                name="password" 
-                type="password" 
-                required 
-                autocomplete="new-password"
-                minlength="8"
-                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
-                placeholder="Minimum 8 characters" 
-            />
-            <p class="text-xs text-slate-500 mt-1">Use at least 8 characters</p>
-        </div>
-        
-        <div>
-            <label for="account_type" class="block text-sm font-medium text-slate-300 mb-2">Account Type</label>
-            <select 
-                id="account_type" 
-                name="account_type" 
-                required
-                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
-            >
-                <option value="haulier" selected>Haulier (I have vehicles)</option>
-                <option value="loader">Loader (I have loads)</option>
-            </select>
-        </div>
+ <!-- Register Form -->
+ <form method="post" id="register-form" class="space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token or '' }}" />
+    
+    <div>
+        <label for="company_name" class="block text-sm font-medium text-slate-300 mb-2">Company Name</label>
+        <input 
+            id="company_name" 
+            name="company_name" 
+            type="text" 
+            required
+            class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+            value="{{ company_name or '' }}" 
+            placeholder="ABC Haulage Ltd" 
+        />
+    </div>
+    
+    <div>
+        <label for="email" class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+        <input 
+            id="email" 
+            name="email" 
+            type="email" 
+            required 
+            autocomplete="email"
+            class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+            value="{{ email or '' }}" 
+            placeholder="contact@company.com" 
+        />
+    </div>
+    
+    <div>
+        <label for="password" class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+        <input 
+            id="password" 
+            name="password" 
+            type="password" 
+            required 
+            autocomplete="new-password"
+            minlength="6"
+            class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+            placeholder="Minimum 6 characters" 
+        />
+        <p class="text-xs text-slate-500 mt-1">Use at least 6 characters</p>
+    </div>
+    
+    <div>
+        <label for="password_confirm" class="block text-sm font-medium text-slate-300 mb-2">Confirm Password</label>
+        <input 
+            id="password_confirm" 
+            name="password_confirm" 
+            type="password" 
+            required 
+            autocomplete="new-password"
+            class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+            placeholder="Re-enter password" 
+        />
+    </div>
+    
+    <div>
+        <label for="account_type" class="block text-sm font-medium text-slate-300 mb-2">Account Type</label>
+        <select 
+            id="account_type" 
+            name="account_type" 
+            required
+            class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+        >
+            <option value="haulier" selected>Haulier (I have vehicles)</option>
+            <option value="loader">Loader (I have loads)</option>
+        </select>
+    </div>
+    
+    <button type="submit" class="btn-primary w-full px-4 py-3.5 text-white font-semibold rounded-lg shadow-lg">
+        Create Account
+    </button>
+</form>
+
+<script>
+    // Update form action based on account type
+    document.getElementById('register-form').addEventListener('submit', function(e) {
+        const accountType = document.getElementById('account_type').value;
+        const action = accountType === 'loader' ? '/register-loader' : '/register-haulier';
+        this.action = action;
+    });
+</script>
         
         <button type="submit" class="btn-primary w-full px-4 py-3.5 text-white font-semibold rounded-lg shadow-lg">
             Create Account
