@@ -222,8 +222,8 @@ async def register_haulier_submit(
 ):
     """Create Haulier + User (self-service)."""
     form = await request.form()
-    name = (form.get("name") or "").strip()
-    email = (form.get("contact_email") or "").strip().lower()
+    name = (form.get("company_name") or "").strip()
+    email = (form.get("email") or "").strip().lower()
     phone = (form.get("contact_phone") or "").strip() or None
     password = form.get("password") or ""
     password_confirm = form.get("password_confirm") or ""
@@ -259,8 +259,8 @@ async def register_loader_submit(
 ):
     """Create Loader + User (self-service)."""
     form = await request.form()
-    name = (form.get("name") or "").strip()
-    email = (form.get("contact_email") or "").strip().lower()
+    name = (form.get("company_name") or "").strip()
+    email = (form.get("email") or "").strip().lower()
     phone = (form.get("contact_phone") or "").strip() or None
     password = form.get("password") or ""
     password_confirm = form.get("password_confirm") or ""
