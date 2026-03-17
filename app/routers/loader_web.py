@@ -35,57 +35,12 @@ def loader_dashboard(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """Redirect loaders to main dashboard - same interface for everyone."""
     result = _loader_or_redirect(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, loader = result
-    loads = (
-        db.query(models.Load)
-        .filter(models.Load.loader_id == loader.id)
-        .order_by(models.Load.created_at.desc())
-        .all()
-    )
-    planned = (
-        db.query(models.PlannedLoad)
-        .filter(models.PlannedLoad.loader_id == loader.id)
-        .order_by(models.PlannedLoad.created_at.desc())
-        .all()
-    )
-    # Interests on our loads or our planned loads
-    load_ids = [l.id for l in loads]
-    planned_ids = [p.id for p in planned]
-    interests = []
-    if load_ids:
-        interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.load_id.in_(load_ids)).all())
-    if planned_ids:
-        interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.planned_load_id.in_(planned_ids)).all())
-    open_count = len([l for l in loads if l.status == models.LoadStatusEnum.OPEN.value])
-    load_ids = [l.id for l in loads]
-    jobs = (
-        db.query(models.BackhaulJob)
-        .filter(models.BackhaulJob.load_id.in_(load_ids))
-        .order_by(models.BackhaulJob.matched_at.desc())
-        .all()
-    ) if load_ids else []
-
-    return templates.TemplateResponse(
-        "loader_dashboard.html",
-        {
-            "request": request,
-            "loader": loader,
-            "loads": loads,
-            "planned_loads": planned,
-            "load_interests": interests,
-            "jobs": jobs,
-            "open_loads_count": open_count,
-            "load_added": request.query_params.get("load_added"),
-            "planned_added": request.query_params.get("planned_added"),
-            "job_created": request.query_params.get("job_created"),
-            "already_matched": request.query_params.get("already_matched"),
-            "delete_error": request.query_params.get("delete_error"),
-            "current_user_email": user.email,
-        },
-    )
+    # Redirect to main dashboard
+    return RedirectResponse(url="/", status_code=302)
 
 
 @router.post("/loader/loads", response_class=RedirectResponse)

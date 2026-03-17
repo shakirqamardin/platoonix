@@ -121,14 +121,62 @@ def home(
 ) -> HTMLResponse:
     from app.auth import get_current_user_optional
     current_user = get_current_user_optional(request, db)
-    hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
-    vehicles = db.query(models.Vehicle).order_by(models.Vehicle.created_at.desc()).all()
-    loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
-    jobs = db.query(models.BackhaulJob).order_by(models.BackhaulJob.matched_at.desc()).all()
-    payments = db.query(models.Payment).order_by(models.Payment.created_at.desc()).all()
-    planned_loads = db.query(models.PlannedLoad).order_by(models.PlannedLoad.created_at.desc()).all()
-    haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
-    load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
+    
+    # Role-based filtering
+    if current_user and current_user.loader_id:
+        # LOADER VIEW - only their loads
+        loader = db.get(models.Loader, current_user.loader_id)
+        loads = db.query(models.Load).filter(models.Load.loader_id == loader.id).order_by(models.Load.created_at.desc()).all()
+        planned_loads = db.query(models.PlannedLoad).filter(models.PlannedLoad.loader_id == loader.id).order_by(models.PlannedLoad.created_at.desc()).all()
+        load_ids = [l.id for l in loads]
+        planned_ids = [p.id for p in planned_loads]
+        
+        # Only interests on their loads
+        load_interests = []
+        if load_ids:
+            load_interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.load_id.in_(load_ids)).all())
+        if planned_ids:
+            load_interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.planned_load_id.in_(planned_ids)).all())
+        
+        # Only jobs for their loads
+        jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.load_id.in_(load_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if load_ids else []
+        payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
+        
+        # No vehicles, hauliers, or routes for loaders
+        hauliers = []
+        vehicles = []
+        haulier_routes = []
+        
+    elif current_user and current_user.haulier_id:
+        # HAULIER VIEW - only their vehicles and jobs
+        haulier = db.get(models.Haulier, current_user.haulier_id)
+        vehicles = db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier.id).order_by(models.Vehicle.registration).all()
+        haulier_routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
+        
+        vehicle_ids = [v.id for v in vehicles]
+        jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id.in_(vehicle_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if vehicle_ids else []
+        payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
+        
+        # Show all loads (for searching)
+        loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+        
+        # Show interests they've expressed
+        load_interests = db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier.id).all()
+        
+        # No loader-specific data
+        hauliers = [haulier]  # Just their own company
+        planned_loads = []
+        
+    else:
+        # ADMIN VIEW - see everything
+        hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
+        vehicles = db.query(models.Vehicle).order_by(models.Vehicle.created_at.desc()).all()
+        loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+        jobs = db.query(models.BackhaulJob).order_by(models.BackhaulJob.matched_at.desc()).all()
+        payments = db.query(models.Payment).order_by(models.Payment.created_at.desc()).all()
+        planned_loads = db.query(models.PlannedLoad).order_by(models.PlannedLoad.created_at.desc()).all()
+        haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
+        load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
 
     load_interests_display = _load_interests_display(load_interests, db)
 
