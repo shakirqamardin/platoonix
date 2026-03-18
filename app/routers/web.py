@@ -704,7 +704,7 @@ def delete_haulier_form(
     db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier_id).delete()
     db.delete(haulier)
     db.commit()
-    return RedirectResponse(url="/?deleted=haulier", status_code=303)
+    return RedirectResponse(url="/?section=vehicles&deleted=haulier", status_code=303)
 
 
 @router.post("/delete-vehicle/{vehicle_id}", response_class=RedirectResponse)
@@ -724,8 +724,7 @@ def delete_vehicle_form(
     db.query(models.LoadInterest).filter(models.LoadInterest.vehicle_id == vehicle_id).delete()
     db.delete(vehicle)
     db.commit()
-    return RedirectResponse(url="/?deleted=vehicle", status_code=303)
-
+return RedirectResponse(url="/?section=vehicles&deleted=vehicle", status_code=303)
 
 @router.post("/delete-job/{job_id}", response_class=RedirectResponse)
 def delete_job_form(
@@ -833,7 +832,7 @@ def delete_load_form(
     db.query(models.LoadInterest).filter(models.LoadInterest.load_id == load_id).delete()
     db.delete(load)
     db.commit()
-    return RedirectResponse(url="/?deleted=load", status_code=303)
+    return RedirectResponse(url="/?section=loads&deleted=load", status_code=303)
 
 
 @router.post("/show-interest", response_class=RedirectResponse)
