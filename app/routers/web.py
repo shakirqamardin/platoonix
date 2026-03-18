@@ -254,25 +254,35 @@ async def create_load(
     # Determine loader_id
     loader_id = None
     if current_user.loader_id:
-        # Loader creating their own load
         loader_id = current_user.loader_id
     elif current_user.role == "admin":
-        # Admin can create loads (won't have loader_id set, we'll leave it None or admin can specify)
         loader_id = None
     else:
         return RedirectResponse(url="/?section=loads&error=Not+authorized", status_code=303)
+    
+    # Build requirements JSON
+    requirements = {}
+    if vehicle_type_required:
+        requirements["vehicle_type"] = vehicle_type_required
+    if trailer_type_required:
+        requirements["trailer_type"] = trailer_type_required
+    
+    # Set pickup/delivery windows to now (can be enhanced later)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
     
     load = models.Load(
         loader_id=loader_id,
         shipper_name=shipper_name,
         pickup_postcode=pickup_postcode,
         delivery_postcode=delivery_postcode,
-        vehicle_type_required=vehicle_type_required,
-        trailer_type_required=trailer_type_required,
+        pickup_window_start=now,
+        pickup_window_end=now,
         pallets=int(pallets) if pallets and str(pallets).isdigit() else None,
-        cubic_metres=float(cubic_metres) if cubic_metres else None,
+        volume_m3=float(cubic_metres) if cubic_metres else None,
+        requirements=requirements if requirements else None,
         status=models.LoadStatusEnum.OPEN.value,
-   )
+    )
     db.add(load)
     db.commit()
     
