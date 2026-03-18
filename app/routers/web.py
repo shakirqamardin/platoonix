@@ -927,6 +927,13 @@ async def accept_interest(
             load.status = models.LoadStatusEnum.MATCHED.value
             db.commit()
     
+    # Send email to haulier
+    try:
+        from app.services.email_sender import email_haulier_job_created
+        email_haulier_job_created(job, db)
+    except Exception:
+        pass  # Don't fail job creation if email fails
+    
     return RedirectResponse(url="/?section=matches", status_code=303)
 
 

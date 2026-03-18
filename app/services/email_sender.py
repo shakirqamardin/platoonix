@@ -71,3 +71,31 @@ def email_loader_interest(interest: "models.LoadInterest", db: Session) -> bool:
         "Log in to Platoonix to accept or decline.\n"
     )
     return send_email(user.email, subject, body)
+def email_haulier_job_created(job: "models.BackhaulJob", db: Session) -> bool:
+    """
+    Send "Your interest was accepted - job created!" to the haulier.
+    Returns True if sent, False otherwise.
+    """
+    vehicle = db.get(models.Vehicle, job.vehicle_id)
+    if not vehicle or not vehicle.haulier_id:
+        return False
+    
+    user = db.query(models.User).filter(models.User.haulier_id == vehicle.haulier_id).first()
+    if not user or not user.email:
+        return False
+    
+    load = db.get(models.Load, job.load_id)
+    if not load:
+        return False
+    
+    route_desc = f"{load.pickup_postcode} → {load.delivery_postcode}"
+    
+    subject = "Platoonix: Your interest was accepted - Job created!"
+    body = (
+        f"Great news! The loader has accepted your interest.\n\n"
+        f"Job #{job.id} has been created:\n"
+        f"Route: {route_desc}\n"
+        f"Vehicle: {vehicle.registration}\n\n"
+        f"Log in to Platoonix to view job details and start tracking.\n"
+    )
+    return send_email(user.email, subject, body)
