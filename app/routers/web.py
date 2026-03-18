@@ -1118,21 +1118,22 @@ async def express_interest(
     if not vehicle or vehicle.haulier_id != current_user.haulier_id:
         raise HTTPException(status_code=403, detail="Not your vehicle")
     
-    # Check if match already exists
-    existing = db.query(models.Match).filter(
-        models.Match.load_id == load_id,
-        models.Match.vehicle_id == vehicle_id
+    # Check if interest already exists
+    existing = db.query(models.LoadInterest).filter(
+        models.LoadInterest.load_id == load_id,
+        models.LoadInterest.vehicle_id == vehicle_id,
+        models.LoadInterest.haulier_id == current_user.haulier_id
     ).first()
     
     if existing:
-        return RedirectResponse(url="/?tab=find-backhaul&msg=already_interested", status_code=303)
+        return RedirectResponse(url="/?section=matches&msg=already_interested", status_code=303)
     
-    # Create match suggestion
-    match = models.Match(
+    # Create interest
+    interest = models.LoadInterest(
         load_id=load_id,
         vehicle_id=vehicle_id,
         haulier_id=current_user.haulier_id,
-        status="pending",
+        status="expressed",
     )
     db.add(match)
     db.commit()
