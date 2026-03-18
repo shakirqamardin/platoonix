@@ -724,7 +724,7 @@ def delete_vehicle_form(
     db.query(models.LoadInterest).filter(models.LoadInterest.vehicle_id == vehicle_id).delete()
     db.delete(vehicle)
     db.commit()
-return RedirectResponse(url="/?section=vehicles&deleted=vehicle", status_code=303)
+    return RedirectResponse(url="/?section=vehicles&deleted=vehicle", status_code=303)
 
 @router.post("/delete-job/{job_id}", response_class=RedirectResponse)
 def delete_job_form(
