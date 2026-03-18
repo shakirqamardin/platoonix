@@ -1134,7 +1134,15 @@ async def express_interest(
         haulier_id=current_user.haulier_id,
         status="expressed",
     )
-    db.add(match)
+    db.add(interest)
     db.commit()
+    db.refresh(interest)
     
-    return RedirectResponse(url="/?tab=matches&msg=interest_sent", status_code=303)
+    # Send email to loader
+    try:
+        from app.services.email_sender import email_loader_interest
+        email_loader_interest(interest, db)
+    except Exception:
+        pass  # Don't fail if email fails
+    
+    return RedirectResponse(url="/?section=matches&msg=interest_sent", status_code=303)
