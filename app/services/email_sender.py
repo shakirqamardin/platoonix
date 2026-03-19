@@ -12,10 +12,13 @@ def send_email(to_email: str, subject: str, body_text: str) -> bool:
     Send a plain-text email. Returns True if sent, False if skipped (no config) or failed.
     """
     settings = get_settings()
+    print(f"[EMAIL DEBUG] SMTP settings: host={settings.smtp_host}, user={settings.smtp_user}, password={'SET' if settings.smtp_password else 'MISSING'}")
     if not settings.smtp_host or not settings.smtp_user or not settings.smtp_password:
+        print(f"[EMAIL DEBUG] SMTP not configured, skipping email")
         return False
     to_email = (to_email or "").strip()
     if not to_email:
+        print(f"[EMAIL DEBUG] No recipient email provided")
         return False
     try:
         import smtplib
