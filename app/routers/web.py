@@ -736,10 +736,27 @@ def delete_job_form(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
-    """Admin: cancel/delete a backhaul job (and its payment + POD). Frees the load and vehicle for deletion."""
+    """Admin: cancel/delete a backhaul job. Resets load to open and interest to suggested."""
     job = db.get(models.BackhaulJob, job_id)
     if not job:
         return RedirectResponse(url="/?section=matches&delete_error=Job+not+found", status_code=303)
+    
+    # Reset load status to open
+    if job.load_id:
+        load = db.get(models.Load, job.load_id)
+        if load:
+            load.status = models.LoadStatusEnum.OPEN.value
+    
+    # Reset interest status to suggested (so haulier can try again)
+    interest = db.query(models.LoadInterest).filter(
+        models.LoadInterest.load_id == job.load_id,
+        models.LoadInterest.vehicle_id == job.vehicle_id,
+        models.LoadInterest.status == "accepted"
+    ).first()
+    if interest:
+        interest.status = "suggested"
+    
+    # Delete related records
     db.query(models.Payment).filter(models.Payment.backhaul_job_id == job_id).delete()
     db.query(models.POD).filter(models.POD.backhaul_job_id == job_id).delete()
     db.delete(job)
