@@ -533,54 +533,6 @@ def _parse_float(s, default=None):
     except (TypeError, ValueError):
         return default
 
-
-@router.post("/loads", response_class=HTMLResponse)
-async def create_load_form(
-    request: Request,
-    db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
-) -> RedirectResponse:
-    form = dict(await request.form())
-    shipper_name = (form.get("shipper_name") or "").strip()
-    pickup_postcode = (form.get("pickup_postcode") or "").strip().upper()
-    delivery_postcode = (form.get("delivery_postcode") or "").strip().upper()
-    weight_kg = _parse_float(form.get("weight_kg"))
-    volume_m3 = _parse_float(form.get("volume_m3"))
-    pallets = _parse_float(form.get("pallets"))
-    if pallets is not None and pallets > 0:
-        volume_m3 = pallets * get_settings().pallet_volume_m3
-    required_vehicle_type = (form.get("required_vehicle_type") or "").strip().lower() or None
-    required_trailer_type = (form.get("required_trailer_type") or "").strip().lower() or None
-    requirements = {}
-    if required_vehicle_type and required_vehicle_type != "any":
-        requirements["vehicle_type"] = required_vehicle_type
-    if required_trailer_type and required_trailer_type != "any":
-        requirements["trailer_type"] = required_trailer_type
-    if not requirements:
-        requirements = None
-
-    load = models.Load(
-        shipper_name=shipper_name,
-        pickup_postcode=pickup_postcode,
-        delivery_postcode=delivery_postcode,
-        pickup_window_start=datetime.utcnow(),
-        pickup_window_end=datetime.utcnow(),
-        weight_kg=weight_kg,
-        volume_m3=volume_m3,
-        pallets=pallets,
-        requirements=requirements,
-    )
-    db.add(load)
-    db.commit()
-    db.refresh(load)
-    try:
-        from app.services.alert_stream import notify_new_load
-        notify_new_load(load, db)
-    except Exception:
-        pass
-    return RedirectResponse(url="/?section=matches", status_code=303)
-
-
 @router.post("/upload", response_class=RedirectResponse)
 async def upload_file_form(
     request: Request,
