@@ -228,6 +228,7 @@ def home(
             "match_diagnostic": None,
             "platform_fee_percent": get_settings().platform_fee_percent,
             "current_user_email": (current_user.email if current_user else ""),
+            "current_user": current_user,
         },
     )
 @router.post("/loads", response_class=RedirectResponse)

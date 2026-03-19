@@ -922,13 +922,19 @@
                                                     👋 Show Interest
                                                 </button>
                                             </form>
-                                            {% elif row.interest.status == 'expressed' %}
+                                            {{% elif row.interest.status == 'expressed' %}
+                                            {% if current_user and current_user.loader_id %}
+                                            <!-- Only loaders can accept -->
                                             <form method="post" action="/accept-interest" class="inline">
                                                 <input type="hidden" name="interest_id" value="{{ row.interest.id }}" />
                                                 <button type="submit" class="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all">
                                                     ✅ Accept Job
                                                 </button>
                                             </form>
+                                            {% else %}
+                                            <!-- Hauliers see waiting status -->
+                                            <span class="text-amber-400 text-sm font-medium">⏳ Awaiting loader</span>
+                                            {% endif %}
                                             {% elif row.interest.status == 'accepted' %}
                                             <span class="text-emerald-400 text-sm font-medium">✓ Job Created</span>
                                             {% endif %}
