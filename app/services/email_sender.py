@@ -36,7 +36,8 @@ def send_email(to_email: str, subject: str, body_text: str) -> bool:
             server.login(settings.smtp_user, settings.smtp_password)
             server.sendmail(settings.smtp_from_email, [to_email], msg.as_string())
         return True
-    except Exception:
+    except Exception as e:
+        print(f"[EMAIL DEBUG] SMTP error: {e}")
         return False
 
 
