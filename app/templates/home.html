@@ -922,7 +922,7 @@
                                                     👋 Show Interest
                                                 </button>
                                             </form>
-                                            {{% elif row.interest.status == 'expressed' %}
+                                            {% elif row.interest.status == 'expressed' %}
                                             {% if current_user and current_user.loader_id %}
                                             <!-- Only loaders can accept -->
                                             <form method="post" action="/accept-interest" class="inline">
