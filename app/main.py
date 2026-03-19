@@ -167,3 +167,4 @@ app.include_router(haulier_web.router, tags=["haulier-web"])
 app.include_router(loader_web.router, tags=["loader-web"])
 app.include_router(driver.router)
 app.include_router(tracking.router)
+# Force rebuild Thu 19 Mar 2026 11:33:35 GMT
