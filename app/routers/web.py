@@ -251,6 +251,7 @@ async def create_load(
     trailer_type_required = (form.get("trailer_type_required") or "").strip() or None
     pallets = form.get("pallets")
     cubic_metres = form.get("cubic_metres")
+    budget_gbp = form.get("budget_gbp")
     
     if not shipper_name or not pickup_postcode or not delivery_postcode:
         return RedirectResponse(url="/?section=loads&error=Missing+required+fields", status_code=303)
@@ -285,6 +286,10 @@ async def create_load(
         pallets=int(pallets) if pallets and str(pallets).isdigit() else None,
         volume_m3=float(cubic_metres) if cubic_metres else None,
         requirements=requirements if requirements else None,
+        status=models.LoadStatusEnum.OPEN.value,
+        volume_m3=float(cubic_metres) if cubic_metres else None,
+        requirements=requirements if requirements else None,
+        budget_gbp=float(budget_gbp) if budget_gbp else None,
         status=models.LoadStatusEnum.OPEN.value,
     )
     db.add(load)
