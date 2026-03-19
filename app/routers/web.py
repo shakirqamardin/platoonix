@@ -146,7 +146,7 @@ def home(
         hauliers = []
         vehicles = []
         haulier_routes = []
-        
+        users = []
     elif current_user and current_user.haulier_id:
         # HAULIER VIEW - only their vehicles and jobs
         haulier = db.get(models.Haulier, current_user.haulier_id)
@@ -166,7 +166,7 @@ def home(
         # No loader-specific data
         hauliers = [haulier]  # Just their own company
         planned_loads = []
-        
+        users = []
     else:
         # ADMIN VIEW - see everything
         hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
@@ -177,6 +177,8 @@ def home(
         planned_loads = db.query(models.PlannedLoad).order_by(models.PlannedLoad.created_at.desc()).all()
         haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
         load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
+        
+        users = db.query(models.User).order_by(models.User.email).all()
 
     load_interests_display = _load_interests_display(load_interests, db)
 
@@ -200,6 +202,7 @@ def home(
         "home.html",
         {
             "request": request,
+            "users": users,
             "hauliers": hauliers,
             "vehicles": vehicles,
             "loads": loads,
@@ -833,6 +836,28 @@ def delete_load_form(
     db.delete(load)
     db.commit()
     return RedirectResponse(url="/?section=loads&deleted=load", status_code=303)
+
+
+@router.post("/delete-user/{user_id}", response_class=RedirectResponse)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+) -> RedirectResponse:
+    """Delete a user account (admin only). Cannot delete admin users."""
+    user = db.get(models.User, user_id)
+    if not user:
+        return RedirectResponse(url="/?section=admin&delete_error=User+not+found", status_code=303)
+    
+    # Prevent deleting admin accounts
+    if user.role == "admin":
+        return RedirectResponse(url="/?section=admin&delete_error=Cannot+delete+admin+users", status_code=303)
+    
+    # Delete the user
+    db.delete(user)
+    db.commit()
+    
+    return RedirectResponse(url="/?section=admin&deleted=user", status_code=303)
 
 
 @router.post("/show-interest", response_class=RedirectResponse)
