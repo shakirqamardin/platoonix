@@ -1136,8 +1136,7 @@ async def express_interest(
     # Send email to loader
     try:
         from app.services.email_sender import email_loader_interest
-        email_loader_interest(interest, db)
-    except Exception:
-        pass  # Don't fail if email fails
-    
-    return RedirectResponse(url="/?section=matches&msg=interest_sent", status_code=303)
+        result = email_loader_interest(interest, db)
+        print(f"[EMAIL DEBUG] email_loader_interest returned: {result}")
+    except Exception as e:
+        print(f"[EMAIL DEBUG] Email failed: {e}")
