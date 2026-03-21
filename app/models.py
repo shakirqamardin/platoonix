@@ -20,7 +20,6 @@ from app.database import Base
 class UserRoleEnum(str, Enum):
     HAULIER = "haulier"
     LOADER = "loader"
-    DRIVER = "driver"
     ADMIN = "admin"
 
 
@@ -33,7 +32,6 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # haulier, loader, admin
     haulier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("hauliers.id"), nullable=True)
-    driver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("drivers.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
@@ -88,25 +86,7 @@ class Haulier(Base):
     driver_photo_url: Mapped[Optional[str]] = mapped_column(String(500))
     
     vehicles: Mapped[list["Vehicle"]] = relationship("Vehicle", back_populates="haulier")
-class Driver(Base):
-    """Individual driver employed by a haulier. Has own login."""
-    __tablename__ = "drivers"
-    
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    haulier_id: Mapped[int] = mapped_column(ForeignKey("hauliers.id"), nullable=False)
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    vehicle_id: Mapped[Optional[int]] = mapped_column(ForeignKey("vehicles.id"), nullable=True)  # ← ADD THIS LINE
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[Optional[str]] = mapped_column(String(50))
-    license_number: Mapped[Optional[str]] = mapped_column(String(50))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
-    )
-    
-    haulier: Mapped["Haulier"] = relationship("Haulier")
-    user: Mapped[Optional["User"]] = relationship("User")
-    vehicle: Mapped[Optional["Vehicle"]] = relationship("Vehicle")  # ← ADD THIS LINE
-
+   
 class Vehicle(Base):
     __tablename__ = "vehicles"
 
