@@ -244,6 +244,18 @@ class BackhaulJob(Base):
 
     route_geometry: Mapped[Optional[dict]] = mapped_column(JSON)
     ulez_caz_status: Mapped[Optional[str]] = mapped_column(String(50))
+    
+    vehicle: Mapped["Vehicle"] = relationship("Vehicle")
+    load: Mapped["Load"] = relationship("Load")
+    
+    @property
+    def display_number(self) -> str:
+        """Format job number as H{haulier_id:05d}-{job_id:04d}"""
+        if hasattr(self, 'vehicle') and self.vehicle and self.vehicle.haulier_id:
+            haulier_id = self.vehicle.haulier_id
+        else:
+            haulier_id = 0
+        return f"H{haulier_id:05d}-{self.id:04d}"
 
 
 class PODStatusEnum(str, Enum):
