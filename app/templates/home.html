@@ -975,7 +975,8 @@
                             <tbody>
                                 {% for j in jobs %}
                                 <tr class="border-b border-slate-800/50">
-                                    <td class="py-3 px-4 font-mono text-teal-400">{{ j.id }}</td>
+                                    <td class="py-3 px-4 font-mono text-teal-400">{{ j.display_number }}
+                                    </td>
                                     <td class="py-3 px-4 text-slate-400">V{{ j.vehicle_id }} • L{{ j.load_id }}</td>
                                     <td class="py-3 px-4">
                                         {% for l in loads %}

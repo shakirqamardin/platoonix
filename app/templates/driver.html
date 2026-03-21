@@ -28,7 +28,7 @@
       {% else %}
       {% set j = active_job %}
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
-        <h1 class="text-lg font-semibold mb-2">Job #{{ j.id }}</h1>
+        <h1 class="text-lg font-semibold mb-2">Job {{ j.display_number }}</h1>
         <p class="text-slate-300 font-mono text-sm">{{ j.pickup_postcode }} → {{ j.delivery_postcode }}</p>
         <p class="text-slate-500 text-sm">{{ j.shipper_name or 'Load' }}</p>
       </section>
