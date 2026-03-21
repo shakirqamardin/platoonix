@@ -128,8 +128,6 @@ def check_db_and_create_tables():
                     email=settings.admin_email,
                     password_hash=hash_password(settings.admin_password),
                     role="admin",
-                    haulier_id=None,
-                    loader_id=None,
                 )
                 db.add(admin)
                 db.commit()
