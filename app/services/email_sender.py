@@ -12,7 +12,10 @@ def send_email(to_email: str, subject: str, body_text: str) -> bool:
     Send a plain-text email using SendGrid API (preferred) or SMTP fallback.
     Returns True if sent, False if skipped (no config) or failed.
     """
+    return False  # Temporarily disable all email
+    
     settings = get_settings()
+    # ... rest of code
     
     # Try SendGrid API first
     sendgrid_key = getattr(settings, 'sendgrid_api_key', None)
