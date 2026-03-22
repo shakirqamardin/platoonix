@@ -275,7 +275,23 @@ async def create_load(
     # Set pickup/delivery windows to now (can be enhanced later)
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
-    
+    load = models.Load(
+        shipper_name=shipper_name,
+        pickup_postcode=pickup_postcode,
+        delivery_postcode=delivery_postcode,
+        pickup_window_start=now,
+        pickup_window_end=now,
+        delivery_window_start=now,
+        delivery_window_end=now,
+        vehicle_type_required=vehicle_type_required,
+        trailer_type_required=trailer_type_required,
+        pallets=int(pallets) if pallets else None,
+        volume_m3=float(cubic_metres) if cubic_metres else None,
+        budget_gbp=float(budget_gbp) if budget_gbp else None,
+        requirements=requirements,
+        status=models.LoadStatusEnum.OPEN.value,
+        loader_id=loader_id,
+    )
     db.add(load)
     db.commit()
     
