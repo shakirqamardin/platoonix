@@ -283,8 +283,6 @@ async def create_load(
         pickup_window_end=now,
         delivery_window_start=now,
         delivery_window_end=now,
-        vehicle_type_required=vehicle_type_required,
-        trailer_type_required=trailer_type_required,
         pallets=int(pallets) if pallets else None,
         volume_m3=float(cubic_metres) if cubic_metres else None,
         budget_gbp=float(budget_gbp) if budget_gbp else None,
