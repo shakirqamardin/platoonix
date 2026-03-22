@@ -32,6 +32,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # haulier, loader, admin
     haulier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("hauliers.id"), nullable=True)
+    loader_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loaders.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

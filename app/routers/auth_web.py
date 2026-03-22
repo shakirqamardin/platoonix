@@ -243,12 +243,14 @@ async def register_haulier_submit(
         password_hash=hash_password(password),
         role="haulier",
         haulier_id=haulier.id,
-        loader_id=None,
     )
     db.add(user)
+    db.flush()
+    # Read id/role before commit(): after commit, instances expire; lazy refresh in async routes can raise MissingGreenlet.
+    user_id, user_role = user.id, user.role
     db.commit()
-    request.session["user_id"] = user.id
-    request.session["role"] = user.role
+    request.session["user_id"] = user_id
+    request.session["role"] = user_role
     return RedirectResponse(url="/haulier", status_code=303)
 
 
@@ -279,13 +281,14 @@ async def register_loader_submit(
         email=email,
         password_hash=hash_password(password),
         role="loader",
-        haulier_id=None,
         loader_id=loader.id,
     )
     db.add(user)
+    db.flush()
+    user_id, user_role = user.id, user.role
     db.commit()
-    request.session["user_id"] = user.id
-    request.session["role"] = user.role
+    request.session["user_id"] = user_id
+    request.session["role"] = user_role
     return RedirectResponse(url="/loader", status_code=303)
 
 

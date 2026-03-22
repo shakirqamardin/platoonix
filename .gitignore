@@ -26,3 +26,4 @@ build/
 
 # Uploaded ePOD files (stored under static/uploads/pods/)
 static/uploads/
+node_modules

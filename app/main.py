@@ -49,6 +49,15 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration {table}.{col}: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS loader_id INTEGER REFERENCES loaders(id)"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration users.loader_id: {e!r}", file=sys.stderr)
             # backhaul_jobs.collected_at: confirmed collection (captures pay)
             try:
                 conn.execute(text(

@@ -1,0 +1,24 @@
+
+HAULIER
+DISTRIBUTOR
+Turn Empty Miles Into Revenue
+Upload your return journey schedules and discover backload opportunities within 25 miles. Intelligent matching based on vehicle type, capacity, and certifications.
+0
+ACTIVE JOURNEYS
+0
+AVAILABLE MATCHES
+£0
+POTENTIAL EARNINGS
+📤 Upload Data
+CSV columns: vehicle, vehicleType, capacity_kg, palletSpaces, certifications, destination, returnPostcode, returnTime
+📁
+Drop CSV file or click to upload
+Bulk import with vehicle specifications
+🚛 Manual Entry
+
+ADD JOURNEY
+✨ Available Matches
+📍
+No matches found yet. Add data to see opportunities.
+
+Direct Haulier-Distributor Platform • Pilot Version
