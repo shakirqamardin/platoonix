@@ -101,73 +101,10 @@
       </section>
       {% endif %}
 
-      <!-- Who's interested -->
-      <!-- Find backhaul -->
-      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
-        <h2 class="text-lg font-semibold mb-1">Find backhaul</h2>
-        <p class="text-slate-500 text-sm mb-3">💡 Smart Route Matching: Enter where you're empty and optionally where you're heading. We'll find loads within 25 miles along your entire journey!</p>
-        
-        <form method="get" action="/haulier/find-backhaul" class="flex flex-wrap items-center gap-2 mb-4">
-          <select name="vehicle_id" required class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-w-[10rem] min-h-[2.5rem]">
-            <option value="">Choose vehicle</option>
-            {% for v in vehicles %}
-            <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %}>{{ v.registration }} · {{ v.vehicle_type }}</option>
-            {% endfor %}
-          </select>
-          
-          <input name="origin_postcode" value="{{ find_origin_postcode or '' }}" placeholder="Currently Empty At (required)" required class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-44 min-h-[2.5rem] placeholder-slate-500" />
-          
-          <input name="destination_postcode" value="{{ find_destination_postcode or '' }}" placeholder="Returning To (optional)" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-44 min-h-[2.5rem] placeholder-slate-500" />
-          
-          <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">🔍 Find Loads</button>
-        </form>
-
-        {% if matching_results is not none %}
-        {% if matching_results %}
-        <p class="text-slate-400 text-sm mb-2">✨ Matching Loads:</p>
-        <div class="overflow-x-auto -mx-1">
-          <table class="w-full text-sm border-collapse min-w-[16rem]">
-            <thead>
-              <tr class="border-b border-slate-600 text-left text-slate-400">
-                <th class="py-2 pr-2">Load</th>
-                <th class="py-2 pr-2">Pickup → Delivery</th>
-                <th class="py-2 text-right">Distance</th>
-                <th class="py-2 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for m in matching_results %}
-              <tr class="border-b border-slate-800">
-                <td class="py-2 pr-2">{{ m.load.shipper_name }}</td>
-                <td class="py-2 pr-2">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</td>
-                <td class="py-2 text-right text-emerald-400">{{ m.distance_miles }} mi</td>
-                <td class="py-2 text-center">
-                  <form method="post" action="/interest" style="display:inline;">
-                    <input type="hidden" name="load_id" value="{{ m.load.id }}">
-                    <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
-                    <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700">
-                      ✓ Interest
-                    </button>
-                  </form>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-        <p class="text-slate-500 py-2">No matching loads found.</p>
-        {% if postcode_lookup_failed %}<p class="text-amber-300 text-xs rounded bg-amber-900/20 px-2 py-1 mt-2">Postcode lookup failed. Use a full UK postcode (e.g. M1 1AA)</p>{% endif %}
-        {% if match_diagnostic and match_diagnostic.loads %}
-        <div class="overflow-x-auto -mx-1 mt-2">
-          <table class="w-full text-sm border-collapse min-w-[16rem]">
-            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Route</th><th class="py-2 pr-2">Why no match</th></tr></thead>
-            <tbody>
-              {% for row in match_diagnostic.loads %}<tr class="border-b border-slate-800"><td class="py-2 pr-2">{{ row.load.pickup_postcode }} → {{ row.load.delivery_postcode }}</td><td class="py-2 text-amber-400">{{ row.reason if row.reason else (row.distance_miles|default(0)|round(1)|string + " mi") }}</td></tr>{% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% endif %}
-        {% endif %}
-        {% endif %}
+      <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-5 sm:p-6 mb-6">
+        <h2 class="text-lg font-semibold text-slate-100 mb-1">Matches</h2>
+        <p class="text-slate-500 text-sm">Hauliers show interest on the main dashboard. While logged in as a loader, open the <a href="/" class="text-emerald-400 hover:underline">home dashboard</a> to see interest on your loads and accept jobs.</p>
       </section>
+    </div>
+  </body>
+</html>

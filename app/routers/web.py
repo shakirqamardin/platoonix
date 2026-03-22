@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Form, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Form, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -836,6 +836,7 @@ def delete_user(
 @router.post("/show-interest", response_class=RedirectResponse)
 async def show_interest_form(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
@@ -880,11 +881,9 @@ async def show_interest_form(
         db.add(interest)
         db.commit()
     try:
-        from app.services.email_sender import email_loader_interest
-        try:
-            email_loader_interest(interest, db)
-        except Exception:
-            pass  # Never block on email
+        from app.services.email_sender import schedule_loader_interest_email
+
+        schedule_loader_interest_email(background_tasks, interest.id)
     except Exception:
         pass
     return RedirectResponse(url="/", status_code=303)
@@ -893,6 +892,7 @@ async def show_interest_form(
 @router.post("/accept-interest", response_class=RedirectResponse)
 async def accept_interest(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
@@ -927,74 +927,14 @@ async def accept_interest(
             load.status = models.LoadStatusEnum.MATCHED.value
             db.commit()
     
-    # Send email to haulier
     try:
-        from app.services.email_sender import email_haulier_job_created
-        try:
-            email_haulier_job_created(job, db)
-        except Exception:
-            pass  # Never block on email
-    except Exception:
-        pass  # Don't fail job creation if email fails
-    
-    return RedirectResponse(url="/?section=matches", status_code=303)
+        from app.services.email_sender import schedule_haulier_job_email
 
-
-@router.post("/create-haulier-account", response_class=RedirectResponse)
-async def create_haulier_account(
-    request: Request,
-    db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
-) -> RedirectResponse:
-    """Admin: create a new haulier (company) and their login in one step. No separate Add company needed."""
-    form = dict(await request.form())
-    haulier_id = int(form.get("haulier_id"))
-    vehicle_id = int(form.get("vehicle_id"))
-    planned_load_id = form.get("planned_load_id")
-    load_id = form.get("load_id")
-    if planned_load_id:
-        planned_load_id = int(planned_load_id)
-    else:
-        planned_load_id = None
-    if load_id:
-        load_id = int(load_id)
-    else:
-        load_id = None
-    if not planned_load_id and not load_id:
-        return RedirectResponse(url="/", status_code=303)
-    existing = (
-        db.query(models.LoadInterest)
-        .filter(
-            models.LoadInterest.haulier_id == haulier_id,
-            models.LoadInterest.vehicle_id == vehicle_id,
-            models.LoadInterest.planned_load_id == planned_load_id,
-            models.LoadInterest.load_id == load_id,
-        )
-        .first()
-    )
-    if existing:
-        existing.status = "expressed"
-        db.commit()
-        interest = existing
-    else:
-        interest = models.LoadInterest(
-            haulier_id=haulier_id,
-            vehicle_id=vehicle_id,
-            load_id=load_id,
-            planned_load_id=planned_load_id,
-            status="expressed",
-        )
-        db.add(interest)
-        db.commit()
-    try:
-        from app.services.email_sender import email_loader_interest
-        try:
-            email_loader_interest(interest, db)
-        except Exception:
-            pass  # Never block on email
+        schedule_haulier_job_email(background_tasks, job.id)
     except Exception:
         pass
-    return RedirectResponse(url="/", status_code=303)
+
+    return RedirectResponse(url="/?section=matches", status_code=303)
 
 
 @router.post("/create-haulier-account", response_class=RedirectResponse)
@@ -1103,52 +1043,68 @@ async def create_loader_account(
     db.commit()
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Loader account created"), status_code=303)
 
-@router.post("/interest")
+@router.post("/interest", response_class=RedirectResponse)
 async def express_interest(
     request: Request,
-    load_id: int = Form(...),
-    vehicle_id: int = Form(...),
+    background_tasks: BackgroundTasks,
+    load_id: Optional[str] = Form(None),
+    vehicle_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-):
-    """Haulier expresses interest in a load - creates a match suggestion."""
-    # Get current user
+) -> RedirectResponse:
+    """Haulier expresses interest in a load - creates a match suggestion.
+
+    Always returns a redirect (never implicit None → 200 empty). Form fields are
+    optional at validation so bad/missing IDs redirect instead of 422 JSON.
+    """
+    from urllib.parse import quote_plus
+
+    def _redirect_matches(msg: str) -> RedirectResponse:
+        return RedirectResponse(
+            url="/?section=matches&msg=" + quote_plus(msg),
+            status_code=303,
+        )
+
+    try:
+        lid = int(str(load_id).strip()) if load_id is not None and str(load_id).strip() else None
+        vid = int(str(vehicle_id).strip()) if vehicle_id is not None and str(vehicle_id).strip() else None
+    except (TypeError, ValueError):
+        return _redirect_matches("invalid_interest")
+
+    if lid is None or vid is None:
+        return _redirect_matches("invalid_interest")
+
     current_user = get_current_user_optional(request, db)
     if not current_user or current_user.role != "haulier":
-        raise HTTPException(status_code=403, detail="Haulier login required")
-    
-    # Verify the vehicle belongs to this haulier
-    vehicle = db.get(models.Vehicle, vehicle_id)
+        return RedirectResponse(url="/login", status_code=303)
+
+    vehicle = db.get(models.Vehicle, vid)
     if not vehicle or vehicle.haulier_id != current_user.haulier_id:
-        raise HTTPException(status_code=403, detail="Not your vehicle")
+        return _redirect_matches("not_your_vehicle")
     
-    # Check if interest already exists
     existing = db.query(models.LoadInterest).filter(
-        models.LoadInterest.load_id == load_id,
-        models.LoadInterest.vehicle_id == vehicle_id,
+        models.LoadInterest.load_id == lid,
+        models.LoadInterest.vehicle_id == vid,
         models.LoadInterest.haulier_id == current_user.haulier_id
     ).first()
-    
+
     if existing:
         return RedirectResponse(url="/?section=matches&msg=already_interested", status_code=303)
-    
-    # Create interest
+
     interest = models.LoadInterest(
-        load_id=load_id,
-        vehicle_id=vehicle_id,
+        load_id=lid,
+        vehicle_id=vid,
         haulier_id=current_user.haulier_id,
         status="expressed",
     )
     db.add(interest)
     db.commit()
     db.refresh(interest)
-    
-    # Send email to loader
+
     try:
-        from app.services.email_sender import email_loader_interest
-        try:
-            email_loader_interest(interest, db)
-        except Exception:
-            pass  # Never block on email
-    except Exception as e:
-        print(f"[EMAIL DEBUG] Email failed: {e}")
-        return RedirectResponse(url="/?section=matches", status_code=303)
+        from app.services.email_sender import schedule_loader_interest_email
+
+        schedule_loader_interest_email(background_tasks, interest.id)
+    except Exception:
+        pass
+
+    return RedirectResponse(url="/?section=matches", status_code=303)
