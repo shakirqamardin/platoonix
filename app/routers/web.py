@@ -1151,3 +1151,4 @@ async def express_interest(
             pass  # Never block on email
     except Exception as e:
         print(f"[EMAIL DEBUG] Email failed: {e}")
+        return RedirectResponse(url="/?section=matches", status_code=303)
