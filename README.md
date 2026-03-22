@@ -139,3 +139,4 @@ psql -d backhaul_dev -c "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS trailer_t
 - Add login so hauliers and loaders only see their own data.
 
 # Fixed User creation
+# Trigger deploy
