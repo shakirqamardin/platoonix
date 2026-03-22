@@ -1004,8 +1004,6 @@ async def create_haulier_account(
         email=email,
         password_hash=hash_password(password),
         role="haulier",
-        haulier_id=haulier.id,
-        loader_id=None,
     )
     db.add(user)
     db.commit()
@@ -1041,8 +1039,6 @@ async def create_haulier_login(
         email=email,
         password_hash=hash_password(password),
         role="haulier",
-        haulier_id=haulier_id,
-        loader_id=None,
     )
     db.add(user)
     db.commit()
@@ -1076,8 +1072,6 @@ async def create_loader_account(
         email=email,
         password_hash=hash_password(password),
         role="loader",
-        haulier_id=None,
-        loader_id=loader.id,
     )
     db.add(user)
     db.commit()
