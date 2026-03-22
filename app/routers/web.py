@@ -881,7 +881,10 @@ async def show_interest_form(
         db.commit()
     try:
         from app.services.email_sender import email_loader_interest
-        email_loader_interest(interest, db)
+        try:
+            email_loader_interest(interest, db)
+        except Exception:
+            pass  # Never block on email
     except Exception:
         pass
     return RedirectResponse(url="/", status_code=303)
@@ -927,7 +930,10 @@ async def accept_interest(
     # Send email to haulier
     try:
         from app.services.email_sender import email_haulier_job_created
-        email_haulier_job_created(job, db)
+        try:
+            email_haulier_job_created(job, db)
+        except Exception:
+            pass  # Never block on email
     except Exception:
         pass  # Don't fail job creation if email fails
     
@@ -982,7 +988,10 @@ async def create_haulier_account(
         db.commit()
     try:
         from app.services.email_sender import email_loader_interest
-        email_loader_interest(interest, db)
+        try:
+            email_loader_interest(interest, db)
+        except Exception:
+            pass  # Never block on email
     except Exception:
         pass
     return RedirectResponse(url="/", status_code=303)
@@ -1136,7 +1145,9 @@ async def express_interest(
     # Send email to loader
     try:
         from app.services.email_sender import email_loader_interest
-        result = email_loader_interest(interest, db)
-        print(f"[EMAIL DEBUG] email_loader_interest returned: {result}")
+        try:
+            email_loader_interest(interest, db)
+        except Exception:
+            pass  # Never block on email
     except Exception as e:
         print(f"[EMAIL DEBUG] Email failed: {e}")
