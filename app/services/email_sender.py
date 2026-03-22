@@ -1,5 +1,5 @@
 """
-Send transactional email via SMTP. No-op if SMTP is not configured.
+Send transactional email via SendGrid API. Falls back to SMTP if SendGrid not configured.
 """
 from sqlalchemy.orm import Session
 
@@ -9,17 +9,24 @@ from app.config import get_settings
 
 def send_email(to_email: str, subject: str, body_text: str) -> bool:
     """
-    Send a plain-text email. Returns True if sent, False if skipped (no config) or failed.
+    Send a plain-text email using SendGrid API (preferred) or SMTP fallback.
+    Returns True if sent, False if skipped (no config) or failed.
     """
     settings = get_settings()
-    print(f"[EMAIL DEBUG] SMTP settings: host={settings.smtp_host}, user={settings.smtp_user}, password={'SET' if settings.smtp_password else 'MISSING'}")
+    
+    # Try SendGrid API first
+    sendgrid_key = getattr(settings, 'sendgrid_api_key', None)
+    if sendgrid_key:
+        return _send_via_sendgrid(to_email, subject, body_text, sendgrid_key, settings.smtp_from_email)
+    
+    # Fallback to SMTP
     if not settings.smtp_host or not settings.smtp_user or not settings.smtp_password:
-        print(f"[EMAIL DEBUG] SMTP not configured, skipping email")
         return False
+    
     to_email = (to_email or "").strip()
     if not to_email:
-        print(f"[EMAIL DEBUG] No recipient email provided")
         return False
+    
     try:
         import smtplib
         from email.mime.text import MIMEText
@@ -37,7 +44,45 @@ def send_email(to_email: str, subject: str, body_text: str) -> bool:
             server.sendmail(settings.smtp_from_email, [to_email], msg.as_string())
         return True
     except Exception as e:
-        print(f"[EMAIL DEBUG] SMTP error: {e}")
+        print(f"[EMAIL] SMTP error: {e}")
+        return False
+
+
+def _send_via_sendgrid(to_email: str, subject: str, body_text: str, api_key: str, from_email: str) -> bool:
+    """Send email using SendGrid API."""
+    to_email = (to_email or "").strip()
+    if not to_email:
+        return False
+    
+    try:
+        import requests
+        
+        data = {
+            "personalizations": [{"to": [{"email": to_email}]}],
+            "from": {"email": from_email},
+            "subject": subject,
+            "content": [{"type": "text/plain", "value": body_text}]
+        }
+        
+        response = requests.post(
+            "https://api.sendgrid.com/v3/mail/send",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 202:
+            print(f"[EMAIL] SendGrid: Email sent to {to_email}")
+            return True
+        else:
+            print(f"[EMAIL] SendGrid error: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"[EMAIL] SendGrid exception: {e}")
         return False
 
 
@@ -75,6 +120,8 @@ def email_loader_interest(interest: "models.LoadInterest", db: Session) -> bool:
         "Log in to Platoonix to accept or decline.\n"
     )
     return send_email(user.email, subject, body)
+
+
 def email_haulier_job_created(job: "models.BackhaulJob", db: Session) -> bool:
     """
     Send "Your interest was accepted - job created!" to the haulier.

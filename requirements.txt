@@ -14,3 +14,5 @@ openpyxl==3.1.5
 passlib[bcrypt]==1.7.4
 itsdangerous>=2.0
 stripe>=8.0
+requests
+requests

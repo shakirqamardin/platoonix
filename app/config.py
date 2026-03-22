@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     smtp_user: Optional[str] = None
     smtp_password: Optional[str] = None
     smtp_from_email: str = "noreply@platoonix.com"
+    # Email (optional): leave unset to skip sending
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from_email: str = "noreply@platoonix.com"
+    sendgrid_api_key: Optional[str] = None
 
     # Stripe (optional): for payouts to hauliers via Connect. Leave unset to skip.
     stripe_secret_key: Optional[str] = None
