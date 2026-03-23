@@ -443,6 +443,7 @@
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="border-b border-slate-700">
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Match</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Load</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Route</th>
                                 <th class="py-3 px-4 text-right font-semibold text-slate-400">Distance</th>
@@ -451,20 +452,43 @@
                         </thead>
                         <tbody>
                             {% for m in matching_results %}
-                            <tr class="border-b border-slate-800/50">
+                            <tr class="border-b border-slate-800/50 {% if not m.is_perfect_match %}bg-amber-900/10{% endif %}">
+                                <td class="py-3 px-4">
+                                    {% if m.is_perfect_match %}
+                                    <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-green-900/50 text-green-300 rounded">
+                                        ✓ Perfect
+                                    </span>
+                                    {% else %}
+                                    <div class="flex flex-col gap-1">
+                                        <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-amber-900/50 text-amber-300 rounded">
+                                            ⚠️ Near
+                                        </span>
+                                        {% for reason in m.mismatch_reasons %}
+                                        <span class="text-xs text-amber-400">{{ reason }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </td>
                                 <td class="py-3 px-4 font-medium">{{ m.load.shipper_name }}</td>
                                 <td class="py-3 px-4 text-slate-300">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</td>
                                 <td class="py-3 px-4 text-right">
-                                    <span class="badge badge-success">{{ m.distance_miles }} mi</span>
+                                    <span class="badge {% if m.is_perfect_match %}badge-success{% else %}bg-amber-600 text-white{% endif %}">{{ m.distance_miles }} mi</span>
                                 </td>
                                 <td class="py-3 px-4 text-center">
-                                    <form method="post" action="/interest" style="display:inline;">
-                                        <input type="hidden" name="load_id" value="{{ m.load.id }}">
-                                        <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
-                                        <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700">
-                                            ✓ Interest
+                                    <div class="flex gap-2 justify-center">
+                                        <form method="post" action="/interest" style="display:inline;">
+                                            <input type="hidden" name="load_id" value="{{ m.load.id }}">
+                                            <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
+                                            <button type="submit" class="px-3 py-1.5 text-xs font-semibold {% if m.is_perfect_match %}bg-teal-600 hover:bg-teal-700{% else %}bg-amber-600 hover:bg-amber-700{% endif %} text-white rounded-lg">
+                                                {% if m.is_perfect_match %}✓{% else %}⚠️{% endif %} Interest
+                                            </button>
+                                        </form>
+                                        {% if not m.is_perfect_match %}
+                                        <button onclick="alert('Contact loader feature coming soon! For now, show interest and mention your solution (forklift/tailgate) in follow-up.')" class="px-3 py-1.5 text-xs font-semibold bg-slate-600 hover:bg-slate-700 text-white rounded-lg">
+                                            💬 Contact
                                         </button>
-                                    </form>
+                                        {% endif %}
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}

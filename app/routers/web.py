@@ -375,16 +375,16 @@ def find_backhaul_page(
                 all_pairs = route_pairs + origin_pairs
                 seen_load_ids = set()
                 unique_pairs = []
-                for load, dist in all_pairs:
+                for load, dist, is_perfect, reasons in all_pairs:
                     if load.id not in seen_load_ids:
                         seen_load_ids.add(load.id)
-                        unique_pairs.append((load, dist))
+                        unique_pairs.append((load, dist, is_perfect, reasons))
                 pairs = unique_pairs
             else:
                 # Just origin search if no destination
                 pairs = find_matching_loads(vehicle_id, origin_postcode, db)
             
-            matching_results = [{"load": load, "distance_miles": dist} for load, dist in pairs]
+            matching_results = [{"load": load, "distance_miles": dist, "is_perfect_match": is_perfect, "mismatch_reasons": reasons} for load, dist, is_perfect, reasons in pairs]
             if not matching_results:
                 open_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
                 if open_count > 0:

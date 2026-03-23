@@ -16,10 +16,10 @@ def find_matching_loads(
     origin_postcode: str,
     db: Session,
     radius_miles: Optional[int] = None,
-) -> List[Tuple[models.Load, float]]:
+) -> List[Tuple[models.Load, float, bool, List[str]]]:
     """
-    Find open loads within radius_miles of origin_postcode that match the vehicle's
-    trailer type and capacity. Returns list of (load, distance_miles) sorted by distance.
+    Find open loads whose pickup is within radius_miles of origin_postcode, considering vehicle
+    trailer type and capacity. Returns list of (load, distance_miles, is_perfect_match, mismatch_reasons) sorted by match quality then distance.
     """
     settings = get_settings()
     radius = radius_miles if radius_miles is not None else settings.default_backhaul_radius_miles
@@ -28,6 +28,7 @@ def find_matching_loads(
     if not vehicle:
         return []
 
+    origin_postcode = (origin_postcode or "").strip().upper()
     origin_ll = get_lat_lon(origin_postcode)
     if not origin_ll:
         return []
@@ -50,20 +51,24 @@ def find_matching_loads(
         if distance > radius:
             continue
 
-        # Load criteria: vehicle type and trailer type must match when load specifies them
+        # Check for perfect match vs near match
+        is_perfect_match = True
+        mismatch_reasons = []
+        
         req = load.requirements or {}
         if not isinstance(req, dict):
             req = {}
+            
         required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
-        if required_vehicle_type:
-            if (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
-                continue
+        if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
+            is_perfect_match = False
+            mismatch_reasons.append(f"Vehicle type: need {required_vehicle_type}")
+            
         required_trailer = (req.get("trailer_type") or "").strip().lower()
-        if required_trailer:
-            if (vehicle.trailer_type or "").strip().lower() != required_trailer:
-                continue
-
-        # Capacity: load must fit vehicle capacity when vehicle has limits
+        if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
+            is_perfect_match = False
+            mismatch_reasons.append(f"Trailer: need {required_trailer}")
+            
         if vehicle.capacity_weight_kg is not None and vehicle.capacity_weight_kg > 0:
             if (load.weight_kg or 0) > vehicle.capacity_weight_kg:
                 continue
@@ -71,9 +76,10 @@ def find_matching_loads(
             if (load.volume_m3 or 0) > vehicle.capacity_volume_m3:
                 continue
 
-        results.append((load, round(distance, 1)))
+        results.append((load, round(distance, 1), is_perfect_match, mismatch_reasons))
 
-    results.sort(key=lambda x: x[1])
+    # Sort perfect matches first, then by distance
+    results.sort(key=lambda x: (not x[2], x[1]))
     return results
 
 
@@ -225,7 +231,7 @@ def find_matching_loads_along_route(
     Find open loads whose pickup is within radius_miles of any point along the
     route from from_postcode (e.g. delivery) to to_postcode (e.g. base).
     Driver going Manchester → Milton Keynes gets jobs anywhere along that corridor.
-    Returns list of (load, min_distance_miles) sorted by distance.
+    Returns list of (load, min_distance_miles, is_perfect_match, mismatch_reasons) sorted by match quality then distance.
     """
     settings = get_settings()
     radius = radius_miles if radius_miles is not None else settings.default_backhaul_radius_miles
@@ -262,12 +268,19 @@ def find_matching_loads_along_route(
         req = load.requirements or {}
         if not isinstance(req, dict):
             req = {}
+        # Check for perfect match vs near match
+        is_perfect_match = True
+        mismatch_reasons = []
+        
         required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
         if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
-            continue
+            is_perfect_match = False
+            mismatch_reasons.append(f"Vehicle type: need {required_vehicle_type}")
+            
         required_trailer = (req.get("trailer_type") or "").strip().lower()
         if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
-            continue
+            is_perfect_match = False
+            mismatch_reasons.append(f"Trailer: need {required_trailer}")
         if vehicle.capacity_weight_kg is not None and vehicle.capacity_weight_kg > 0:
             if (load.weight_kg or 0) > vehicle.capacity_weight_kg:
                 continue
@@ -275,7 +288,8 @@ def find_matching_loads_along_route(
             if (load.volume_m3 or 0) > vehicle.capacity_volume_m3:
                 continue
 
-        results.append((load, round(min_dist, 1)))
+        results.append((load, round(min_dist, 1), is_perfect_match, mismatch_reasons))
 
-    results.sort(key=lambda x: x[1])
+    # Sort perfect matches first, then by distance
+    results.sort(key=lambda x: (not x[2], x[1]))  # False (near match) sorts after True (perfect)
     return results
