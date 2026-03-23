@@ -427,7 +427,10 @@
                 </form>
                 
                 <div id="alerts-list" class="mb-4 space-y-2 max-h-32 overflow-auto text-sm hidden"></div>
-                
+            </div>
+
+            {% if matching_results is not none %}
+            <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.25s">
                 {% if find_origin_postcode %}
                 <div class="text-sm text-slate-400 mb-3 glass-card rounded-lg px-4 py-3 border border-teal-500/20">
                     ✓ Searched from: <span class="font-mono text-teal-400">{{ find_origin_postcode }}</span>
@@ -436,8 +439,7 @@
                     {% endif %}
                 </div>
                 {% endif %}
-                
-                {% if matching_results is not none %}
+
                 <div class="space-y-4">
                     {% if matching_results %}
                     <!-- Results Header -->
@@ -595,8 +597,8 @@
                     </div>
                     {% endif %}
                 </div>
-                {% endif %}
             </div>
+            {% endif %}
         </section>
 
         <!-- Vehicles Section -->
