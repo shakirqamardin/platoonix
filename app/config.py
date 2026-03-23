@@ -38,13 +38,7 @@ class Settings(BaseSettings):
     admin_email: str = "admin@platoonix.local"
     admin_password: str = "change-me"
 
-    # Email (optional): leave unset to skip sending
-    smtp_host: Optional[str] = None
-    smtp_port: int = 587
-    smtp_user: Optional[str] = None
-    smtp_password: Optional[str] = None
-    smtp_from_email: str = "noreply@platoonix.com"
-    # Email (optional): leave unset to skip sending
+    # Email (optional): SendGrid API key, or SMTP below. Set SMTP_FROM_EMAIL to a verified SendGrid sender.
     smtp_host: Optional[str] = None
     smtp_port: int = 587
     smtp_user: Optional[str] = None

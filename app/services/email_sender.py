@@ -1,6 +1,7 @@
 """
 Send transactional email via SendGrid API. Falls back to SMTP if SendGrid not configured.
 """
+from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app import models
@@ -12,24 +13,26 @@ def send_email(to_email: str, subject: str, body_text: str) -> bool:
     Send a plain-text email using SendGrid API (preferred) or SMTP fallback.
     Returns True if sent, False if skipped (no config) or failed.
     """
-    return False  # Temporarily disable all email
-    
     settings = get_settings()
-    # ... rest of code
-    
-    # Try SendGrid API first
-    sendgrid_key = getattr(settings, 'sendgrid_api_key', None)
-    if sendgrid_key:
-        return _send_via_sendgrid(to_email, subject, body_text, sendgrid_key, settings.smtp_from_email)
-    
-    # Fallback to SMTP
-    if not settings.smtp_host or not settings.smtp_user or not settings.smtp_password:
-        return False
-    
     to_email = (to_email or "").strip()
     if not to_email:
         return False
-    
+
+    # SendGrid rejects null/empty content; keep JSON-safe strings
+    subject = (subject or "").strip() or "(no subject)"
+    body_text = str(body_text if body_text is not None else "")
+    from_email = (settings.smtp_from_email or "").strip()
+    if not from_email:
+        print("[EMAIL] smtp_from_email is empty; set SMTP_FROM_EMAIL / verified SendGrid sender.")
+        return False
+
+    sendgrid_key = getattr(settings, "sendgrid_api_key", None)
+    if sendgrid_key and str(sendgrid_key).strip():
+        return _send_via_sendgrid(to_email, subject, body_text, str(sendgrid_key).strip(), from_email)
+
+    if not settings.smtp_host or not settings.smtp_user or not settings.smtp_password:
+        return False
+
     try:
         import smtplib
         from email.mime.text import MIMEText
@@ -37,14 +40,14 @@ def send_email(to_email: str, subject: str, body_text: str) -> bool:
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = settings.smtp_from_email
+        msg["From"] = from_email
         msg["To"] = to_email
         msg.attach(MIMEText(body_text, "plain", "utf-8"))
 
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(settings.smtp_from_email, [to_email], msg.as_string())
+            server.sendmail(from_email, [to_email], msg.as_string())
         return True
     except Exception as e:
         print(f"[EMAIL] SMTP error: {e}")
@@ -53,40 +56,72 @@ def send_email(to_email: str, subject: str, body_text: str) -> bool:
 
 def _send_via_sendgrid(to_email: str, subject: str, body_text: str, api_key: str, from_email: str) -> bool:
     """Send email using SendGrid API."""
-    to_email = (to_email or "").strip()
-    if not to_email:
-        return False
-    
     try:
         import requests
-        
+
         data = {
             "personalizations": [{"to": [{"email": to_email}]}],
             "from": {"email": from_email},
             "subject": subject,
-            "content": [{"type": "text/plain", "value": body_text}]
+            "content": [{"type": "text/plain", "value": body_text}],
         }
-        
+
         response = requests.post(
             "https://api.sendgrid.com/v3/mail/send",
             headers={
                 "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
             json=data,
-            timeout=10
+            timeout=15,
         )
-        
+
         if response.status_code == 202:
-            print(f"[EMAIL] SendGrid: Email sent to {to_email}")
+            print(f"[EMAIL] SendGrid: queued for {to_email}")
             return True
-        else:
-            print(f"[EMAIL] SendGrid error: {response.status_code} - {response.text}")
-            return False
-            
+        print(f"[EMAIL] SendGrid error: {response.status_code} - {response.text}")
+        return False
+
     except Exception as e:
         print(f"[EMAIL] SendGrid exception: {e}")
         return False
+
+
+def _run_loader_interest_email(interest_id: int) -> None:
+    """Background task: own DB session; request session must not be used after return."""
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        interest = db.get(models.LoadInterest, interest_id)
+        if interest:
+            email_loader_interest(interest, db)
+    finally:
+        db.close()
+
+
+def _run_haulier_job_email(job_id: int) -> None:
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        job = db.get(models.BackhaulJob, job_id)
+        if job:
+            email_haulier_job_created(job, db)
+    finally:
+        db.close()
+
+
+def schedule_loader_interest_email(background_tasks: BackgroundTasks, interest_id: int) -> None:
+    """Queue loader notification after interest is saved (non-blocking)."""
+    if interest_id:
+        background_tasks.add_task(_run_loader_interest_email, interest_id)
+
+
+def schedule_haulier_job_email(background_tasks: BackgroundTasks, job_id: int) -> None:
+    """Queue haulier notification after job is created (non-blocking)."""
+    if job_id:
+        background_tasks.add_task(_run_haulier_job_email, job_id)
 
 
 def email_loader_interest(interest: "models.LoadInterest", db: Session) -> bool:
@@ -133,17 +168,17 @@ def email_haulier_job_created(job: "models.BackhaulJob", db: Session) -> bool:
     vehicle = db.get(models.Vehicle, job.vehicle_id)
     if not vehicle or not vehicle.haulier_id:
         return False
-    
+
     user = db.query(models.User).filter(models.User.haulier_id == vehicle.haulier_id).first()
     if not user or not user.email:
         return False
-    
+
     load = db.get(models.Load, job.load_id)
     if not load:
         return False
-    
+
     route_desc = f"{load.pickup_postcode} → {load.delivery_postcode}"
-    
+
     subject = "Platoonix: Your interest was accepted - Job created!"
     body = (
         f"Great news! The loader has accepted your interest.\n\n"
