@@ -105,6 +105,7 @@ class DriverJobRead(BaseModel):
     id: int
     vehicle_id: int
     load_id: int
+    driver_id: Optional[int] = None
     pickup_postcode: str
     delivery_postcode: str
     shipper_name: str
@@ -130,6 +131,10 @@ class DriverStatusUpdate(BaseModel):
         ...,
         description="One of: reached_pickup, collected, departed_pickup, reached_delivery",
     )
+
+
+class DriverAssignRequest(BaseModel):
+    driver_id: Optional[int] = None
 
 
 class LoadMatchResult(BaseModel):

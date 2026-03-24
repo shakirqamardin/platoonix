@@ -1,7 +1,7 @@
 """
 Driver API: my job(s), update location (live GPS), set status.
 Driver-led flow: reached_pickup -> collected (captures payment) -> departed_pickup -> reached_delivery -> delivered (ePOD, payout).
-Auth: session-based; haulier role only (driver is haulier's user).
+Auth: session-based; shared access for haulier office and driver login.
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -10,14 +10,23 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import get_current_user_optional
+from app.auth import get_current_driver_optional, get_current_user_optional
 from app.database import get_db
 
 router = APIRouter(prefix="/api/driver", tags=["driver"])
 
 
-def _get_haulier_user(request: Request, db: Session) -> tuple[models.User, models.Haulier]:
-    """Return (user, haulier) or raise 401. Requires haulier role."""
+def _get_actor_haulier(
+    request: Request, db: Session
+) -> tuple[Optional[models.User], Optional[models.Driver], models.Haulier]:
+    """Return actor (user or driver) and haulier."""
+    driver = get_current_driver_optional(request, db)
+    if driver:
+        haulier = db.get(models.Haulier, driver.haulier_id)
+        if not haulier:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Haulier not found")
+        return (None, driver, haulier)
+
     user = get_current_user_optional(request, db)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not logged in")
@@ -37,15 +46,22 @@ def _get_haulier_user(request: Request, db: Session) -> tuple[models.User, model
     haulier = db.get(models.Haulier, haulier_id)
     if not haulier:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Haulier not found")
-    return (user, haulier)
+    return (user, None, haulier)
 
 
-def _job_belongs_to_haulier(job_id: int, haulier: models.Haulier, db: Session) -> Optional[models.BackhaulJob]:
+def _job_belongs_to_haulier(
+    job_id: int,
+    haulier: models.Haulier,
+    db: Session,
+    actor_driver: Optional[models.Driver] = None,
+) -> Optional[models.BackhaulJob]:
     job = db.get(models.BackhaulJob, job_id)
     if not job:
         return None
     vehicle = db.get(models.Vehicle, job.vehicle_id)
     if not vehicle or vehicle.haulier_id != haulier.id:
+        return None
+    if actor_driver is not None and job.driver_id not in (None, actor_driver.id):
         return None
     return job
 
@@ -65,6 +81,7 @@ def _job_to_driver_read(job: models.BackhaulJob, db: Session) -> schemas.DriverJ
         id=job.id,
         vehicle_id=job.vehicle_id,
         load_id=job.load_id,
+        driver_id=job.driver_id,
         pickup_postcode=pickup,
         delivery_postcode=delivery,
         shipper_name=shipper,
@@ -88,8 +105,8 @@ def get_my_job(
     db: Session = Depends(get_db),
 ):
     """Get one job (for driver app)."""
-    _, haulier = _get_haulier_user(request, db)
-    job = _job_belongs_to_haulier(job_id, haulier, db)
+    _, driver, haulier = _get_actor_haulier(request, db)
+    job = _job_belongs_to_haulier(job_id, haulier, db, actor_driver=driver)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found or not yours")
     return _job_to_driver_read(job, db)
@@ -102,7 +119,7 @@ def list_my_jobs(
     active_only: bool = True,
 ):
     """List backhaul jobs for the current haulier. active_only=true excludes completed jobs."""
-    _, haulier = _get_haulier_user(request, db)
+    _, driver, haulier = _get_actor_haulier(request, db)
     q = (
         db.query(models.BackhaulJob)
         .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
@@ -111,6 +128,8 @@ def list_my_jobs(
     )
     if active_only:
         q = q.filter(models.BackhaulJob.completed_at.is_(None))
+    if driver is not None:
+        q = q.filter(models.BackhaulJob.driver_id == driver.id)
     jobs = q.all()
     return [_job_to_driver_read(j, db) for j in jobs]
 
@@ -123,8 +142,8 @@ def update_job_location(
     db: Session = Depends(get_db),
 ):
     """Update driver's live GPS for this job. All parties can see position via GET /api/driver/jobs or track page."""
-    _, haulier = _get_haulier_user(request, db)
-    job = _job_belongs_to_haulier(job_id, haulier, db)
+    _, driver, haulier = _get_actor_haulier(request, db)
+    job = _job_belongs_to_haulier(job_id, haulier, db, actor_driver=driver)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found or not yours")
     job.last_lat = body.lat
@@ -149,7 +168,7 @@ def loads_on_route_home(
     Driver Manchester → Milton Keynes: returns jobs along that corridor.
     Requires haulier auth; vehicle_id must belong to your haulier (or pass job_id to use job's vehicle + delivery/base).
     """
-    _, haulier = _get_haulier_user(request, db)
+    _, driver, haulier = _get_actor_haulier(request, db)
     if not from_postcode or not to_postcode:
         return []
     vid = vehicle_id
@@ -175,8 +194,8 @@ def update_job_status(
     Allowed: reached_pickup, collected, departed_pickup, reached_delivery.
     Delivery (completed) is via ePOD upload + confirm, not this endpoint.
     """
-    _, haulier = _get_haulier_user(request, db)
-    job = _job_belongs_to_haulier(job_id, haulier, db)
+    _, driver, haulier = _get_actor_haulier(request, db)
+    job = _job_belongs_to_haulier(job_id, haulier, db, actor_driver=driver)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found or not yours")
     now = datetime.now(timezone.utc)
@@ -203,6 +222,43 @@ def update_job_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="status must be one of: reached_pickup, collected, departed_pickup, reached_delivery",
         )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return _job_to_driver_read(job, db)
+
+
+@router.post("/jobs/{job_id}/assign-driver", response_model=schemas.DriverJobRead)
+def assign_driver(
+    job_id: int,
+    body: schemas.DriverAssignRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Assign/unassign a driver to a job.
+    - Haulier/admin can assign any driver from the same haulier.
+    - Driver actor cannot reassign.
+    Body JSON: {"driver_id": <int|null>}
+    """
+    user, actor_driver, haulier = _get_actor_haulier(request, db)
+    if actor_driver is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Drivers cannot reassign jobs")
+    job = _job_belongs_to_haulier(job_id, haulier, db)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found or not yours")
+    driver_id = body.driver_id
+    if driver_id in ("", None):
+        job.driver_id = None
+    else:
+        try:
+            driver_id = int(driver_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid driver_id")
+        driver = db.get(models.Driver, driver_id)
+        if not driver or driver.haulier_id != haulier.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Driver not found for this haulier")
+        job.driver_id = driver.id
     db.add(job)
     db.commit()
     db.refresh(job)

@@ -1,0 +1,44 @@
+{% extends "base_auth.html" %}
+{% block title %}Driver Log in – Platoonix{% endblock %}
+{% block content %}
+    <h1 class="text-2xl font-display font-bold text-center mb-2 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
+        Driver Sign In
+    </h1>
+    <p class="text-slate-400 text-sm text-center mb-6">Use your driver account to access jobs and ePOD</p>
+
+    {% if error %}
+    <div class="glass-card rounded-xl px-4 py-3 mb-4 border-l-4 border-amber-500">
+        <div class="flex items-center gap-2">
+            <span class="text-lg">⚠️</span>
+            <span class="text-amber-300 text-sm">{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/driver-login" class="space-y-5">
+        <div>
+            <label for="email" class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+            <input id="email" name="email" type="email" required autocomplete="email"
+                   class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+                   value="{{ email or '' }}" placeholder="driver@company.com" />
+        </div>
+
+        <div>
+            <label for="password" class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+            <input id="password" name="password" type="password" required autocomplete="current-password"
+                   class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+                   placeholder="••••••••" />
+        </div>
+
+        <button type="submit" class="btn-primary w-full px-4 py-3.5 text-white font-semibold rounded-lg shadow-lg">
+            Sign In as Driver
+        </button>
+    </form>
+
+    <div class="mt-6 text-center">
+        <p class="text-slate-500 text-sm">
+            Company account?
+            <a href="/login" class="text-teal-400 hover:text-teal-300 font-medium transition-colors">Use standard login</a>
+        </p>
+    </div>
+{% endblock %}

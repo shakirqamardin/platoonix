@@ -1027,6 +1027,7 @@
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Job ID</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Vehicle • Load</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Route</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Assigned Driver</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Payment</th>
                                     <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
                                 </tr>
@@ -1045,6 +1046,28 @@
                                             <span class="font-mono text-slate-300">{{ l.delivery_postcode }}</span>
                                             {% endif %}
                                         {% endfor %}
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        {% if current_user and current_user.role == 'haulier' %}
+                                        <form method="post" action="/assign-job-driver" class="flex items-center gap-2">
+                                            <input type="hidden" name="job_id" value="{{ j.id }}" />
+                                            <select name="driver_id" class="rounded-lg border border-slate-600 bg-slate-900/80 px-2 py-1.5 text-xs min-w-[11rem]">
+                                                <option value="">Unassigned</option>
+                                                {% for d in drivers %}
+                                                <option value="{{ d.id }}" {% if j.driver_id == d.id %}selected{% endif %}>{{ d.name }}{% if d.phone %} · {{ d.phone }}{% endif %}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="submit" class="px-2 py-1.5 text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-white rounded-md">Save</button>
+                                        </form>
+                                        {% else %}
+                                            {% set assigned = namespace(name='Unassigned') %}
+                                            {% for d in drivers %}
+                                                {% if j.driver_id == d.id %}
+                                                    {% set assigned.name = d.name %}
+                                                {% endif %}
+                                            {% endfor %}
+                                            <span class="text-slate-300 text-xs">{{ assigned.name }}</span>
+                                        {% endif %}
                                     </td>
                                     <td class="py-3 px-4">
                                         {% for p in payments %}

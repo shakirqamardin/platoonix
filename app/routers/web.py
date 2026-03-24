@@ -147,6 +147,7 @@ def home(
         vehicles = []
         haulier_routes = []
         users = []
+        drivers = []
     elif current_user and current_user.haulier_id:
         # HAULIER VIEW - only their vehicles and jobs
         haulier = db.get(models.Haulier, current_user.haulier_id)
@@ -167,6 +168,7 @@ def home(
         hauliers = [haulier]  # Just their own company
         planned_loads = []
         users = []
+        drivers = db.query(models.Driver).filter(models.Driver.haulier_id == haulier.id).order_by(models.Driver.name).all()
     else:
         # ADMIN VIEW - see everything
         hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
@@ -179,6 +181,7 @@ def home(
         load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
         
         users = db.query(models.User).order_by(models.User.email).all()
+        drivers = db.query(models.Driver).order_by(models.Driver.name).all()
 
     load_interests_display = _load_interests_display(load_interests, db)
 
@@ -203,6 +206,7 @@ def home(
         {
             "request": request,
             "users": users,
+            "drivers": drivers,
             "hauliers": hauliers,
             "vehicles": vehicles,
             "loads": loads,
@@ -717,6 +721,51 @@ def delete_job_form(
     db.delete(job)
     db.commit()
     return RedirectResponse(url="/?section=matches&deleted=job", status_code=303)
+
+
+@router.post("/assign-job-driver", response_class=RedirectResponse)
+async def assign_job_driver(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Assign/unassign a driver to a confirmed job (haulier office or admin)."""
+    current_user = get_current_user_optional(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    if current_user.role not in ("haulier", "admin"):
+        return RedirectResponse(url="/?section=matches&delete_error=Not+authorized", status_code=303)
+
+    form = await request.form()
+    try:
+        job_id = int(form.get("job_id") or 0)
+    except (TypeError, ValueError):
+        return RedirectResponse(url="/?section=matches&delete_error=Invalid+job", status_code=303)
+    job = db.get(models.BackhaulJob, job_id)
+    if not job:
+        return RedirectResponse(url="/?section=matches&delete_error=Job+not+found", status_code=303)
+    vehicle = db.get(models.Vehicle, job.vehicle_id)
+    if not vehicle:
+        return RedirectResponse(url="/?section=matches&delete_error=Vehicle+not+found", status_code=303)
+
+    if current_user.role == "haulier" and vehicle.haulier_id != current_user.haulier_id:
+        return RedirectResponse(url="/?section=matches&delete_error=Not+your+job", status_code=303)
+
+    driver_id_raw = (form.get("driver_id") or "").strip()
+    if not driver_id_raw:
+        job.driver_id = None
+    else:
+        try:
+            driver_id = int(driver_id_raw)
+        except (TypeError, ValueError):
+            return RedirectResponse(url="/?section=matches&delete_error=Invalid+driver", status_code=303)
+        driver = db.get(models.Driver, driver_id)
+        if not driver or driver.haulier_id != vehicle.haulier_id:
+            return RedirectResponse(url="/?section=matches&delete_error=Driver+not+found+for+this+haulier", status_code=303)
+        job.driver_id = driver.id
+
+    db.add(job)
+    db.commit()
+    return RedirectResponse(url="/?section=matches&deleted=driver_assigned", status_code=303)
 
 
 def _can_view_job_track(job: models.BackhaulJob, user: Optional[models.User], db: Session) -> bool:

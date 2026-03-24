@@ -87,6 +87,24 @@ class Haulier(Base):
     driver_photo_url: Mapped[Optional[str]] = mapped_column(String(500))
     
     vehicles: Mapped[list["Vehicle"]] = relationship("Vehicle", back_populates="haulier")
+    drivers: Mapped[list["Driver"]] = relationship("Driver", back_populates="haulier")
+
+
+class Driver(Base):
+    __tablename__ = "drivers"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    haulier_id: Mapped[int] = mapped_column(ForeignKey("hauliers.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50))
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+
+    haulier: Mapped["Haulier"] = relationship("Haulier", back_populates="drivers")
+    jobs: Mapped[list["BackhaulJob"]] = relationship("BackhaulJob", back_populates="driver")
    
 class Vehicle(Base):
     __tablename__ = "vehicles"
@@ -225,6 +243,7 @@ class BackhaulJob(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"), nullable=False)
     load_id: Mapped[int] = mapped_column(ForeignKey("loads.id"), nullable=False)
+    driver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("drivers.id"), nullable=True)
 
     matched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
@@ -246,6 +265,7 @@ class BackhaulJob(Base):
     
     vehicle: Mapped["Vehicle"] = relationship("Vehicle")
     load: Mapped["Load"] = relationship("Load")
+    driver: Mapped[Optional["Driver"]] = relationship("Driver", back_populates="jobs")
     
     @property
     def display_number(self) -> str:

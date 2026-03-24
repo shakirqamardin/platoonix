@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app import models
-from app.auth import get_current_user_optional, require_haulier
+from app.auth import get_current_driver_optional, get_current_user_optional, require_haulier
 from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
@@ -34,6 +34,21 @@ def _haulier_or_redirect(request: Request, db: Session) -> Union[Tuple[models.Us
         return RedirectResponse(url="/login", status_code=302)
     return (user, haulier)
 
+def _haulier_or_driver_context(
+    request: Request, db: Session
+) -> Union[Tuple[models.Haulier, Optional[models.Driver]], RedirectResponse]:
+    """Return (haulier, optional driver actor) for shared driver workflow."""
+    driver = get_current_driver_optional(request, db)
+    if driver:
+        haulier = db.get(models.Haulier, driver.haulier_id)
+        if not haulier:
+            return RedirectResponse(url="/driver-login", status_code=302)
+        return (haulier, driver)
+    result = _haulier_or_redirect(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    _, haulier = result
+    return (haulier, None)
 
 @router.get("/driver", response_class=HTMLResponse)
 def driver_page(
@@ -41,18 +56,19 @@ def driver_page(
     db: Session = Depends(get_db),
 ):
     """Driver-led view: one active job, status buttons, share live location, loads on route home. Haulier only."""
-    result = _haulier_or_redirect(request, db)
+    result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
-    active_job = (
+    haulier, actor_driver = result
+    q = (
         db.query(models.BackhaulJob)
         .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
         .filter(models.Vehicle.haulier_id == haulier.id)
         .filter(models.BackhaulJob.completed_at.is_(None))
-        .order_by(models.BackhaulJob.matched_at.desc())
-        .first()
     )
+    if actor_driver is not None:
+        q = q.filter(models.BackhaulJob.driver_id == actor_driver.id)
+    active_job = q.order_by(models.BackhaulJob.matched_at.desc()).first()
     loads_on_route_home = []
     show_route_home_hint = False
     base_postcode_used = None
@@ -83,17 +99,25 @@ def driver_page(
             "loads_on_route_home": loads_on_route_home,
             "show_route_home_hint": show_route_home_hint,
             "base_postcode_used": base_postcode_used,
+            "is_driver_login": bool(actor_driver),
         },
     )
 
 
-def _driver_job_for_haulier(job_id: int, haulier: models.Haulier, db: Session) -> Optional[models.BackhaulJob]:
-    """Return the BackhaulJob if it belongs to this haulier, else None."""
+def _driver_job_for_haulier(
+    job_id: int,
+    haulier: models.Haulier,
+    db: Session,
+    actor_driver: Optional[models.Driver] = None,
+) -> Optional[models.BackhaulJob]:
+    """Return job for this haulier; for driver actor, enforce assigned driver."""
     job = db.get(models.BackhaulJob, job_id)
     if not job:
         return None
     vehicle = db.get(models.Vehicle, job.vehicle_id)
     if not vehicle or vehicle.haulier_id != haulier.id:
+        return None
+    if actor_driver is not None and job.driver_id not in (None, actor_driver.id):
         return None
     return job
 
@@ -110,13 +134,13 @@ def driver_epod_page(
     job_id: int = Query(None),
 ):
     """Driver: upload ePOD for a job. Completes delivery and triggers payout."""
-    result = _haulier_or_redirect(request, db)
+    result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
+    haulier, actor_driver = result
     if job_id is None:
         return RedirectResponse(url="/driver", status_code=302)
-    job = _driver_job_for_haulier(job_id, haulier, db)
+    job = _driver_job_for_haulier(job_id, haulier, db, actor_driver=actor_driver)
     if not job:
         return RedirectResponse(url="/driver?error=Job+not+found", status_code=302)
     if job.completed_at:
@@ -134,16 +158,16 @@ async def driver_epod_submit(
     db: Session = Depends(get_db),
 ):
     """Driver: upload ePOD file → create POD → confirm (completes job + payout)."""
-    result = _haulier_or_redirect(request, db)
+    result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
+    haulier, actor_driver = result
     form = await request.form()
     try:
         job_id = int(form.get("job_id", 0))
     except (TypeError, ValueError):
         return RedirectResponse(url="/driver?error=Invalid+job", status_code=303)
-    job = _driver_job_for_haulier(job_id, haulier, db)
+    job = _driver_job_for_haulier(job_id, haulier, db, actor_driver=actor_driver)
     if not job:
         return RedirectResponse(url="/driver?error=Job+not+found", status_code=303)
     if job.completed_at:
@@ -220,10 +244,10 @@ async def haulier_update_profile(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    result = _haulier_or_redirect(request, db)
+    result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
+    haulier, actor_driver = result
     form = await request.form()
     haulier.name = (form.get("name") or haulier.name or "").strip()
     haulier.contact_email = (form.get("contact_email") or haulier.contact_email or "").strip()
@@ -242,10 +266,10 @@ async def haulier_add_vehicle(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    result = _haulier_or_redirect(request, db)
+    result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
+    haulier, actor_driver = result
     form = await request.form()
     registration = (form.get("registration") or "").upper().strip()
     vehicle_type = form.get("vehicle_type") or "rigid"
@@ -285,10 +309,10 @@ def haulier_delete_vehicle(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    result = _haulier_or_redirect(request, db)
+    result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
+    haulier, actor_driver = result
     vehicle = db.get(models.Vehicle, vehicle_id)
     if not vehicle or vehicle.haulier_id != haulier.id:
         return RedirectResponse(url="/haulier?delete_error=Vehicle+not+found", status_code=303)
@@ -307,10 +331,10 @@ async def haulier_add_route(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    result = _haulier_or_redirect(request, db)
+    result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
+    haulier, actor_driver = result
     form = await request.form()
     vehicle_id = int(form.get("vehicle_id", 0))
     vehicle = db.get(models.Vehicle, vehicle_id)
@@ -348,10 +372,10 @@ def haulier_delete_route(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    result = _haulier_or_redirect(request, db)
+    result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return result
-    user, haulier = result
+    haulier, actor_driver = result
     route = db.get(models.HaulierRoute, route_id)
     if not route or route.haulier_id != haulier.id:
         return RedirectResponse(url="/haulier?delete_error=Route+not+found", status_code=303)

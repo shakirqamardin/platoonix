@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.auth import (
+    get_current_driver_optional,
     get_current_user_optional,
     hash_password,
     verify_password,
@@ -27,6 +28,9 @@ RESET_TOKEN_EXPIRY_HOURS = 1
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     """Show login form. If already logged in, redirect to role dashboard."""
+    driver = get_current_driver_optional(request, db)
+    if driver:
+        return RedirectResponse(url="/driver", status_code=302)
     user = get_current_user_optional(request, db)
     if user:
         if user.role == "haulier":
@@ -40,6 +44,46 @@ def login_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
         "login.html",
         {"request": request, "error": None, "email": "", "password_reset": password_reset, "logout": logout},
     )
+
+
+@router.get("/driver-login", response_class=HTMLResponse)
+def driver_login_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    """Show driver login form."""
+    driver = get_current_driver_optional(request, db)
+    if driver:
+        return RedirectResponse(url="/driver", status_code=302)
+    return templates.TemplateResponse(
+        "driver_login.html",
+        {"request": request, "error": None, "email": ""},
+    )
+
+
+@router.post("/driver-login")
+async def driver_login_submit(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    form = await request.form()
+    email = (form.get("email") or "").strip().lower()
+    password = form.get("password") or ""
+    if not email or not password:
+        return templates.TemplateResponse(
+            "driver_login.html",
+            {"request": request, "error": "Email and password required.", "email": email},
+            status_code=200,
+        )
+    driver = db.query(models.Driver).filter(models.Driver.email == email).first()
+    if not driver or not verify_password(password, driver.password_hash):
+        return templates.TemplateResponse(
+            "driver_login.html",
+            {"request": request, "error": "Invalid email or password.", "email": email},
+            status_code=200,
+        )
+    request.session.clear()
+    request.session["driver_id"] = driver.id
+    request.session["haulier_id"] = driver.haulier_id
+    request.session["role"] = "driver"
+    return RedirectResponse(url="/driver", status_code=302)
 
 
 @router.post("/login")

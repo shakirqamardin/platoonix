@@ -37,6 +37,11 @@ def get_session_user_id(request: Request) -> Optional[int]:
     return request.session.get("user_id")
 
 
+def get_session_driver_id(request: Request) -> Optional[int]:
+    """Return driver_id from session or None."""
+    return request.session.get("driver_id")
+
+
 def get_current_user_optional(
     request: Request,
     db: Session,
@@ -48,6 +53,17 @@ def get_current_user_optional(
     if not user_id:
         return None
     return db.get(models.User, user_id)
+
+
+def get_current_driver_optional(
+    request: Request,
+    db: Session,
+) -> Optional[models.Driver]:
+    """Load current driver from session; return None if not logged in as driver."""
+    driver_id = get_session_driver_id(request)
+    if not driver_id:
+        return None
+    return db.get(models.Driver, driver_id)
 
 
 def get_current_user(
