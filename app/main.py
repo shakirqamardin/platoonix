@@ -67,6 +67,29 @@ def check_db_and_create_tables():
                 conn.rollback()
                 if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                     print(f"Migration backhaul_jobs.driver_id: {e!r}", file=sys.stderr)
+            # drivers table existed before final schema; ensure required columns are present
+            for col_sql in (
+                "ALTER TABLE drivers ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
+                "ALTER TABLE drivers ADD COLUMN IF NOT EXISTS phone VARCHAR(50)",
+                "ALTER TABLE drivers ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
+                "ALTER TABLE drivers ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration drivers columns: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_drivers_email ON drivers(email)"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration drivers email index: {e!r}", file=sys.stderr)
             # backhaul_jobs.collected_at: confirmed collection (captures pay)
             try:
                 conn.execute(text(
