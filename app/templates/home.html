@@ -294,6 +294,14 @@
                 </div>
             </div>
             {% endif %}
+            {% if request.query_params.get("vehicle_added") %}
+            <div class="glass-card rounded-xl px-4 py-3 border-l-4 border-emerald-500">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">✅</span>
+                    <span class="text-emerald-300">Vehicle added.</span>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         {% set _sec = request.query_params.get("section", "find") %}
@@ -672,6 +680,7 @@
                     Vehicle Management
                 </h2>
                 
+                {% if current_user and current_user.role == 'admin' %}
                 <div class="glass-card rounded-xl p-4 mb-6 border border-amber-500/20">
                     <p class="text-slate-300 text-sm">
                         <span class="text-amber-400">ℹ️</span> Logged in as <strong>admin</strong>. Companies should 
@@ -679,6 +688,7 @@
                         Use <strong class="text-slate-200">Admin → Create company + login</strong> for new users.
                     </p>
                 </div>
+                {% endif %}
                 
                 <!-- Add Company & Vehicle Forms -->
                 <div class="space-y-4 mb-6">

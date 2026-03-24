@@ -9,6 +9,8 @@ from typing import Optional, Tuple, Union
 from fastapi import APIRouter, Depends, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import delete as sa_delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models
@@ -294,22 +296,26 @@ async def haulier_add_vehicle(
     trailer_type = (form.get("trailer_type") or "").strip() or None
     base_postcode = (form.get("base_postcode") or "").strip().upper() or None
     if not registration:
-        return RedirectResponse(url="/haulier?delete_error=Reg+required", status_code=303)
+        return RedirectResponse(url="/?section=vehicles&delete_error=Registration+required", status_code=303)
     if db.query(models.Vehicle).filter(models.Vehicle.registration == registration).first():
         return RedirectResponse(
-            url="/haulier?delete_error=Registration+already+exists",
+            url="/?section=vehicles&delete_error=Registration+already+exists",
             status_code=303,
         )
-    vehicle = models.Vehicle(
-        haulier_id=haulier.id,
-        registration=registration,
-        vehicle_type=vehicle_type,
-        trailer_type=trailer_type,
-        base_postcode=base_postcode,
-    )
-    db.add(vehicle)
-    db.commit()
-    db.refresh(vehicle)
+    try:
+        vehicle = models.Vehicle(
+            haulier_id=haulier.id,
+            registration=registration,
+            vehicle_type=vehicle_type,
+            trailer_type=trailer_type,
+            base_postcode=base_postcode,
+        )
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(url="/?section=vehicles&delete_error=Could+not+save+vehicle", status_code=303)
     if base_postcode:
         try:
             from app.services.alert_stream import notify_matching_loads_for_vehicle
@@ -318,7 +324,7 @@ async def haulier_add_vehicle(
             )
         except Exception:
             pass
-    return RedirectResponse(url="/haulier?vehicle_added=1", status_code=303)
+    return RedirectResponse(url="/?section=vehicles&vehicle_added=1", status_code=303)
 
 
 @router.post("/haulier/delete-vehicle/{vehicle_id}", response_class=RedirectResponse)
@@ -333,15 +339,19 @@ def haulier_delete_vehicle(
     haulier, actor_driver = result
     vehicle = db.get(models.Vehicle, vehicle_id)
     if not vehicle or vehicle.haulier_id != haulier.id:
-        return RedirectResponse(url="/haulier?delete_error=Vehicle+not+found", status_code=303)
+        return RedirectResponse(url="/?section=vehicles&delete_error=Vehicle+not+found", status_code=303)
     if db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id == vehicle_id).first():
-        return RedirectResponse(url="/haulier?delete_error=Vehicle+has+jobs", status_code=303)
+        return RedirectResponse(url="/?section=vehicles&delete_error=Vehicle+has+jobs", status_code=303)
     if db.query(models.HaulierRoute).filter(models.HaulierRoute.vehicle_id == vehicle_id).first():
-        return RedirectResponse(url="/haulier?delete_error=Remove+from+routes+first", status_code=303)
-    db.query(models.LoadInterest).filter(models.LoadInterest.vehicle_id == vehicle_id).delete()
-    db.delete(vehicle)
-    db.commit()
-    return RedirectResponse(url="/haulier?deleted=vehicle", status_code=303)
+        return RedirectResponse(url="/?section=vehicles&delete_error=Remove+from+routes+first", status_code=303)
+    try:
+        db.execute(sa_delete(models.LoadInterest).where(models.LoadInterest.vehicle_id == vehicle_id))
+        db.delete(vehicle)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(url="/?section=vehicles&delete_error=Cannot+delete+vehicle", status_code=303)
+    return RedirectResponse(url="/?section=vehicles&deleted=vehicle", status_code=303)
 
 
 @router.post("/haulier/routes", response_class=RedirectResponse)

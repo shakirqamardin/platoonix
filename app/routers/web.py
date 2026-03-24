@@ -5,6 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Form, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import delete as sa_delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models
@@ -133,13 +135,25 @@ def _load_interests_display(load_interests_list, db: Session):
     return out
 
 
+def _require_user_or_login(request: Request, db: Session) -> Optional[RedirectResponse]:
+    """Any logged-in role may open the dashboard; guests go to /login."""
+    from app.auth import get_current_user_optional
+
+    if get_current_user_optional(request, db) is None:
+        return RedirectResponse(url="/login", status_code=302)
+    return None
+
+
 @router.get("/", response_class=HTMLResponse)
 def home(
     request: Request,
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
 ) -> HTMLResponse:
     from app.auth import get_current_user_optional
+
+    login_redir = _require_user_or_login(request, db)
+    if login_redir is not None:
+        return login_redir
     current_user = get_current_user_optional(request, db)
     
     # Role-based filtering
@@ -416,10 +430,13 @@ def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
 def find_backhaul_page(
     request: Request,
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
 ) -> HTMLResponse:
     """Run smart matching and render home with matching_results (vehicle_id + origin_postcode + optional destination_postcode from query)."""
     from app.auth import get_current_user_optional
+
+    login_redir = _require_user_or_login(request, db)
+    if login_redir is not None:
+        return login_redir
     from app.services.geocode import get_lat_lon
     from app.services.matching import find_matching_loads_along_route
     current_user = get_current_user_optional(request, db)
@@ -556,17 +573,29 @@ async def create_haulier_form(
 async def create_vehicle_form(
     request: Request,
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
+    from app.auth import get_current_user_optional
+
+    current_user = get_current_user_optional(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
     form = dict(await request.form())
     try:
-        haulier_id_raw = form.get("haulier_id")
-        if not haulier_id_raw:
+        if current_user.role == "admin":
+            haulier_id_raw = form.get("haulier_id")
+            if not haulier_id_raw:
+                return RedirectResponse(
+                    url="/?section=vehicles&delete_error=Please+pick+a+company",
+                    status_code=303,
+                )
+            haulier_id = int(haulier_id_raw)
+        elif current_user.role == "haulier" and current_user.haulier_id:
+            haulier_id = int(current_user.haulier_id)
+        else:
             return RedirectResponse(
-                url="/?section=vehicles&delete_error=Please+pick+a+company",
+                url="/?section=vehicles&delete_error=Not+authorized",
                 status_code=303,
             )
-        haulier_id = int(haulier_id_raw)
     except (TypeError, ValueError):
         return RedirectResponse(
             url="/?section=vehicles&delete_error=Please+pick+a+company",
@@ -594,16 +623,23 @@ async def create_vehicle_form(
         )
 
     base_postcode = (form.get("base_postcode") or "").strip().upper() or None
-    vehicle = models.Vehicle(
-        haulier_id=haulier_id,
-        registration=registration,
-        vehicle_type=vehicle_type,
-        trailer_type=trailer_type,
-        base_postcode=base_postcode,
-    )
-    db.add(vehicle)
-    db.commit()
-    db.refresh(vehicle)
+    try:
+        vehicle = models.Vehicle(
+            haulier_id=haulier_id,
+            registration=registration,
+            vehicle_type=vehicle_type,
+            trailer_type=trailer_type,
+            base_postcode=base_postcode,
+        )
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=Could+not+save+vehicle",
+            status_code=303,
+        )
     if base_postcode:
         try:
             from app.services.alert_stream import notify_matching_loads_for_vehicle
@@ -757,20 +793,37 @@ def delete_haulier_form(
 @router.post("/delete-vehicle/{vehicle_id}", response_class=RedirectResponse)
 def delete_vehicle_form(
     vehicle_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
-    """Delete a vehicle (only if not used in jobs or planned routes)."""
+    """Delete a vehicle (only if not used in jobs or planned routes). Admin or owning haulier."""
+    from app.auth import get_current_user_optional
+
+    current_user = get_current_user_optional(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
     vehicle = db.get(models.Vehicle, vehicle_id)
     if not vehicle:
         return RedirectResponse(url="/?delete_error=Vehicle+not+found", status_code=303)
+    if current_user.role == "haulier":
+        if not current_user.haulier_id or vehicle.haulier_id != current_user.haulier_id:
+            return RedirectResponse(url="/?section=vehicles&delete_error=Not+authorized", status_code=303)
+    elif current_user.role != "admin":
+        return RedirectResponse(url="/?section=vehicles&delete_error=Not+authorized", status_code=303)
     if db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id == vehicle_id).first():
         return RedirectResponse(url="/?delete_error=Vehicle+has+jobs", status_code=303)
     if db.query(models.HaulierRoute).filter(models.HaulierRoute.vehicle_id == vehicle_id).first():
         return RedirectResponse(url="/?delete_error=Remove+from+planned+routes+first", status_code=303)
-    db.query(models.LoadInterest).filter(models.LoadInterest.vehicle_id == vehicle_id).delete()
-    db.delete(vehicle)
-    db.commit()
+    try:
+        db.execute(sa_delete(models.LoadInterest).where(models.LoadInterest.vehicle_id == vehicle_id))
+        db.delete(vehicle)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=Cannot+delete+vehicle",
+            status_code=303,
+        )
     return RedirectResponse(url="/?section=vehicles&deleted=vehicle", status_code=303)
 
 @router.post("/delete-job/{job_id}", response_class=RedirectResponse)
