@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Form, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import delete as sa_delete
+from sqlalchemy import delete as sa_delete, update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -777,16 +777,32 @@ def delete_haulier_form(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
-    """Delete a haulier (only if they have no vehicles)."""
+    """Delete a haulier company (no vehicles). Clears users/drivers/trailers linked to this haulier."""
     haulier = db.get(models.Haulier, haulier_id)
     if not haulier:
         return RedirectResponse(url="/?delete_error=Haulier+not+found", status_code=303)
     if db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier_id).first():
         return RedirectResponse(url="/?delete_error=Delete+vehicles+first", status_code=303)
-    db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier_id).delete()
-    db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier_id).delete()
-    db.delete(haulier)
-    db.commit()
+    for d in db.query(models.Driver).filter(models.Driver.haulier_id == haulier_id).all():
+        if db.query(models.BackhaulJob).filter(models.BackhaulJob.driver_id == d.id).first():
+            return RedirectResponse(
+                url="/?section=vehicles&delete_error=Resolve+driver+jobs+before+deleting+company",
+                status_code=303,
+            )
+    try:
+        db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier_id).delete()
+        db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier_id).delete()
+        db.query(models.Trailer).filter(models.Trailer.haulier_id == haulier_id).delete()
+        db.query(models.Driver).filter(models.Driver.haulier_id == haulier_id).delete()
+        db.execute(sa_update(models.User).where(models.User.haulier_id == haulier_id).values(haulier_id=None))
+        db.delete(haulier)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=Cannot+delete+company",
+            status_code=303,
+        )
     return RedirectResponse(url="/?section=vehicles&deleted=haulier", status_code=303)
 
 
