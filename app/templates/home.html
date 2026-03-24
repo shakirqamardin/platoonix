@@ -1331,6 +1331,48 @@
                         </div>
                     </form>
                 </div>
+
+                <!-- Driver Accounts Management -->
+                <div class="glass-card rounded-xl p-5 border border-slate-700/30 mt-6">
+                    <h3 class="text-lg font-semibold text-slate-200 mb-4">Driver Accounts</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-700">
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Driver Name</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Email</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Haulier</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Phone</th>
+                                    <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for d in drivers %}
+                                <tr class="border-b border-slate-800/50">
+                                    <td class="py-3 px-4 text-slate-200">{{ d.name }}</td>
+                                    <td class="py-3 px-4 text-slate-300">{{ d.email }}</td>
+                                    <td class="py-3 px-4 text-slate-400">
+                                        {% for h in hauliers %}
+                                            {% if h.id == d.haulier_id %}{{ h.name }}{% endif %}
+                                        {% endfor %}
+                                    </td>
+                                    <td class="py-3 px-4 text-slate-400">{{ d.phone or "-" }}</td>
+                                    <td class="py-3 px-4 text-right">
+                                        <form method="post" action="/delete-driver/{{ d.id }}" class="inline" onsubmit="return confirm('Delete driver {{ d.name }} ({{ d.email }})?');">
+                                            <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if not drivers %}
+                    <p class="text-slate-500 text-sm mt-4">No drivers yet.</p>
+                    {% endif %}
+                </div>
             </div>
         </section>
 

@@ -1138,6 +1138,21 @@ async def create_driver_account(
     db.commit()
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Driver account created"), status_code=303)
 
+
+@router.post("/delete-driver/{driver_id}", response_class=RedirectResponse)
+def delete_driver_account(
+    driver_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+) -> RedirectResponse:
+    """Admin: delete a driver account."""
+    driver = db.get(models.Driver, driver_id)
+    if not driver:
+        return RedirectResponse(url="/?section=admin&create_login_error=Driver+not+found", status_code=303)
+    db.delete(driver)
+    db.commit()
+    return RedirectResponse(url="/?section=admin&create_login_ok=Driver+deleted", status_code=303)
+
 @router.post("/interest", response_class=RedirectResponse)
 async def express_interest(
     request: Request,
