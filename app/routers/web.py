@@ -21,6 +21,26 @@ templates = Jinja2Templates(directory="app/templates")
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "templates"
 
 
+def _stripe_dashboard_urls() -> tuple[str, str, bool]:
+    """
+    (customers_root, connect_accounts_root, is_test_key).
+    e.g. https://dashboard.stripe.com/test/customers — append /cus_xxx for a customer.
+    """
+    sk = (get_settings().stripe_secret_key or "").strip()
+    is_test = not sk or sk.startswith("sk_test")
+    if is_test:
+        return (
+            "https://dashboard.stripe.com/test/customers",
+            "https://dashboard.stripe.com/test/connect/accounts",
+            True,
+        )
+    return (
+        "https://dashboard.stripe.com/customers",
+        "https://dashboard.stripe.com/connect/accounts",
+        False,
+    )
+
+
 @router.get("/terms", response_class=HTMLResponse)
 def terms_page(request: Request) -> HTMLResponse:
     """Public Terms & Conditions page. No login required."""
@@ -201,6 +221,15 @@ def home(
     except Exception:
         total_payout = 0.0
 
+    haulier_profile = None
+    loader_profile = None
+    if current_user and current_user.haulier_id:
+        haulier_profile = db.get(models.Haulier, current_user.haulier_id)
+    elif current_user and current_user.loader_id:
+        loader_profile = db.get(models.Loader, current_user.loader_id)
+
+    _scust, _sconn, _stest = _stripe_dashboard_urls()
+
     return templates.TemplateResponse(
         "home.html",
         {
@@ -208,6 +237,11 @@ def home(
             "users": users,
             "drivers": drivers,
             "hauliers": hauliers,
+            "haulier_profile": haulier_profile,
+            "loader_profile": loader_profile,
+            "stripe_dashboard_customers_root": _scust,
+            "stripe_dashboard_connect_accounts_root": _sconn,
+            "stripe_is_test_mode": _stest,
             "vehicles": vehicles,
             "loads": loads,
             "jobs": jobs,
@@ -231,6 +265,8 @@ def home(
             "postcode_lookup_failed": False,
             "match_diagnostic": None,
             "platform_fee_percent": get_settings().platform_fee_percent,
+            "loader_flat_fee_gbp": get_settings().loader_flat_fee_gbp,
+            "pallet_volume_m3": get_settings().pallet_volume_m3,
             "current_user_email": (current_user.email if current_user else ""),
             "current_user": current_user,
         },
@@ -249,6 +285,8 @@ async def create_load(
     
     form = await request.form()
     shipper_name = (form.get("shipper_name") or "").strip()
+    booking_name = (form.get("booking_name") or "").strip() or None
+    booking_ref = (form.get("booking_ref") or "").strip() or None
     pickup_postcode = (form.get("pickup_postcode") or "").strip().upper()
     delivery_postcode = (form.get("delivery_postcode") or "").strip().upper()
     vehicle_type_required = (form.get("vehicle_type_required") or "").strip() or None
@@ -256,7 +294,30 @@ async def create_load(
     pallets = form.get("pallets")
     cubic_metres = form.get("cubic_metres")
     budget_gbp = form.get("budget_gbp")
-    
+
+    from datetime import datetime, timezone
+    from app.services.upload_parser import parse_datetime_optional
+
+    now = datetime.now(timezone.utc)
+    ps = parse_datetime_optional(form.get("pickup_window_start"))
+    pe = parse_datetime_optional(form.get("pickup_window_end"))
+    ds = parse_datetime_optional(form.get("delivery_window_start"))
+    de = parse_datetime_optional(form.get("delivery_window_end"))
+    if ps is None and pe is None:
+        ps = pe = now
+    else:
+        if ps is None:
+            ps = pe
+        if pe is None:
+            pe = ps
+    if ds is None and de is None:
+        ds = de = now
+    else:
+        if ds is None:
+            ds = de
+        if de is None:
+            de = ds
+
     if not shipper_name or not pickup_postcode or not delivery_postcode:
         return RedirectResponse(url="/?section=loads&error=Missing+required+fields", status_code=303)
     
@@ -276,18 +337,24 @@ async def create_load(
     if trailer_type_required:
         requirements["trailer_type"] = trailer_type_required
     
-    # Set pickup/delivery windows to now (can be enhanced later)
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
+    pallets_val = None
+    try:
+        if pallets is not None and str(pallets).strip():
+            pallets_val = float(pallets)
+    except (TypeError, ValueError):
+        pass
+
     load = models.Load(
         shipper_name=shipper_name,
+        booking_ref=booking_ref,
+        booking_name=booking_name,
         pickup_postcode=pickup_postcode,
         delivery_postcode=delivery_postcode,
-        pickup_window_start=now,
-        pickup_window_end=now,
-        delivery_window_start=now,
-        delivery_window_end=now,
-        pallets=int(pallets) if pallets else None,
+        pickup_window_start=ps,
+        pickup_window_end=pe,
+        delivery_window_start=ds,
+        delivery_window_end=de,
+        pallets=pallets_val,
         volume_m3=float(cubic_metres) if cubic_metres else None,
         budget_gbp=float(budget_gbp) if budget_gbp else None,
         requirements=requirements,
@@ -416,6 +483,15 @@ def find_backhaul_page(
     except Exception:
         total_payout = 0.0
 
+    haulier_profile = None
+    loader_profile = None
+    if current_user and current_user.haulier_id:
+        haulier_profile = db.get(models.Haulier, current_user.haulier_id)
+    elif current_user and current_user.loader_id:
+        loader_profile = db.get(models.Loader, current_user.loader_id)
+
+    _scust, _sconn, _stest = _stripe_dashboard_urls()
+
     return templates.TemplateResponse(
         "home.html",
         {
@@ -429,6 +505,11 @@ def find_backhaul_page(
             "haulier_routes": haulier_routes,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,
+            "haulier_profile": haulier_profile,
+            "loader_profile": loader_profile,
+            "stripe_dashboard_customers_root": _scust,
+            "stripe_dashboard_connect_accounts_root": _sconn,
+            "stripe_is_test_mode": _stest,
             "uploaded": None,
             "upload_errors": None,
             "upload_type": "",
@@ -445,7 +526,10 @@ def find_backhaul_page(
             "postcode_lookup_failed": postcode_lookup_failed,
             "match_diagnostic": match_diagnostic,
             "platform_fee_percent": get_settings().platform_fee_percent,
+            "loader_flat_fee_gbp": get_settings().loader_flat_fee_gbp,
+            "pallet_volume_m3": get_settings().pallet_volume_m3,
             "current_user_email": (current_user.email if current_user else ""),
+            "current_user": current_user,
         },
     )
 
@@ -933,8 +1017,8 @@ async def show_interest_form(
         from app.services.email_sender import schedule_loader_interest_email
 
         schedule_loader_interest_email(background_tasks, interest.id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[EMAIL] schedule_loader_interest_email failed: {e}")
     return RedirectResponse(url="/", status_code=303)
 
 
@@ -980,8 +1064,8 @@ async def accept_interest(
         from app.services.email_sender import schedule_haulier_job_email
 
         schedule_haulier_job_email(background_tasks, job.id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[EMAIL] schedule_haulier_job_email failed: {e}")
 
     return RedirectResponse(url="/?section=matches", status_code=303)
 
@@ -1214,7 +1298,7 @@ async def express_interest(
         from app.services.email_sender import schedule_loader_interest_email
 
         schedule_loader_interest_email(background_tasks, interest.id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[EMAIL] schedule_loader_interest_email failed: {e}")
 
     return RedirectResponse(url="/?section=matches", status_code=303)

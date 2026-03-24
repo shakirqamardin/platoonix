@@ -190,9 +190,9 @@ def update_job_status(
     db: Session = Depends(get_db),
 ):
     """
-    Driver sets milestone. Payment: 'collected' triggers capture (RESERVED -> CAPTURED).
+    Driver sets milestone. 'collected' charges the loader (Stripe) then RESERVED -> CAPTURED.
     Allowed: reached_pickup, collected, departed_pickup, reached_delivery.
-    Delivery (completed) is via ePOD upload + confirm, not this endpoint.
+    Delivery payout is via ePOD upload + confirm, not this endpoint.
     """
     _, driver, haulier = _get_actor_haulier(request, db)
     job = _job_belongs_to_haulier(job_id, haulier, db, actor_driver=driver)
@@ -203,7 +203,6 @@ def update_job_status(
     if status_val == "reached_pickup":
         job.reached_pickup_at = now
     elif status_val == "collected":
-        job.collected_at = now
         payment = (
             db.query(models.Payment)
             .filter(models.Payment.backhaul_job_id == job.id)
@@ -211,8 +210,17 @@ def update_job_status(
             .first()
         )
         if payment and payment.status == models.PaymentStatusEnum.RESERVED.value:
+            from app.services.stripe_loader_charge import try_charge_loader_for_job
+
+            ok_charge, charge_err = try_charge_loader_for_job(payment, db)
+            if not ok_charge:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Loader payment failed: {charge_err}. Fix the card or Stripe customer, then retry.",
+                )
             payment.status = models.PaymentStatusEnum.CAPTURED.value
             db.add(payment)
+        job.collected_at = now
     elif status_val == "departed_pickup":
         job.departed_pickup_at = now
     elif status_val == "reached_delivery":

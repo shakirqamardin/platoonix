@@ -20,6 +20,8 @@ def create_load(
         volume_m3 = pallets * get_settings().pallet_volume_m3
     load = models.Load(
         shipper_name=load_in.shipper_name,
+        booking_ref=(load_in.booking_ref or "").strip() or None,
+        booking_name=(load_in.booking_name or "").strip() or None,
         pickup_postcode=load_in.pickup_postcode.upper(),
         delivery_postcode=load_in.delivery_postcode.upper(),
         pickup_window_start=load_in.pickup_window_start,

@@ -29,17 +29,14 @@ def confirm_collection(
     db: Session = Depends(get_db),
 ):
     """
-    Confirm collection (pickup): marks the job as collected and moves payment RESERVED -> CAPTURED.
-    Call this when the haulier has collected the load; delivery confirmation (ePOD) then releases pay.
+    Confirm collection (pickup): charge the loader (load + flat fee) when Stripe is configured,
+    then mark the job collected and payment RESERVED -> CAPTURED. ePOD / delivery then pays the haulier only.
     """
     job = db.get(models.BackhaulJob, body.backhaul_job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backhaul job not found")
     if job.collected_at:
         return {"ok": True, "message": "Collection already confirmed", "collected_at": job.collected_at}
-
-    job.collected_at = datetime.now(timezone.utc)
-    db.add(job)
 
     payment = (
         db.query(models.Payment)
@@ -48,8 +45,19 @@ def confirm_collection(
         .first()
     )
     if payment and payment.status == models.PaymentStatusEnum.RESERVED.value:
+        from app.services.stripe_loader_charge import try_charge_loader_for_job
+
+        ok_charge, charge_err = try_charge_loader_for_job(payment, db)
+        if not ok_charge:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Loader payment failed: {charge_err}. Fix the card or Stripe customer, then retry.",
+            )
         payment.status = models.PaymentStatusEnum.CAPTURED.value
         db.add(payment)
+
+    job.collected_at = datetime.now(timezone.utc)
+    db.add(job)
 
     db.commit()
     db.refresh(job)
@@ -134,7 +142,7 @@ def confirm_pod(
         job.completed_at = datetime.now(timezone.utc)
         db.add(job)
 
-    # ePOD confirmed → pay haulier (net_payout_gbp); platform keeps fee_gbp
+    # ePOD confirmed → pay haulier (loader was charged at collection)
     payment = (
         db.query(models.Payment)
         .filter(models.Payment.backhaul_job_id == pod.backhaul_job_id)
@@ -142,15 +150,18 @@ def confirm_pod(
         .first()
     )
     if payment:
-        if payment.status not in (
-            models.PaymentStatusEnum.RESERVED.value,
-            models.PaymentStatusEnum.CAPTURED.value,
-        ):
+        if payment.status == models.PaymentStatusEnum.RESERVED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Payment not collectable (status: {payment.status})",
+                detail="Collection must be confirmed before delivery (payment still reserved).",
+            )
+        if payment.status != models.PaymentStatusEnum.CAPTURED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Payment cannot be released (status: {payment.status})",
             )
         from app.services.stripe_payout import try_payout_to_haulier
+
         ok, err = try_payout_to_haulier(payment, db)
         if not ok and err:
             raise HTTPException(

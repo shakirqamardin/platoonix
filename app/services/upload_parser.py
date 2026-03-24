@@ -34,6 +34,8 @@ LOAD_COLS = {
     "pickup_window_end": ["pickup_window_end", "pickup_end", "pickup_to"],
     "delivery_window_start": ["delivery_window_start", "delivery_start"],
     "delivery_window_end": ["delivery_window_end", "delivery_end"],
+    "booking_ref": ["booking_ref", "booking_reference", "reference", "ref"],
+    "booking_name": ["booking_name", "job_name", "order_name"],
     "weight_kg": ["weight_kg", "weight"],
     "volume_m3": ["volume_m3", "volume"],
     "pallets": ["pallets", "pallet"],
@@ -72,6 +74,16 @@ def _parse_datetime(s: Optional[str]) -> Optional[datetime]:
     if isinstance(s, datetime):
         return s.replace(tzinfo=timezone.utc) if s.tzinfo is None else s
     s = str(s).strip()
+    try:
+        if len(s) >= 16 and "T" in s:
+            part = s[:19] if len(s) >= 19 else s[:16]
+            if len(part) == 16:
+                dt = datetime.strptime(part, "%Y-%m-%dT%H:%M")
+            else:
+                dt = datetime.strptime(part[:19], "%Y-%m-%dT%H:%M:%S")
+            return dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%d/%m/%Y %H:%M"):
         try:
             dt = datetime.strptime(s[:19], fmt) if len(s) >= 10 else datetime.strptime(s, fmt)

@@ -48,17 +48,24 @@ def assign_load_to_vehicle(
     load.status = models.LoadStatusEnum.MATCHED.value
     db.add(load)
 
-    # Platform fee: one 8% (configurable) of job value, deducted from haulier payout
-    fee_gbp = body.fee_gbp
-    if fee_gbp is None:
-        fee_gbp = round(body.amount_gbp * (settings.platform_fee_percent / 100.0), 2)
-    net_payout_gbp = round(body.amount_gbp - fee_gbp, 2)
+    from app.services.payment_fees import compute_job_payment_splits
+
+    if body.fee_gbp is not None:
+        fee_gbp = round(float(body.fee_gbp), 2)
+        net_payout_gbp = round(body.amount_gbp - fee_gbp, 2)
+        flat_fee_gbp = round(float(getattr(settings, "loader_flat_fee_gbp", 5.0) or 0.0), 2)
+    else:
+        splits = compute_job_payment_splits(body.amount_gbp, settings)
+        fee_gbp = splits.fee_gbp
+        net_payout_gbp = splits.net_payout_gbp
+        flat_fee_gbp = splits.flat_fee_gbp
 
     payment = models.Payment(
         backhaul_job_id=job.id,  # will be filled after flush
         amount_gbp=body.amount_gbp,
         fee_gbp=fee_gbp,
         net_payout_gbp=net_payout_gbp,
+        flat_fee_gbp=flat_fee_gbp,
         status=models.PaymentStatusEnum.RESERVED.value,
     )
 

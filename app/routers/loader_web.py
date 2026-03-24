@@ -43,6 +43,26 @@ def loader_dashboard(
     return RedirectResponse(url="/", status_code=302)
 
 
+@router.post("/loader/profile", response_class=RedirectResponse)
+async def loader_update_profile(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Save loader company name, contact, and Stripe Customer ID for card charges at collection."""
+    result = _loader_or_redirect(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    _user, loader = result
+    form = await request.form()
+    loader.name = (form.get("name") or loader.name or "").strip()
+    loader.contact_email = (form.get("contact_email") or loader.contact_email or "").strip()
+    loader.contact_phone = (form.get("contact_phone") or "").strip() or None
+    loader.contact_name = (form.get("contact_name") or "").strip() or None
+    loader.stripe_customer_id = (form.get("stripe_customer_id") or "").strip() or None
+    db.commit()
+    return RedirectResponse(url="/?section=company&profile_saved=1", status_code=303)
+
+
 @router.post("/loader/loads", response_class=RedirectResponse)
 async def loader_add_load(
     request: Request,
@@ -53,8 +73,13 @@ async def loader_add_load(
         return result
     user, loader = result
     form = await request.form()
-    from datetime import datetime
+    from datetime import datetime, timezone
+
+    from app.services.upload_parser import parse_datetime_optional
+
     shipper_name = (form.get("shipper_name") or "").strip()
+    booking_name = (form.get("booking_name") or "").strip() or None
+    booking_ref = (form.get("booking_ref") or "").strip() or None
     pickup_postcode = (form.get("pickup_postcode") or "").strip().upper()
     delivery_postcode = (form.get("delivery_postcode") or "").strip().upper()
     weight_kg = None
@@ -90,17 +115,51 @@ async def loader_add_load(
         requirements["trailer_type"] = required_trailer_type
     requirements = requirements if requirements else None
 
+    budget_val = None
+    try:
+        b = form.get("budget_gbp")
+        if b is not None and str(b).strip():
+            budget_val = float(b)
+    except (TypeError, ValueError):
+        pass
+
+    now = datetime.now(timezone.utc)
+    ps = parse_datetime_optional(form.get("pickup_window_start"))
+    pe = parse_datetime_optional(form.get("pickup_window_end"))
+    ds = parse_datetime_optional(form.get("delivery_window_start"))
+    de = parse_datetime_optional(form.get("delivery_window_end"))
+    if ps is None and pe is None:
+        ps = pe = now
+    else:
+        if ps is None:
+            ps = pe
+        if pe is None:
+            pe = ps
+    if ds is None and de is None:
+        ds = de = now
+    else:
+        if ds is None:
+            ds = de
+        if de is None:
+            de = ds
+
     load = models.Load(
         loader_id=loader.id,
         shipper_name=shipper_name,
+        booking_ref=booking_ref,
+        booking_name=booking_name,
         pickup_postcode=pickup_postcode,
         delivery_postcode=delivery_postcode,
-        pickup_window_start=datetime.utcnow(),
-        pickup_window_end=datetime.utcnow(),
+        pickup_window_start=ps,
+        pickup_window_end=pe,
+        delivery_window_start=ds,
+        delivery_window_end=de,
         weight_kg=weight_kg,
         volume_m3=volume_m3,
         pallets=pallets,
+        budget_gbp=budget_val,
         requirements=requirements,
+        status=models.LoadStatusEnum.OPEN.value,
     )
     db.add(load)
     db.commit()
@@ -243,8 +302,9 @@ async def loader_accept_interest(
 
     amount_gbp = float(load.budget_gbp or 0)
     settings = get_settings()
-    fee_gbp = round(amount_gbp * (settings.platform_fee_percent / 100.0), 2)
-    net_payout_gbp = round(amount_gbp - fee_gbp, 2)
+    from app.services.payment_fees import compute_job_payment_splits
+
+    splits = compute_job_payment_splits(amount_gbp, settings)
 
     job = models.BackhaulJob(
         vehicle_id=interest.vehicle_id,
@@ -257,9 +317,10 @@ async def loader_accept_interest(
 
     payment = models.Payment(
         backhaul_job_id=job.id,
-        amount_gbp=amount_gbp,
-        fee_gbp=fee_gbp,
-        net_payout_gbp=net_payout_gbp,
+        amount_gbp=splits.amount_gbp,
+        fee_gbp=splits.fee_gbp,
+        net_payout_gbp=splits.net_payout_gbp,
+        flat_fee_gbp=splits.flat_fee_gbp,
         status=models.PaymentStatusEnum.RESERVED.value,
     )
     db.add(payment)

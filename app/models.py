@@ -62,6 +62,8 @@ class Loader(Base):
         DateTime(timezone=True), default=datetime.utcnow
     )
     contact_name: Mapped[Optional[str]] = mapped_column(String(255))
+    # Stripe Billing Customer (cus_...) — set when loader saves a card; used to charge on job completion
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255))
 
     loads: Mapped[list["Load"]] = relationship("Load", back_populates="loader")
     planned_loads: Mapped[list["PlannedLoad"]] = relationship("PlannedLoad", back_populates="loader")
@@ -159,6 +161,9 @@ class Load(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     loader_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loaders.id"), nullable=True)  # who posted this load
+    # Optional TMS / booking identifiers (your ref, customer-facing name)
+    booking_ref: Mapped[Optional[str]] = mapped_column(String(255))
+    booking_name: Mapped[Optional[str]] = mapped_column(String(255))
     shipper_name: Mapped[str] = mapped_column(String(255), nullable=False)
     pickup_postcode: Mapped[str] = mapped_column(String(20), nullable=False)
     delivery_postcode: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -316,8 +321,16 @@ class Payment(Base):
     amount_gbp: Mapped[float] = mapped_column(Float, nullable=False)
     fee_gbp: Mapped[float] = mapped_column(Float, default=0.0)
     net_payout_gbp: Mapped[float] = mapped_column(Float, nullable=False)
+    # Flat fee (e.g. £5) charged to loader on top of load value; platform keeps (covers Stripe/card overhead)
+    flat_fee_gbp: Mapped[float] = mapped_column(Float, default=0.0)
+    # Stripe PaymentIntent id for the loader charge (pi_...); haulier transfer may use provider_payment_id
+    loader_stripe_payment_intent_id: Mapped[Optional[str]] = mapped_column(String(255))
     provider_payment_id: Mapped[Optional[str]] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), default=PaymentStatusEnum.RESERVED.value)
+
+    @property
+    def total_loader_charge_gbp(self) -> float:
+        return round(float(self.amount_gbp or 0) + float(self.flat_fee_gbp or 0), 2)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

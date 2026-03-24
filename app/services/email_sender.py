@@ -58,6 +58,8 @@ def _send_via_sendgrid(to_email: str, subject: str, body_text: str, api_key: str
     """Send email using SendGrid API."""
     try:
         import requests
+        import time
+        settings = get_settings()
 
         data = {
             "personalizations": [{"to": [{"email": to_email}]}],
@@ -65,22 +67,35 @@ def _send_via_sendgrid(to_email: str, subject: str, body_text: str, api_key: str
             "subject": subject,
             "content": [{"type": "text/plain", "value": body_text}],
         }
-
-        response = requests.post(
-            "https://api.sendgrid.com/v3/mail/send",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=data,
-            timeout=15,
-        )
-
-        if response.status_code == 202:
-            print(f"[EMAIL] SendGrid: queued for {to_email}")
-            return True
-        print(f"[EMAIL] SendGrid error: {response.status_code} - {response.text}")
-        return False
+        retries = max(0, int(getattr(settings, "email_retry_count", 2)))
+        timeout = max(5, int(getattr(settings, "email_send_timeout_seconds", 15)))
+        transient_codes = {408, 425, 429, 500, 502, 503, 504}
+        for attempt in range(retries + 1):
+            response = requests.post(
+                "https://api.sendgrid.com/v3/mail/send",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=data,
+                timeout=timeout,
+            )
+            if response.status_code == 202:
+                print(f"[EMAIL] SendGrid: queued for {to_email} (from {from_email})")
+                return True
+            if response.status_code in transient_codes and attempt < retries:
+                # Short exponential backoff for transient gateway/rate-limit failures.
+                time.sleep(0.5 * (2 ** attempt))
+                continue
+            detail = response.text
+            if response.status_code == 403 and "Sender Identity" in detail:
+                print(
+                    f"[EMAIL] SendGrid 403: from address {from_email!r} is not a verified "
+                    "Sender Identity in SendGrid. Set SMTP_FROM_EMAIL in Railway to a verified "
+                    "sender (Settings → Sender Authentication), then redeploy."
+                )
+            print(f"[EMAIL] SendGrid error: {response.status_code} - {detail}")
+            return False
 
     except Exception as e:
         print(f"[EMAIL] SendGrid exception: {e}")

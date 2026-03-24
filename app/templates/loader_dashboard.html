@@ -35,27 +35,70 @@
         <p class="text-slate-500 text-sm mb-4">Post loads with route and capacity; only <strong class="text-slate-300">suitable vehicles</strong> are suggested in Matches.</p>
         <div class="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 mb-5">
           <h3 class="text-sm font-semibold text-slate-200 mb-3">Post a load</h3>
-          <form method="post" action="/loader/loads" class="space-y-3">
+          <form id="loader-post-load-form" method="post" action="/loader/loads" class="space-y-3" data-pallet-volume-m3="1.2">
             <div class="flex flex-wrap gap-3 items-end">
               <input name="shipper_name" required placeholder="Shipper name" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-32 focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50" />
+              <input name="booking_ref" placeholder="Booking ref" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-28 focus:ring-2 focus:ring-emerald-500/40" />
+              <input name="booking_name" placeholder="Booking name" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 min-w-[8rem] focus:ring-2 focus:ring-emerald-500/40" />
+            </div>
+            <div class="flex flex-wrap gap-3 items-end">
               <input name="pickup_postcode" required placeholder="Pickup postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-28 focus:ring-2 focus:ring-emerald-500/40" />
               <input name="delivery_postcode" required placeholder="Delivery postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-28 focus:ring-2 focus:ring-emerald-500/40" />
             </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <label class="block text-xs text-slate-500">Pickup start<input name="pickup_window_start" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs text-slate-100" /></label>
+              <label class="block text-xs text-slate-500">Pickup end<input name="pickup_window_end" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs text-slate-100" /></label>
+              <label class="block text-xs text-slate-500">Delivery start<input name="delivery_window_start" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs text-slate-100" /></label>
+              <label class="block text-xs text-slate-500">Delivery end<input name="delivery_window_end" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-2 text-xs text-slate-100" /></label>
+            </div>
             <div class="flex flex-wrap gap-3 items-end">
               <input name="weight_kg" type="number" step="0.1" min="0" placeholder="Weight (kg)" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-24 focus:ring-2 focus:ring-emerald-500/40" title="Only vehicles with enough capacity will match" />
-              <input name="pallets" type="number" step="0.1" min="0" placeholder="Pallets" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-20 focus:ring-2 focus:ring-emerald-500/40" title="If entered, volume is calculated (1.2 m³ per pallet)" />
-              <input name="volume_m3" type="number" step="0.1" min="0" placeholder="Volume (m³)" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-24 focus:ring-2 focus:ring-emerald-500/40" title="Or leave blank when using Pallets" />
+              <input name="pallets" type="number" step="any" min="0" placeholder="Pallets" autocomplete="off" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-20 focus:ring-2 focus:ring-emerald-500/40" title="Linked to m³ (1 pallet ≈ 1.2 m³ by default)" />
+              <input name="volume_m3" type="number" step="0.1" min="0" placeholder="Volume (m³)" autocomplete="off" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-24 focus:ring-2 focus:ring-emerald-500/40" title="Linked to pallets" />
+              <input name="budget_gbp" type="number" step="0.01" min="0" placeholder="Budget (£)" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 w-24 focus:ring-2 focus:ring-emerald-500/40" />
               <select name="required_vehicle_type" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-emerald-500/40"><option value="any">Any vehicle</option><option value="artic">Artic</option><option value="rigid">Rigid</option><option value="van">Van</option></select>
               <select name="required_trailer_type" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-emerald-500/40"><option value="any">Any trailer</option><option value="curtain_sider">Curtain</option><option value="box">Box</option><option value="flatbed">Flatbed</option><option value="other">Other</option></select>
               <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors">Post load</button>
             </div>
+            <p class="text-xs text-slate-500">Pallets and m³ stay in sync (1 pallet = 1.2 m³ unless the server uses a different setting).</p>
           </form>
+          <script>
+          (function () {
+            var form = document.getElementById("loader-post-load-form");
+            if (!form) return;
+            var rate = parseFloat(form.getAttribute("data-pallet-volume-m3") || "1.2");
+            if (!(rate > 0)) rate = 1.2;
+            var palletsEl = form.querySelector('input[name="pallets"]');
+            var cubicEl = form.querySelector('input[name="volume_m3"]');
+            if (!palletsEl || !cubicEl) return;
+            function fmtM3(n) { return (Math.round(n * 10) / 10).toFixed(1); }
+            function fmtPallets(n) {
+              var x = Math.round(n * 100) / 100;
+              var s = x.toFixed(2).replace(/\.?0+$/, "").replace(/\.$/, "");
+              return s;
+            }
+            palletsEl.addEventListener("input", function () {
+              var raw = (palletsEl.value || "").trim();
+              if (raw === "") { cubicEl.value = ""; return; }
+              var v = parseFloat(raw);
+              if (isNaN(v) || v < 0) return;
+              cubicEl.value = fmtM3(v * rate);
+            });
+            cubicEl.addEventListener("input", function () {
+              var raw = (cubicEl.value || "").trim();
+              if (raw === "") { palletsEl.value = ""; return; }
+              var v = parseFloat(raw);
+              if (isNaN(v) || v < 0) return;
+              palletsEl.value = fmtPallets(v / rate);
+            });
+          })();
+          </script>
         </div>
         <div class="overflow-x-auto rounded-lg border border-slate-800">
           <table class="w-full text-sm border-collapse min-w-[20rem]">
-            <thead><tr class="border-b border-slate-700 bg-slate-800/50 text-left text-slate-400"><th class="py-3 px-4 font-medium">Shipper</th><th class="py-3 px-4 font-medium">From → To</th><th class="py-3 px-4 font-medium">Pallets</th><th class="py-3 px-4 font-medium">m³</th><th class="py-3 px-4 font-medium">Status</th><th class="py-3 px-4 w-20"></th></tr></thead>
+            <thead><tr class="border-b border-slate-700 bg-slate-800/50 text-left text-slate-400"><th class="py-3 px-4 font-medium">Shipper</th><th class="py-3 px-4 font-medium">Booking</th><th class="py-3 px-4 font-medium">From → To</th><th class="py-3 px-4 font-medium">Schedule</th><th class="py-3 px-4 font-medium">Pallets</th><th class="py-3 px-4 font-medium">m³</th><th class="py-3 px-4 font-medium">£</th><th class="py-3 px-4 font-medium">Status</th><th class="py-3 px-4 w-20"></th></tr></thead>
             <tbody>
-              {% for l in loads %}<tr class="border-b border-slate-800/80 hover:bg-slate-800/30 transition-colors"><td class="py-3 px-4 text-slate-200">{{ l.shipper_name }}</td><td class="py-3 px-4 font-mono text-slate-300">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</td><td class="py-3 px-4 text-slate-300">{% if l.pallets %}{{ "%.0f"|format(l.pallets) }}{% else %}—{% endif %}</td><td class="py-3 px-4 text-slate-300">{% if l.volume_m3 %}{{ "%.1f"|format(l.volume_m3) }}{% else %}—{% endif %}</td><td class="py-3 px-4"><span class="rounded-md px-2 py-0.5 text-xs font-medium {% if l.status == 'open' %}bg-emerald-900/50 text-emerald-200{% else %}bg-slate-700 text-slate-300{% endif %}">{{ l.status }}</span></td><td class="py-3 px-4"><form method="post" action="/loader/delete-load/{{ l.id }}" class="inline" onsubmit="return confirm('Delete this load?');"><button type="submit" class="rounded border border-red-900/50 bg-transparent px-2 py-1 text-xs text-red-300 hover:bg-red-900/20 transition-colors">Remove</button></form></td></tr>{% endfor %}
+              {% for l in loads %}<tr class="border-b border-slate-800/80 hover:bg-slate-800/30 transition-colors"><td class="py-3 px-4 text-slate-200">{{ l.shipper_name }}</td><td class="py-3 px-4 text-slate-400 text-xs max-w-[8rem]">{% if l.booking_ref %}{{ l.booking_ref }}{% if l.booking_name %} · {{ l.booking_name }}{% endif %}{% elif l.booking_name %}{{ l.booking_name }}{% else %}—{% endif %}</td><td class="py-3 px-4 font-mono text-slate-300">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</td><td class="py-3 px-4 text-slate-500 text-xs whitespace-nowrap">{% set dws = l.delivery_window_start or l.pickup_window_start %}{% set dwe = l.delivery_window_end or l.pickup_window_end %}P {{ l.pickup_window_start.strftime('%d %b %H:%M') }}–{{ l.pickup_window_end.strftime('%H:%M') }}<br/><span class="text-slate-600">D {{ dws.strftime('%d %b %H:%M') if dws else '—' }}–{{ dwe.strftime('%H:%M') if dwe else '—' }}</span></td><td class="py-3 px-4 text-slate-300">{% if l.pallets %}{{ "%.0f"|format(l.pallets) }}{% else %}—{% endif %}</td><td class="py-3 px-4 text-slate-300">{% if l.volume_m3 %}{{ "%.1f"|format(l.volume_m3) }}{% else %}—{% endif %}</td><td class="py-3 px-4 text-slate-300">{% if l.budget_gbp is not none %}{{ "%.2f"|format(l.budget_gbp) }}{% else %}—{% endif %}</td><td class="py-3 px-4"><span class="rounded-md px-2 py-0.5 text-xs font-medium {% if l.status == 'open' %}bg-emerald-900/50 text-emerald-200{% else %}bg-slate-700 text-slate-300{% endif %}">{{ l.status }}</span></td><td class="py-3 px-4"><form method="post" action="/loader/delete-load/{{ l.id }}" class="inline" onsubmit="return confirm('Delete this load?');"><button type="submit" class="rounded border border-red-900/50 bg-transparent px-2 py-1 text-xs text-red-300 hover:bg-red-900/20 transition-colors">Remove</button></form></td></tr>{% endfor %}
             </tbody>
           </table>
         </div>

@@ -1,9 +1,12 @@
 """
 Consolidated CSV upload: Company + related entities in one file.
 """
+from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 from sqlalchemy.orm import Session
 from app import models
+from app.config import get_settings
+from app.services.upload_parser import parse_datetime_optional
 import csv
 import io
 
@@ -101,8 +104,12 @@ def import_loaders_loads(db: Session, content: bytes, filename: str) -> Dict:
     """
     Import loaders and their loads from consolidated CSV.
     Columns: company_name, contact_email, contact_phone, contact_name,
-             pickup_postcode, delivery_postcode, weight_kg, pallets, 
-             pickup_date, vehicle_type_required, trailer_type_required
+             pickup_postcode, delivery_postcode, weight_kg, pallets,
+             pickup_date, vehicle_type_required, trailer_type_required,
+             shipper_name (optional; defaults to company_name),
+             booking_ref, booking_name (optional),
+             pickup_window_start, pickup_window_end, delivery_window_start, delivery_window_end (optional),
+             budget_gbp (optional)
     """
     text = content.decode('utf-8-sig')
     reader = csv.DictReader(io.StringIO(text))
@@ -144,25 +151,87 @@ def import_loaders_loads(db: Session, content: bytes, filename: str) -> Dict:
             delivery = (row.get('delivery_postcode') or '').strip().upper()
             
             if pickup and delivery:
-                weight_kg = row.get('weight_kg', '').strip()
-                pallets = row.get('pallets', '').strip()
-                
-                # Build requirements dict
+                weight_kg = None
+                try:
+                    w = (row.get("weight_kg") or "").strip()
+                    if w:
+                        weight_kg = float(w)
+                except (TypeError, ValueError):
+                    pass
+                pallets = None
+                try:
+                    p = (row.get("pallets") or "").strip()
+                    if p:
+                        pallets = float(p)
+                except (TypeError, ValueError):
+                    pass
+                volume_m3 = None
+                if pallets is not None and pallets > 0:
+                    volume_m3 = pallets * get_settings().pallet_volume_m3
+                budget_gbp = None
+                try:
+                    b = (row.get("budget_gbp") or "").strip()
+                    if b:
+                        budget_gbp = float(b)
+                except (TypeError, ValueError):
+                    pass
+
                 requirements = {}
-                veh_type = (row.get('vehicle_type_required') or '').strip().lower()
-                trailer_type = (row.get('trailer_type_required') or '').strip().lower()
-                
-                if veh_type and veh_type != 'any':
-                    requirements['vehicle_type'] = veh_type
-                if trailer_type and trailer_type != 'any':
-                    requirements['trailer_type'] = trailer_type
-                
+                veh_type = (row.get("vehicle_type_required") or "").strip().lower()
+                trailer_type = (row.get("trailer_type_required") or "").strip().lower()
+                if veh_type and veh_type != "any":
+                    requirements["vehicle_type"] = veh_type
+                if trailer_type and trailer_type != "any":
+                    requirements["trailer_type"] = trailer_type
+
+                shipper = (row.get("shipper_name") or "").strip() or company_name
+                br = (row.get("booking_ref") or "").strip() or None
+                bn = (row.get("booking_name") or "").strip() or None
+
+                now = datetime.now(timezone.utc)
+                pd = parse_datetime_optional(row.get("pickup_date"))
+                ps = parse_datetime_optional(row.get("pickup_window_start"))
+                pe = parse_datetime_optional(row.get("pickup_window_end"))
+                ds = parse_datetime_optional(row.get("delivery_window_start"))
+                de = parse_datetime_optional(row.get("delivery_window_end"))
+                if ps is None and pe is None:
+                    if pd:
+                        d0 = pd.replace(hour=0, minute=0, second=0, microsecond=0)
+                        if d0.tzinfo is None:
+                            d0 = d0.replace(tzinfo=timezone.utc)
+                        ps = d0.replace(hour=6, minute=0, second=0, microsecond=0)
+                        pe = d0.replace(hour=18, minute=0, second=0, microsecond=0)
+                    else:
+                        ps = pe = now
+                else:
+                    if ps is None:
+                        ps = pe
+                    if pe is None:
+                        pe = ps
+                if ds is None and de is None:
+                    ds = ps
+                    de = pe
+                else:
+                    if ds is None:
+                        ds = de
+                    if de is None:
+                        de = ds
+
                 load = models.Load(
                     loader_id=companies[email].id,
+                    shipper_name=shipper,
+                    booking_ref=br,
+                    booking_name=bn,
                     pickup_postcode=pickup,
                     delivery_postcode=delivery,
-                    weight_kg=int(weight_kg) if weight_kg else None,
-                    pallets=int(pallets) if pallets else None,
+                    pickup_window_start=ps,
+                    pickup_window_end=pe,
+                    delivery_window_start=ds,
+                    delivery_window_end=de,
+                    weight_kg=weight_kg,
+                    pallets=pallets,
+                    volume_m3=volume_m3,
+                    budget_gbp=budget_gbp,
                     requirements=requirements if requirements else None,
                     status=models.LoadStatusEnum.OPEN.value,
                 )

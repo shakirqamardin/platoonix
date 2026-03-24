@@ -54,6 +54,19 @@
             placeholder="contact@company.com" 
         />
     </div>
+
+    <div>
+        <label for="contact_phone" class="block text-sm font-medium text-slate-300 mb-2">Phone <span class="text-slate-500 font-normal">(optional)</span></label>
+        <input
+            id="contact_phone"
+            name="contact_phone"
+            type="tel"
+            autocomplete="tel"
+            class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+            value="{{ contact_phone or '' }}"
+            placeholder="e.g. 07123 456789"
+        />
+    </div>
     
     <div>
         <label for="password" class="block text-sm font-medium text-slate-300 mb-2">Password</label>

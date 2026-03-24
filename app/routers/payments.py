@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.config import get_settings
 from app.database import get_db
+from app.services.payment_fees import compute_job_payment_splits
 
 
 router = APIRouter()
@@ -105,11 +107,22 @@ def simulate_reserve_payment(
     if not job:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid backhaul_job_id")
 
+    settings = get_settings()
+    if fee_gbp and fee_gbp > 0:
+        net_payout_gbp = round(amount_gbp - fee_gbp, 2)
+        flat_fee_gbp = round(float(getattr(settings, "loader_flat_fee_gbp", 5.0) or 0.0), 2)
+    else:
+        splits = compute_job_payment_splits(amount_gbp, settings)
+        fee_gbp = splits.fee_gbp
+        net_payout_gbp = splits.net_payout_gbp
+        flat_fee_gbp = splits.flat_fee_gbp
+
     payment = models.Payment(
         backhaul_job_id=backhaul_job_id,
         amount_gbp=amount_gbp,
         fee_gbp=fee_gbp,
-        net_payout_gbp=amount_gbp - fee_gbp,
+        net_payout_gbp=net_payout_gbp,
+        flat_fee_gbp=flat_fee_gbp,
         status=models.PaymentStatusEnum.RESERVED.value,
     )
     db.add(payment)

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class HaulierBase(BaseModel):
@@ -60,6 +60,8 @@ class VehicleRead(VehicleBase):
 
 class LoadBase(BaseModel):
     shipper_name: str
+    booking_ref: Optional[str] = None
+    booking_name: Optional[str] = None
     pickup_postcode: str
     delivery_postcode: str
     pickup_window_start: datetime
@@ -178,10 +180,22 @@ class PaymentRead(BaseModel):
     amount_gbp: float
     fee_gbp: float
     net_payout_gbp: float
+    flat_fee_gbp: float = 0.0
+    total_loader_charge_gbp: float = 0.0
+    loader_stripe_payment_intent_id: Optional[str] = None
     provider_payment_id: Optional[str]
     status: str
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def set_total_loader_charge(self) -> "PaymentRead":
+        object.__setattr__(
+            self,
+            "total_loader_charge_gbp",
+            round(self.amount_gbp + self.flat_fee_gbp, 2),
+        )
+        return self
 
     class Config:
         from_attributes = True

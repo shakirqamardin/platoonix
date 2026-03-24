@@ -86,10 +86,24 @@ def import_loads(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, List[str
             errors.append(f"Row {i + 2}: missing shipper_name, pickup_postcode or delivery_postcode")
             continue
         try:
-            pickup_start = parse_datetime_optional(row.get("pickup_window_start")) or now
-            pickup_end = parse_datetime_optional(row.get("pickup_window_end")) or now
+            pickup_start = parse_datetime_optional(row.get("pickup_window_start"))
+            pickup_end = parse_datetime_optional(row.get("pickup_window_end"))
+            if pickup_start is None and pickup_end is None:
+                pickup_start = pickup_end = now
+            else:
+                if pickup_start is None:
+                    pickup_start = pickup_end
+                if pickup_end is None:
+                    pickup_end = pickup_start
             delivery_start = parse_datetime_optional(row.get("delivery_window_start"))
             delivery_end = parse_datetime_optional(row.get("delivery_window_end"))
+            if delivery_start is None and delivery_end is None:
+                delivery_start = delivery_end = now
+            else:
+                if delivery_start is None:
+                    delivery_start = delivery_end
+                if delivery_end is None:
+                    delivery_end = delivery_start
             weight = row.get("weight_kg")
             weight = float(weight) if weight is not None and str(weight).strip() else None
             volume = row.get("volume_m3")
@@ -113,8 +127,12 @@ def import_loads(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, List[str
             if req_trailer:
                 requirements["trailer_type"] = req_trailer
             requirements = requirements if requirements else None
+            br = row.get("booking_ref")
+            bn = row.get("booking_name")
             load = models.Load(
                 shipper_name=str(row["shipper_name"]).strip(),
+                booking_ref=str(br).strip() if br is not None and str(br).strip() else None,
+                booking_name=str(bn).strip() if bn is not None and str(bn).strip() else None,
                 pickup_postcode=str(row["pickup_postcode"]).strip().upper(),
                 delivery_postcode=str(row["delivery_postcode"]).strip().upper(),
                 pickup_window_start=pickup_start,

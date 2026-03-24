@@ -189,6 +189,7 @@ async def driver_epod_submit(
     file_url = f"/static/uploads/pods/{safe_name}"
 
     from datetime import datetime, timezone
+
     pod = models.POD(backhaul_job_id=job.id, file_url=file_url, notes=(form.get("notes") or "").strip() or None)
     db.add(pod)
     db.flush()
@@ -196,17 +197,34 @@ async def driver_epod_submit(
     pod.confirmed_at = datetime.now(timezone.utc)
     job.completed_at = datetime.now(timezone.utc)
     db.add(job)
+    db.flush()
+
     payment = (
         db.query(models.Payment)
         .filter(models.Payment.backhaul_job_id == job.id)
         .order_by(models.Payment.created_at.asc())
         .first()
     )
-    if payment and payment.status in (models.PaymentStatusEnum.RESERVED.value, models.PaymentStatusEnum.CAPTURED.value):
-        from app.services.stripe_payout import try_payout_to_haulier
-        try_payout_to_haulier(payment, db)  # ignore failure for now so job still completes
-        payment.status = models.PaymentStatusEnum.PAID_OUT.value
-        db.add(payment)
+    if payment:
+        if payment.status == models.PaymentStatusEnum.RESERVED.value:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/driver/epod?job_id={job_id}&error=Confirm+collection+first",
+                status_code=303,
+            )
+        if payment.status == models.PaymentStatusEnum.CAPTURED.value:
+            from app.services.stripe_payout import try_payout_to_haulier
+
+            ok_pay, pay_err = try_payout_to_haulier(payment, db)
+            if not ok_pay and pay_err:
+                db.rollback()
+                return RedirectResponse(
+                    url=f"/driver/epod?job_id={job_id}&error=Payout+failed",
+                    status_code=303,
+                )
+            payment.status = models.PaymentStatusEnum.PAID_OUT.value
+            db.add(payment)
+
     db.commit()
     return RedirectResponse(url="/driver?epod_done=1", status_code=303)
 
@@ -258,7 +276,7 @@ async def haulier_update_profile(
     haulier.sort_code = (form.get("sort_code") or "").strip().replace(" ", "") or None
     haulier.account_number = (form.get("account_number") or "").strip().replace(" ", "") or None
     db.commit()
-    return RedirectResponse(url="/haulier?profile_updated=1", status_code=303)
+    return RedirectResponse(url="/?section=company&profile_saved=1", status_code=303)
 
 
 @router.post("/haulier/vehicles", response_class=RedirectResponse)

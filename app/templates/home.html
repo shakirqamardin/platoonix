@@ -285,9 +285,19 @@
                 </div>
             </div>
             {% endif %}
+
+            {% if request.query_params.get("profile_saved") %}
+            <div class="glass-card rounded-xl px-4 py-3 border-l-4 border-emerald-500">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">✅</span>
+                    <span class="text-emerald-300">Company &amp; billing details saved.</span>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
-        {% set initial_section = request.query_params.get("section", "find") %}
+        {% set _sec = request.query_params.get("section", "find") %}
+        {% set initial_section = 'find' if (_sec == 'company' and not haulier_profile and not loader_profile) else _sec %}
         
         <!-- Navigation Tabs -->
         <nav class="glass-card rounded-2xl p-2 mb-6 animate-fade-in" style="animation-delay: 0.1s">
@@ -299,6 +309,16 @@
                         <span>Find Backhaul</span>
                     </div>
                 </label>
+
+                {% if current_user and (current_user.haulier_id or current_user.loader_id) %}
+                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'company' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                    <input type="radio" name="section" class="hidden" value="company" {{ 'checked' if initial_section == 'company' else '' }} />
+                    <div class="flex items-center justify-center gap-2">
+                        <span>🏢</span>
+                        <span>Company</span>
+                    </div>
+                </label>
+                {% endif %}
                 
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'vehicles' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="vehicles" {{ 'checked' if initial_section == 'vehicles' else '' }} />
@@ -349,6 +369,116 @@
                 </label>
             </div>
         </nav>
+
+        <!-- Company & billing (hauliers + loaders) -->
+        <section class="section-panel {{ 'active' if initial_section == 'company' else '' }}" data-section="company">
+            {% if haulier_profile %}
+            <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in border border-teal-500/20">
+                <h2 class="text-2xl font-display font-bold mb-2 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">My company</h2>
+                <p class="text-slate-400 text-sm mb-4">Contact details, default base, payouts via Stripe Connect, and optional UK bank details for manual records.</p>
+                <p class="text-xs text-slate-500 mb-6 rounded-lg border border-slate-700/80 bg-slate-900/40 px-3 py-2">
+                    No Stripe account yet?
+                    <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Create one at stripe.com</a>
+                    (then enable <strong class="text-slate-400">Connect</strong> for haulier payouts). Links below match your <code class="text-slate-400">STRIPE_SECRET_KEY</code> mode{% if stripe_is_test_mode %} (<span class="text-amber-400">test</span>){% else %} (<span class="text-emerald-400">live</span>){% endif %}.
+                </p>
+                <form method="post" action="/haulier/profile" class="space-y-4 max-w-2xl">
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Company name</label>
+                            <input name="name" value="{{ haulier_profile.name or '' }}" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Contact email</label>
+                            <input name="contact_email" type="email" value="{{ haulier_profile.contact_email or '' }}" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Phone <span class="text-slate-500">(optional)</span></label>
+                            <input name="contact_phone" value="{{ haulier_profile.contact_phone or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Default base postcode</label>
+                            <input name="base_postcode" value="{{ haulier_profile.base_postcode or '' }}" placeholder="e.g. NN4 7EX" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm uppercase" />
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-700/80 pt-4">
+                        <h3 class="text-sm font-semibold text-teal-300 mb-2">Payouts (Stripe Connect)</h3>
+                        <p class="text-xs text-slate-500 mb-2">Paste your connected account ID from Stripe (starts with <code class="text-slate-400">acct_</code>). Required for automatic transfers after delivery.</p>
+                        <input name="payment_account_id" value="{{ haulier_profile.payment_account_id or '' }}" placeholder="acct_..." autocomplete="off" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm font-mono" />
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-xs">
+                            <a href="https://dashboard.stripe.com/{% if stripe_is_test_mode %}test/{% endif %}" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Stripe Dashboard</a>
+                            <a href="https://dashboard.stripe.com/{% if stripe_is_test_mode %}test/{% endif %}connect/overview" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Connect overview</a>
+                            {% if haulier_profile.payment_account_id and haulier_profile.payment_account_id.startswith('acct_') %}
+                            <a href="{{ stripe_dashboard_connect_accounts_root }}/{{ haulier_profile.payment_account_id }}" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline font-medium">Open this Connect account →</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-700/80 pt-4">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-2">UK bank details <span class="text-slate-500 font-normal">(optional — for your records; payouts use Stripe above)</span></h3>
+                        <div class="grid sm:grid-cols-2 gap-4">
+                            <div class="sm:col-span-2">
+                                <label class="block text-xs text-slate-400 mb-1">Account name</label>
+                                <input name="bank_account_name" value="{{ haulier_profile.bank_account_name or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">Sort code</label>
+                                <input name="sort_code" value="{{ haulier_profile.sort_code or '' }}" placeholder="12-34-56" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">Account number</label>
+                                <input name="account_number" value="{{ haulier_profile.account_number or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary px-6 py-2.5 text-sm font-semibold text-white rounded-lg">Save company details</button>
+                </form>
+            </div>
+            {% elif loader_profile %}
+            <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in border border-cyan-500/20">
+                <h2 class="text-2xl font-display font-bold mb-2 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">Company &amp; billing</h2>
+                <p class="text-slate-400 text-sm mb-4">Loads are charged to a card on file at <strong class="text-slate-300">collection</strong>. Add your Stripe Customer ID after you create a customer in Stripe and attach a default payment method.</p>
+                <p class="text-xs text-slate-500 mb-4 rounded-lg border border-slate-700/80 bg-slate-900/40 px-3 py-2">
+                    <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Create a Stripe account</a> if needed. Dashboard links use {% if stripe_is_test_mode %}<span class="text-amber-400">test</span>{% else %}<span class="text-emerald-400">live</span>{% endif %} mode from your API key.
+                </p>
+                <ul class="text-xs text-slate-500 list-disc list-inside mb-6 space-y-1">
+                    <li>In Stripe Dashboard: Customers → Create → add card → copy the Customer ID (<code class="text-slate-400">cus_...</code>).</li>
+                    <li>Paste it below so jobs can be charged automatically.</li>
+                </ul>
+                <form method="post" action="/loader/profile" class="space-y-4 max-w-2xl">
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Company name</label>
+                            <input name="name" value="{{ loader_profile.name or '' }}" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Contact email</label>
+                            <input name="contact_email" type="email" value="{{ loader_profile.contact_email or '' }}" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Phone <span class="text-slate-500">(optional)</span></label>
+                            <input name="contact_phone" value="{{ loader_profile.contact_phone or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Contact name <span class="text-slate-500">(optional)</span></label>
+                            <input name="contact_name" value="{{ loader_profile.contact_name or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Stripe Customer ID</label>
+                        <input name="stripe_customer_id" value="{{ loader_profile.stripe_customer_id or '' }}" placeholder="cus_..." class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm font-mono" autocomplete="off" />
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-xs">
+                            <a href="{{ stripe_dashboard_customers_root }}" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Browse customers</a>
+                            {% if loader_profile.stripe_customer_id and loader_profile.stripe_customer_id.startswith('cus_') %}
+                            <a href="{{ stripe_dashboard_customers_root }}/{{ loader_profile.stripe_customer_id }}" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline font-medium">Open this customer in Stripe →</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary px-6 py-2.5 text-sm font-semibold text-white rounded-lg">Save</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="glass-card rounded-2xl p-6 mb-6 text-slate-500 text-sm">Log in as a haulier or loader to manage company details.</div>
+            {% endif %}
+        </section>
 
         <!-- Find Backhaul Section -->
         <section class="section-panel {{ 'active' if initial_section == 'find' else '' }}" data-section="find">
@@ -502,7 +632,8 @@
                                     <td class="py-3 px-3">
                                         {% if m.load.budget_gbp %}
                                         <div class="font-semibold text-green-300">£{{ "%.2f"|format(m.load.budget_gbp) }}</div>
-                                        <div class="text-xs text-slate-500">Net: £{{ "%.2f"|format(m.load.budget_gbp * (1 - platform_fee_percent/100)) }}</div>
+                                        <div class="text-xs text-slate-500">Haulier net: £{{ "%.2f"|format(m.load.budget_gbp * (1 - platform_fee_percent/100)) }} (after {{ platform_fee_percent|round(1) }}%)</div>
+                                        <div class="text-xs text-slate-500">Loader charged load + £{{ "%.2f"|format(loader_flat_fee_gbp|default(5)) }} fee at collection</div>
                                         {% else %}
                                         <span class="text-slate-500">-</span>
                                         {% endif %}
@@ -701,12 +832,22 @@
                 <!-- Add Load Form -->
                 <div class="glass-card rounded-xl p-5 mb-6 border border-teal-500/10">
                     <h3 class="text-lg font-semibold text-slate-200 mb-4">➕ Add New Load</h3>
-                    <form method="post" action="/loads">
+                    <form id="add-load-form" method="post" action="/loads" data-pallet-volume-m3="{{ pallet_volume_m3|default(1.2) }}">
                         <div class="grid md:grid-cols-3 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Shipper</label>
                                 <input name="shipper_name" required placeholder="Company name" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Booking ref <span class="text-slate-500 font-normal">(optional)</span></label>
+                                <input name="booking_ref" placeholder="e.g. PO-12345" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Booking name <span class="text-slate-500 font-normal">(optional)</span></label>
+                                <input name="booking_name" placeholder="Customer / job name" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                            </div>
+                        </div>
+                        <div class="grid md:grid-cols-3 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup Postcode</label>
                                 <input name="pickup_postcode" required placeholder="e.g. M1 1AA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm uppercase" />
@@ -716,6 +857,25 @@
                                 <input name="delivery_postcode" required placeholder="e.g. B2 4QA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm uppercase" />
                             </div>
                         </div>
+                        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window start</label>
+                                <input name="pickup_window_start" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window end</label>
+                                <input name="pickup_window_end" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Delivery window start</label>
+                                <input name="delivery_window_start" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Delivery window end</label>
+                                <input name="delivery_window_end" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-4">Leave schedule blank to default pickup and delivery windows to “now”. If you set only one end of a pair, the other is copied.</p>
                         <div class="grid md:grid-cols-4 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Vehicle Type</label>
@@ -738,11 +898,12 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pallets</label>
-                                <input name="pallets" type="number" placeholder="e.g. 10" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <input name="pallets" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 10" autocomplete="off" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Cubic Metres</label>
-                                <input name="cubic_metres" type="number" step="0.1" placeholder="e.g. 25.5" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <input name="cubic_metres" type="number" min="0" step="0.1" inputmode="decimal" placeholder="e.g. 25.5" autocomplete="off" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <p class="text-xs text-slate-500 mt-1">1 pallet = {{ "%.2f"|format(pallet_volume_m3|default(1.2)) }} m³ — editing one field updates the other.</p>
                             </div>
                         </div>
                         <div class="mb-4">
@@ -754,6 +915,45 @@
                             ➕ Add Load
                         </button>
                     </form>
+                    <script>
+                    (function () {
+                        var form = document.getElementById("add-load-form");
+                        if (!form) return;
+                        var rate = parseFloat(form.getAttribute("data-pallet-volume-m3") || "1.2");
+                        if (!(rate > 0)) rate = 1.2;
+                        var palletsEl = form.querySelector('input[name="pallets"]');
+                        var cubicEl = form.querySelector('input[name="cubic_metres"]');
+                        if (!palletsEl || !cubicEl) return;
+                        function fmtM3(n) {
+                            var s = (Math.round(n * 10) / 10).toFixed(1);
+                            return s;
+                        }
+                        function fmtPallets(n) {
+                            var x = Math.round(n * 100) / 100;
+                            return x === Math.floor(x) ? String(x) : x.toFixed(2).replace(/\.?0+$/, "");
+                        }
+                        palletsEl.addEventListener("input", function () {
+                            var raw = (palletsEl.value || "").trim();
+                            if (raw === "") {
+                                cubicEl.value = "";
+                                return;
+                            }
+                            var v = parseFloat(raw);
+                            if (isNaN(v) || v < 0) return;
+                            cubicEl.value = fmtM3(v * rate);
+                        });
+                        cubicEl.addEventListener("input", function () {
+                            var raw = (cubicEl.value || "").trim();
+                            if (raw === "") {
+                                palletsEl.value = "";
+                                return;
+                            }
+                            var v = parseFloat(raw);
+                            if (isNaN(v) || v < 0) return;
+                            palletsEl.value = fmtPallets(v / rate);
+                        });
+                    })();
+                    </script>
                 </div>
             
                 <!-- Bulk Upload -->
@@ -790,7 +990,9 @@
                         <thead>
                             <tr class="border-b border-slate-700">
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Shipper</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Booking</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Route</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Schedule</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Pallets</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">m³</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Status</th>
@@ -801,13 +1003,22 @@
                             {% for l in loads %}
                             <tr class="border-b border-slate-800/50">
                                 <td class="py-3 px-4 font-medium">{{ l.shipper_name }}</td>
+                                <td class="py-3 px-4 text-slate-400 text-sm max-w-[10rem]">
+                                    {% if l.booking_ref %}{{ l.booking_ref }}{% if l.booking_name %} · {{ l.booking_name }}{% endif %}{% elif l.booking_name %}{{ l.booking_name }}{% else %}—{% endif %}
+                                </td>
                                 <td class="py-3 px-4">
                                     <span class="font-mono text-teal-300">{{ l.pickup_postcode }}</span>
                                     <span class="text-slate-500 mx-1">→</span>
                                     <span class="font-mono text-slate-300">{{ l.delivery_postcode }}</span>
                                 </td>
+                                <td class="py-3 px-4 text-slate-400 text-xs whitespace-nowrap">
+                                    {% set dws = l.delivery_window_start or l.pickup_window_start %}
+                                    {% set dwe = l.delivery_window_end or l.pickup_window_end %}
+                                    <div>P {{ l.pickup_window_start.strftime('%d %b %H:%M') }}–{{ l.pickup_window_end.strftime('%H:%M') }}</div>
+                                    <div class="text-slate-500">D {{ dws.strftime('%d %b %H:%M') if dws else '—' }}–{{ dwe.strftime('%H:%M') if dwe else '—' }}</div>
+                                </td>
                                 <td class="py-3 px-4 text-slate-400">{{ l.pallets or "—" }}</td>
-                                <td class="py-3 px-4 text-slate-400">{{ l.cubic_metres or "—" }}</td>
+                                <td class="py-3 px-4 text-slate-400">{% if l.volume_m3 is not none %}{{ "%.1f"|format(l.volume_m3) }}{% else %}—{% endif %}</td>
                                 <td class="py-3 px-4">
                                     <span class="badge badge-success">{{ l.status }}</span>
                                 </td>
@@ -1104,7 +1315,7 @@
                 </div>
                 
                 <p class="text-xs text-slate-500 mt-6">
-                    Platform fee {{ platform_fee_percent }}%. To delete a load or vehicle that "has jobs", cancel the job here first.
+                    Pricing: {{ platform_fee_percent|round(1) }}% of load value (haulier net shown above); loaders are charged the load + £{{ "%.2f"|format(loader_flat_fee_gbp|default(5)) }} flat fee at collection (pickup). Haulier payout runs after delivery (ePOD). To delete a load or vehicle that &quot;has jobs&quot;, cancel the job here first.
                 </p>
             </div>
         </section>
@@ -1545,29 +1756,6 @@
                     });
             });
         })();
-    </script>
-</body>
-</html>
-    
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.section-tab').forEach(function(tab) {
-            tab.addEventListener('click', function() {
-                var input = this.querySelector('input[type="radio"]');
-                if (input) {
-                    input.checked = true;
-                    var section = input.value;
-                    document.querySelectorAll('.section-panel').forEach(function(p) {
-                        if (p.getAttribute('data-section') === section) {
-                            p.classList.add('active');
-                        } else {
-                            p.classList.remove('active');
-                        }
-                    });
-                }
-            });
-        });
-    });
     </script>
 </body>
 </html>

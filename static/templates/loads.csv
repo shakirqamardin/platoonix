@@ -1,6 +1,6 @@
-shipper_name,pickup_postcode,delivery_postcode,pickup_window_start,pickup_window_end,weight_kg,pallets,volume_m3,budget_gbp,required_vehicle_type,required_trailer_type
-Example Shipper,SW1A1AA,B11AA,2026-03-01 09:00,2026-03-01 11:00,10000,,30,350,artic,curtain_sider
-Acme Logistics,M1 1AA,B2 4AA,,,5000,20,,,rigid,box
-North Freight,NN4 5ET,LE1 1AA,,,8000,,25,400,artic,
-Test Shipper,W1A 1AA,SW1A 1AA,,,12000,33,,500,,curtain_sider
-Bulk Load Co,CV1 1AA,MK1 1AA,,,7500,28,,,,
+shipper_name,pickup_postcode,delivery_postcode,booking_ref,booking_name,pickup_window_start,pickup_window_end,delivery_window_start,delivery_window_end,weight_kg,pallets,volume_m3,budget_gbp,required_vehicle_type,required_trailer_type
+Example Shipper,SW1A1AA,B11AA,PO-1001,Tesco RDC,2026-03-01 09:00,2026-03-01 11:00,2026-03-02 08:00,2026-03-02 12:00,10000,,30,350,artic,curtain_sider
+Acme Logistics,M1 1AA,B2 4AA,,,,,,5000,20,,,rigid,box
+North Freight,NN4 5ET,LE1 1AA,,,,,,8000,,25,400,artic,
+Test Shipper,W1A 1AA,SW1A 1AA,,,,,,12000,33,,500,,curtain_sider
+Bulk Load Co,CV1 1AA,MK1 1AA,,,,,,7500,28,,,,

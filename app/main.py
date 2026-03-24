@@ -141,6 +141,17 @@ def check_db_and_create_tables():
                 conn.rollback()
                 if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                     print(f"Migration loads.pallets: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS booking_ref VARCHAR(255)",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS booking_name VARCHAR(255)",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration loads booking columns: {e!r}", file=sys.stderr)
             # backhaul_jobs: driver timeline + live GPS
             for col, typ in (
                 ("reached_pickup_at", "TIMESTAMP WITH TIME ZONE"),
@@ -159,6 +170,27 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration backhaul_jobs.{col}: {e!r}", file=sys.stderr)
+            # loaders: Stripe Customer for charging the loader when a job completes
+            try:
+                conn.execute(text(
+                    "ALTER TABLE loaders ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration loaders.stripe_customer_id: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE payments ADD COLUMN IF NOT EXISTS flat_fee_gbp DOUBLE PRECISION DEFAULT 0",
+                "ALTER TABLE payments ADD COLUMN IF NOT EXISTS loader_stripe_payment_intent_id VARCHAR(255)",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration payments column: {e!r}", file=sys.stderr)
         # Create or sync admin from ADMIN_EMAIL / ADMIN_PASSWORD
         db = SessionLocal()
         try:

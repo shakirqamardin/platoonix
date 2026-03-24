@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Matching defaults
     default_backhaul_radius_miles: int = 25
 
+    # Pricing: % of load value kept by platform; flat £ charged to loader (covers card fees / ops)
+    loader_flat_fee_gbp: float = 5.0
+
     # Pallets → volume: 1 pallet = this many m³ (euro pallet ~1.2)
     pallet_volume_m3: float = 1.2
 
@@ -45,6 +48,8 @@ class Settings(BaseSettings):
     smtp_password: Optional[str] = None
     smtp_from_email: str = "noreply@platoonix.com"
     sendgrid_api_key: Optional[str] = None
+    email_send_timeout_seconds: int = 15
+    email_retry_count: int = 2
 
     # Stripe (optional): for payouts to hauliers via Connect. Leave unset to skip.
     stripe_secret_key: Optional[str] = None
