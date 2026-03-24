@@ -1108,97 +1108,95 @@
                 </p>
             </div>
         </section>
-<!-- Manage Users Section -->
-<div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.1s">
-    <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-rose-400 to-orange-400 bg-clip-text text-transparent">
-        Admin - Manage Users
-    </h2>
-    
-    <div class="overflow-x-auto">
-        <table class="w-full">
-            <thead>
-                <tr class="border-b border-slate-700">
-                    <th class="text-left py-3 px-4 text-sm font-semibold text-slate-300">Email</th>
-                    <th class="text-left py-3 px-4 text-sm font-semibold text-slate-300">Role</th>
-                    <th class="text-left py-3 px-4 text-sm font-semibold text-slate-300">Company</th>
-                    <th class="text-center py-3 px-4 text-sm font-semibold text-slate-300">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="text-sm">
-                {% for user in users %}
-                <tr class="border-b border-slate-800 hover:bg-slate-800/30 transition-colors">
-                    <td class="py-3 px-4 text-slate-300">{{ user.email }}</td>
-                    <td class="py-3 px-4">
-                        {% if user.role == 'admin' %}
-                        <span class="badge badge-warning">Admin</span>
-                        {% elif user.haulier_id %}
-                        <span class="badge badge-info">Haulier</span>
-                        {% elif user.loader_id %}
-                        <span class="badge badge-success">Loader</span>
-                        {% else %}
-                        <span class="badge">Unknown</span>
-                        {% endif %}
-                    </td>
-                    <td class="py-3 px-4 text-slate-400">
-                        {% if user.haulier %}
-                        {{ user.haulier.name }}
-                        {% elif user.loader %}
-                        {{ user.loader.name }}
-                        {% else %}
-                        -
-                        {% endif %}
-                    </td>
-                    <td class="py-3 px-4 text-center">
-                        {% if user.role != 'admin' %}
-                        <form method="post" action="/delete-user/{{ user.id }}" style="display:inline;" onsubmit="return confirm('Delete user {{ user.email }}? This cannot be undone.');">
-                            <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all">
-                                Delete
-                            </button>
-                        </form>
-                        {% else %}
-                        <span class="text-slate-600 text-xs">Protected</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
 <!-- Analytics Section -->
 <section class="section-panel {{ 'active' if initial_section == 'analytics' else '' }}" data-section="analytics">
     <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
         <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
             📊 Analytics Dashboard
         </h2>
-        
         <p class="text-slate-300 text-sm mb-6">Platform performance and revenue metrics</p>
-        
-        <!-- Stats Cards -->
-        <div class="grid md:grid-cols-4 gap-6 mb-8">
+        <div class="grid md:grid-cols-4 gap-6">
             <div class="stat-card glass-card rounded-xl p-6 border border-slate-700/50">
                 <div class="text-slate-400 text-sm mb-2">Total Revenue</div>
                 <div class="text-3xl font-display font-bold text-emerald-400">£{{ (total_payout|default(0))|round(0) }}</div>
                 <div class="text-xs text-slate-500 mt-2">All completed jobs</div>
             </div>
-            
             <div class="stat-card glass-card rounded-xl p-6 border border-slate-700/50">
                 <div class="text-slate-400 text-sm mb-2">Active Jobs</div>
                 <div class="text-3xl font-display font-bold text-teal-400">{{ jobs|length }}</div>
                 <div class="text-xs text-slate-500 mt-2">Currently in progress</div>
             </div>
-            
             <div class="stat-card glass-card rounded-xl p-6 border border-slate-700/50">
                 <div class="text-slate-400 text-sm mb-2">Open Loads</div>
                 <div class="text-3xl font-display font-bold text-amber-400">{{ open_loads_count|default(0) }}</div>
                 <div class="text-xs text-slate-500 mt-2">Awaiting match</div>
             </div>
-            
             <div class="stat-card glass-card rounded-xl p-6 border border-slate-700/50">
                 <div class="text-slate-400 text-sm mb-2">Platform Fees</div>
-        <!-- Admin Section -->
-        <section class="section-panel {{ 'active' if initial_section == 'admin' else '' }}" data-section="admin">
-            <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
+                <div class="text-3xl font-display font-bold text-cyan-400">{{ platform_fee_percent|round(1) }}%</div>
+                <div class="text-xs text-slate-500 mt-2">Configured fee rate</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Admin Section -->
+<section class="section-panel {{ 'active' if initial_section == 'admin' else '' }}" data-section="admin">
+    <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.1s">
+        <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-rose-400 to-orange-400 bg-clip-text text-transparent">
+            Admin - Manage Users
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-700">
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-slate-300">Email</th>
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-slate-300">Role</th>
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-slate-300">Company</th>
+                        <th class="text-center py-3 px-4 text-sm font-semibold text-slate-300">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    {% for user in users %}
+                    <tr class="border-b border-slate-800 hover:bg-slate-800/30 transition-colors">
+                        <td class="py-3 px-4 text-slate-300">{{ user.email }}</td>
+                        <td class="py-3 px-4">
+                            {% if user.role == 'admin' %}
+                            <span class="badge badge-warning">Admin</span>
+                            {% elif user.haulier_id %}
+                            <span class="badge badge-info">Haulier</span>
+                            {% elif user.loader_id %}
+                            <span class="badge badge-success">Loader</span>
+                            {% else %}
+                            <span class="badge">Unknown</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-slate-400">
+                            {% if user.haulier %}
+                            {{ user.haulier.name }}
+                            {% elif user.loader %}
+                            {{ user.loader.name }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            {% if user.role != 'admin' %}
+                            <form method="post" action="/delete-user/{{ user.id }}" style="display:inline;" onsubmit="return confirm('Delete user {{ user.email }}? This cannot be undone.');">
+                                <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all">Delete</button>
+                            </form>
+                            {% else %}
+                            <span class="text-slate-600 text-xs">Protected</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
                     Admin - Create Logins
                 </h2>
@@ -1374,7 +1372,8 @@
                     {% endif %}
                 </div>
             </div>
-        </section>
+    </div>
+</section>
 
         <!-- Footer -->
         <footer class="mt-12 pt-6 border-t border-slate-800/50 text-center text-sm text-slate-500">
