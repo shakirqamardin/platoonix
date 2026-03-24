@@ -1294,6 +1294,43 @@
                         </div>
                     </form>
                 </div>
+
+                <!-- Driver Account -->
+                <div class="glass-card rounded-xl p-5 border border-teal-500/10 mt-6">
+                    <h3 class="text-lg font-semibold text-slate-200 mb-4">🚗 New Driver</h3>
+                    <form method="post" action="/create-driver" class="grid md:grid-cols-5 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Select Haulier</label>
+                            <select name="haulier_id" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+                                <option value="" disabled selected>Pick haulier...</option>
+                                {% for h in hauliers %}
+                                <option value="{{ h.id }}">{{ h.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Driver Name</label>
+                            <input name="name" required placeholder="e.g. Sam Driver" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Driver Email</label>
+                            <input name="email" type="email" required placeholder="driver@company.com" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Driver Phone (optional)</label>
+                            <input name="phone" placeholder="+44..." class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                            <input name="password" type="password" required placeholder="••••••••" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div class="md:col-span-5">
+                            <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg">
+                                Create Driver
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </section>
 

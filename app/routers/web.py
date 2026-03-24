@@ -1092,6 +1092,52 @@ async def create_loader_account(
     db.commit()
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Loader account created"), status_code=303)
 
+
+@router.post("/create-driver", response_class=RedirectResponse)
+async def create_driver_account(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+) -> RedirectResponse:
+    """Admin: create a driver login linked to a haulier company."""
+    from urllib.parse import quote_plus
+
+    form = await request.form()
+    haulier_id_raw = form.get("haulier_id")
+    name = (form.get("name") or "").strip()
+    email = (form.get("email") or "").strip().lower()
+    phone = (form.get("phone") or "").strip() or None
+    password = form.get("password") or ""
+    base = "/?section=admin"
+
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&create_login_error=" + quote_plus(msg), status_code=303)
+
+    if not haulier_id_raw or not name or not email or not password:
+        return redirect_error("All driver fields except phone are required")
+    if len(password) < 6:
+        return redirect_error("Password must be at least 6 characters")
+    try:
+        haulier_id = int(haulier_id_raw)
+    except (TypeError, ValueError):
+        return redirect_error("Invalid haulier selected")
+    haulier = db.get(models.Haulier, haulier_id)
+    if not haulier:
+        return redirect_error("Haulier not found")
+    if db.query(models.Driver).filter(models.Driver.email == email).first():
+        return redirect_error("Driver email already used")
+
+    driver = models.Driver(
+        haulier_id=haulier_id,
+        name=name,
+        email=email,
+        phone=phone,
+        password_hash=hash_password(password),
+    )
+    db.add(driver)
+    db.commit()
+    return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Driver account created"), status_code=303)
+
 @router.post("/interest", response_class=RedirectResponse)
 async def express_interest(
     request: Request,
