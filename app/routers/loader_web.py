@@ -40,7 +40,7 @@ def loader_dashboard(
     if isinstance(result, RedirectResponse):
         return result
     # Redirect to main dashboard
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/?section=find", status_code=302)
 
 
 @router.post("/loader/profile", response_class=RedirectResponse)
@@ -169,7 +169,7 @@ async def loader_add_load(
         notify_new_load(load, db)
     except Exception:
         pass
-    return RedirectResponse(url="/loader?load_added=1", status_code=303)
+    return RedirectResponse(url="/?section=loads&load_added=1", status_code=303)
 
 
 @router.post("/loader/delete-load/{load_id}", response_class=RedirectResponse)
@@ -184,13 +184,13 @@ def loader_delete_load(
     user, loader = result
     load = db.get(models.Load, load_id)
     if not load or load.loader_id != loader.id:
-        return RedirectResponse(url="/loader?delete_error=Load+not+found", status_code=303)
+        return RedirectResponse(url="/?section=loads&delete_error=Load+not+found", status_code=303)
     if db.query(models.BackhaulJob).filter(models.BackhaulJob.load_id == load_id).first():
-        return RedirectResponse(url="/loader?delete_error=Load+has+jobs", status_code=303)
+        return RedirectResponse(url="/?section=loads&delete_error=Load+has+jobs", status_code=303)
     db.query(models.LoadInterest).filter(models.LoadInterest.load_id == load_id).delete()
     db.delete(load)
     db.commit()
-    return RedirectResponse(url="/loader?deleted=load", status_code=303)
+    return RedirectResponse(url="/?section=loads&deleted=load", status_code=303)
 
 
 @router.post("/loader/planned-loads", response_class=RedirectResponse)
@@ -223,7 +223,7 @@ async def loader_add_planned(
     for route in db.query(models.HaulierRoute).all():
         if planned_load_matches_route(pl, route, db):
             notify_route_match(pl, route, db)
-    return RedirectResponse(url="/loader?planned_added=1", status_code=303)
+    return RedirectResponse(url="/?section=routes&planned_added=1", status_code=303)
 
 
 @router.post("/loader/delete-planned/{planned_id}", response_class=RedirectResponse)
@@ -238,11 +238,11 @@ def loader_delete_planned(
     user, loader = result
     pl = db.get(models.PlannedLoad, planned_id)
     if not pl or pl.loader_id != loader.id:
-        return RedirectResponse(url="/loader?delete_error=Planned+load+not+found", status_code=303)
+        return RedirectResponse(url="/?section=routes&delete_error=Planned+load+not+found", status_code=303)
     db.query(models.LoadInterest).filter(models.LoadInterest.planned_load_id == planned_id).delete()
     db.delete(pl)
     db.commit()
-    return RedirectResponse(url="/loader", status_code=303)
+    return RedirectResponse(url="/?section=routes", status_code=303)
 
 
 @router.post("/loader/show-interest", response_class=RedirectResponse)
@@ -261,27 +261,27 @@ async def loader_accept_interest(
     form = await request.form()
     load_interest_id = form.get("load_interest_id")
     if not load_interest_id:
-        return RedirectResponse(url="/loader", status_code=303)
+        return RedirectResponse(url="/?section=matches", status_code=303)
     try:
         load_interest_id = int(load_interest_id)
     except (TypeError, ValueError):
-        return RedirectResponse(url="/loader", status_code=303)
+        return RedirectResponse(url="/?section=matches", status_code=303)
     interest = db.get(models.LoadInterest, load_interest_id)
     if not interest or interest.status != "expressed":
-        return RedirectResponse(url="/loader", status_code=303)
+        return RedirectResponse(url="/?section=matches", status_code=303)
     load = None
     if interest.load_id:
         load = db.get(models.Load, interest.load_id)
         if not load or load.loader_id != loader.id:
-            return RedirectResponse(url="/loader?delete_error=Load+not+yours", status_code=303)
+            return RedirectResponse(url="/?section=matches&delete_error=Load+not+yours", status_code=303)
         if load.status == models.LoadStatusEnum.MATCHED.value:
             interest.status = "accepted"
             db.commit()
-            return RedirectResponse(url="/loader?already_matched=1", status_code=303)
+            return RedirectResponse(url="/?section=matches&already_matched=1", status_code=303)
     else:
         pl = db.get(models.PlannedLoad, interest.planned_load_id) if interest.planned_load_id else None
         if not pl or pl.loader_id != loader.id:
-            return RedirectResponse(url="/loader?delete_error=Planned+load+not+yours", status_code=303)
+            return RedirectResponse(url="/?section=matches&delete_error=Planned+load+not+yours", status_code=303)
         # Create a concrete Load from this planned load (one instance of the recurring job)
         now = datetime.now(timezone.utc)
         load = models.Load(
@@ -330,4 +330,4 @@ async def loader_accept_interest(
         db.add(load)
     interest.status = "accepted"
     db.commit()
-    return RedirectResponse(url="/loader?job_created=1", status_code=303)
+    return RedirectResponse(url="/?section=matches&job_created=1", status_code=303)

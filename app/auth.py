@@ -84,9 +84,9 @@ def require_admin(request: Request, db: Session) -> Optional[RedirectResponse]:
         return RedirectResponse(url="/login", status_code=302)
     if user.role != "admin":
         if user.role == "haulier":
-            return RedirectResponse(url="/haulier", status_code=302)
+            return RedirectResponse(url="/?section=find", status_code=302)
         if user.role == "loader":
-            return RedirectResponse(url="/loader", status_code=302)
+            return RedirectResponse(url="/?section=find", status_code=302)
         return RedirectResponse(url="/login", status_code=302)
     return None
 
@@ -98,7 +98,7 @@ def require_haulier(request: Request, db: Session) -> Optional[RedirectResponse]
         return RedirectResponse(url="/login", status_code=302)
     if user.role not in ("haulier", "admin"):
         if user.role == "loader":
-            return RedirectResponse(url="/loader", status_code=302)
+            return RedirectResponse(url="/?section=find", status_code=302)
         return RedirectResponse(url="/login", status_code=302)
     return None
 
@@ -110,7 +110,7 @@ def require_loader(request: Request, db: Session) -> Optional[RedirectResponse]:
         return RedirectResponse(url="/login", status_code=302)
     if user.role not in ("loader", "admin"):
         if user.role == "haulier":
-            return RedirectResponse(url="/haulier", status_code=302)
+            return RedirectResponse(url="/?section=find", status_code=302)
         return RedirectResponse(url="/login", status_code=302)
     return None
 

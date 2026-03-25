@@ -305,6 +305,8 @@
         </div>
 
         {% set _sec = request.query_params.get("section", "find") %}
+        {# Non-admins cannot open the Admin tab; avoid broken empty forms #}
+        {% set _sec = 'find' if (current_user and current_user.role != 'admin' and _sec == 'admin') else _sec %}
         {% set initial_section = 'find' if (_sec == 'company' and not haulier_profile and not loader_profile) else _sec %}
         
         <!-- Navigation Tabs -->
@@ -368,6 +370,7 @@
                     </div>
                 </label>
                 
+                {% if current_user and current_user.role == 'admin' %}
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'admin' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="admin" {{ 'checked' if initial_section == 'admin' else '' }} />
                     <div class="flex items-center justify-center gap-2">
@@ -375,6 +378,7 @@
                         <span>Admin</span>
                     </div>
                 </label>
+                {% endif %}
             </div>
         </nav>
 
@@ -883,7 +887,7 @@
                                 <input name="delivery_window_end" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                             </div>
                         </div>
-                        <p class="text-xs text-slate-500 mb-4">Leave schedule blank to default pickup and delivery windows to “now”. If you set only one end of a pair, the other is copied.</p>
+                        <p class="text-xs text-slate-500 mb-4">Optional — use these for <strong class="text-slate-400 font-medium">timed shipments</strong> (collection and delivery slots). Leave all blank for flexible loads; we then default windows to “now”. If you set only one end of a pair, the other is copied.</p>
                         <div class="grid md:grid-cols-4 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Vehicle Type</label>
@@ -1359,7 +1363,8 @@
     </div>
 </section>
 
-<!-- Admin Section -->
+<!-- Admin Section (only full user list + create-login forms for role=admin) -->
+{% if current_user and current_user.role == 'admin' %}
 <section class="section-panel {{ 'active' if initial_section == 'admin' else '' }}" data-section="admin">
     <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.1s">
         <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-rose-400 to-orange-400 bg-clip-text text-transparent">
@@ -1422,14 +1427,28 @@
                 
                 <div class="glass-card rounded-xl p-4 mb-6 border border-amber-500/20">
                     <p class="text-slate-300 text-sm">
-                        <span class="text-amber-400">ℹ️</span> You are logged in as <strong>admin</strong>. 
-                        The forms below create <strong>haulier</strong> and <strong>loader</strong> accounts. 
-                        To switch user, use <a href="/logout" class="text-teal-400 hover:underline">Switch user / Sign out</a> 
-                        then log in with <code class="text-emerald-300 bg-slate-900 px-2 py-1 rounded"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a1c0c5ccc8cfe1d1cdc0d5cececfc8d98fcdcec2c0cd">[email&#160;protected]</a></code>.
+                        <span class="text-amber-400">ℹ️</span> You are logged in as <strong>admin</strong>.
+                        Use <a href="/logout" class="text-teal-400 hover:underline">Sign out</a> to test as haulier, loader, or driver with the accounts you create below.
                     </p>
+                </div>
+
+                <div class="glass-card rounded-xl p-4 mb-6 border border-teal-500/20 bg-teal-950/20">
+                    <h3 class="text-sm font-semibold text-teal-300 mb-2">Test the Driver app</h3>
+                    <ol class="text-slate-400 text-sm list-decimal list-inside space-y-1">
+                        <li>Add a haulier company if needed: <strong class="text-slate-300">Vehicles</strong> tab → <strong class="text-slate-300">Add Company</strong> (or use <em>New Haulier</em> here — use a <strong>new</strong> email not already in the system).</li>
+                        <li>Open <strong class="text-slate-300">Admin</strong> → <strong class="text-slate-300">New Driver</strong>: choose that company, driver name, and a <strong>driver email different from the haulier office login</strong>, plus password.</li>
+                        <li>Sign out → go to <a href="/driver-login" class="text-teal-400 hover:underline font-medium">/driver-login</a> and sign in with the driver email.</li>
+                    </ol>
+                    <p class="text-slate-500 text-xs mt-3"><strong class="text-slate-400">Already have a haulier company?</strong> Do not use “New Haulier” again with the same email — use <strong class="text-slate-400">Link login to existing company</strong> for a second office login, or skip straight to <strong class="text-slate-400">New Driver</strong>.</p>
                 </div>
                 
                 <p class="text-slate-400 text-sm mb-6">Create a company and its login in one step, or link a login to an existing company.</p>
+
+                {% if not hauliers %}
+                <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 mb-6 text-amber-200 text-sm">
+                    No haulier companies in the database yet. Add one under the <strong>Vehicles</strong> tab (Add Company), then return here — the company dropdowns will populate.
+                </div>
+                {% endif %}
                 
                 <div class="grid md:grid-cols-2 gap-6 mb-6">
                     <!-- New Haulier -->
@@ -1593,6 +1612,7 @@
             </div>
     </div>
 </section>
+{% endif %}
 
         <!-- Footer -->
         <footer class="mt-12 pt-6 border-t border-slate-800/50 text-center text-sm text-slate-500">

@@ -491,6 +491,8 @@ def find_backhaul_page(
     haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
     load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
     load_interests_display = _load_interests_display(load_interests, db)
+    users = db.query(models.User).order_by(models.User.email).all()
+    drivers = db.query(models.Driver).order_by(models.Driver.name).all()
     try:
         open_loads_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
     except Exception:
@@ -513,6 +515,8 @@ def find_backhaul_page(
         "home.html",
         {
             "request": request,
+            "users": users,
+            "drivers": drivers,
             "hauliers": hauliers,
             "vehicles": vehicles,
             "loads": loads,
@@ -1160,19 +1164,25 @@ async def create_haulier_account(
     if len(password) < 6:
         return redirect_error("Password must be at least 6 characters")
     if db.query(models.User).filter(models.User.email == email).first():
-        return redirect_error("Email already used")
-    haulier = models.Haulier(name=name, contact_email=email, contact_phone=contact_phone)
-    db.add(haulier)
-    db.commit()
-    db.refresh(haulier)
-    user = models.User(
-        email=email,
-        password_hash=hash_password(password),
-        role="haulier",
-        haulier_id=haulier.id,
-    )
-    db.add(user)
-    db.commit()
+        return redirect_error("That login email is already used — use Link login to existing company or another email")
+    if db.query(models.Haulier).filter(models.Haulier.contact_email == email).first():
+        return redirect_error("A company with this contact email already exists — use Link login to existing company (not New Haulier)")
+    try:
+        haulier = models.Haulier(name=name, contact_email=email, contact_phone=contact_phone)
+        db.add(haulier)
+        db.commit()
+        db.refresh(haulier)
+        user = models.User(
+            email=email,
+            password_hash=hash_password(password),
+            role="haulier",
+            haulier_id=haulier.id,
+        )
+        db.add(user)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return redirect_error("Company or email already exists — use Link login to existing company")
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Company + login created. They can log in and add vehicles."), status_code=303)
 
 

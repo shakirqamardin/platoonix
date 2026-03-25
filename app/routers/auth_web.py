@@ -34,9 +34,9 @@ def login_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     user = get_current_user_optional(request, db)
     if user:
         if user.role == "haulier":
-            return RedirectResponse(url="/haulier", status_code=302)
+            return RedirectResponse(url="/?section=find", status_code=302)
         if user.role == "loader":
-            return RedirectResponse(url="/loader", status_code=302)
+            return RedirectResponse(url="/?section=find", status_code=302)
         return RedirectResponse(url="/", status_code=302)
     password_reset = request.query_params.get("password_reset")
     logout = request.query_params.get("logout")
@@ -109,10 +109,12 @@ async def login_submit(
         )
     request.session["user_id"] = user.id
     request.session["role"] = user.role
+    # Go straight to the dashboard. Do not redirect via /haulier or /loader — those URLs
+    # only bounce to / and can cause ERR_TOO_MANY_REDIRECTS if session/caching misbehaves.
     if user.role == "haulier":
-        return RedirectResponse(url="/haulier", status_code=302)
+        return RedirectResponse(url="/?section=find", status_code=302)
     if user.role == "loader":
-        return RedirectResponse(url="/loader", status_code=302)
+        return RedirectResponse(url="/?section=find", status_code=302)
     return RedirectResponse(url="/", status_code=302)
 
 
@@ -248,9 +250,9 @@ def register_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
     user = get_current_user_optional(request, db)
     if user:
         if user.role == "haulier":
-            return RedirectResponse(url="/haulier", status_code=302)
+            return RedirectResponse(url="/?section=find", status_code=302)
         if user.role == "loader":
-            return RedirectResponse(url="/loader", status_code=302)
+            return RedirectResponse(url="/?section=find", status_code=302)
         return RedirectResponse(url="/", status_code=302)
     error = request.query_params.get("error")
     return templates.TemplateResponse(
@@ -295,7 +297,7 @@ async def register_haulier_submit(
     db.commit()
     request.session["user_id"] = user_id
     request.session["role"] = user_role
-    return RedirectResponse(url="/haulier", status_code=303)
+    return RedirectResponse(url="/?section=find", status_code=303)
 
 
 @router.post("/register-loader", response_class=RedirectResponse)
@@ -333,7 +335,7 @@ async def register_loader_submit(
     db.commit()
     request.session["user_id"] = user_id
     request.session["role"] = user_role
-    return RedirectResponse(url="/loader", status_code=303)
+    return RedirectResponse(url="/?section=find", status_code=303)
 
 
 def _register_redirect(error: str):

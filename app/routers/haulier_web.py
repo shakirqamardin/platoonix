@@ -367,7 +367,7 @@ async def haulier_add_route(
     vehicle_id = int(form.get("vehicle_id", 0))
     vehicle = db.get(models.Vehicle, vehicle_id)
     if not vehicle or vehicle.haulier_id != haulier.id:
-        return RedirectResponse(url="/haulier?delete_error=Invalid+vehicle", status_code=303)
+        return RedirectResponse(url="/?section=routes&delete_error=Invalid+vehicle", status_code=303)
     try:
         day = int(form.get("day_of_week", 0))
     except (TypeError, ValueError):
@@ -391,7 +391,7 @@ async def haulier_add_route(
         route.vehicle_id, route.empty_at_postcode or "", route.haulier_id, db,
         origin_label="planned route",
     )
-    return RedirectResponse(url="/haulier", status_code=303)
+    return RedirectResponse(url="/?section=routes", status_code=303)
 
 
 @router.post("/haulier/delete-route/{route_id}", response_class=RedirectResponse)
@@ -406,7 +406,7 @@ def haulier_delete_route(
     haulier, actor_driver = result
     route = db.get(models.HaulierRoute, route_id)
     if not route or route.haulier_id != haulier.id:
-        return RedirectResponse(url="/haulier?delete_error=Route+not+found", status_code=303)
+        return RedirectResponse(url="/?section=routes&delete_error=Route+not+found", status_code=303)
     db.delete(route)
     db.commit()
-    return RedirectResponse(url="/haulier", status_code=303)
+    return RedirectResponse(url="/?section=routes", status_code=303)
