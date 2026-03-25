@@ -769,7 +769,26 @@
                         </div>
                     </form>
                     {% elif current_user and current_user.role == 'haulier' and not current_user.haulier_id %}
-                    <p class="text-amber-200 text-sm rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">Your login is not linked to a haulier company. Ask an admin to link your account (Admin → Manage users).</p>
+                    <div class="space-y-4">
+                        <div class="text-amber-200 text-sm rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 space-y-2">
+                            <p><strong>Your login is not linked to a haulier company.</strong> This usually happens if the company was deleted (your user is unlinked) or the account was never linked.</p>
+                            <p class="text-slate-300">Ask an admin to open <strong class="text-slate-200">Admin → Manage users</strong> and use <strong class="text-slate-200">Link login to existing company</strong> for <span class="font-mono text-teal-300">{{ current_user.email }}</span>. After that, the forms below work again.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-400 mb-2">Add Vehicle (available after your account is linked)</label>
+                            <fieldset disabled class="rounded-xl border border-slate-600/50 bg-slate-900/40 px-3 py-3 opacity-80">
+                                <div class="flex flex-wrap gap-2 items-end">
+                                    <span class="self-center text-slate-500 text-sm rounded-lg border border-slate-700 px-3 py-2">Company</span>
+                                    <input type="text" readonly placeholder="Registration" class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm w-32 uppercase opacity-70" />
+                                    <span class="px-3 py-2 text-sm border border-slate-700 rounded-lg text-slate-500">DVLA Lookup</span>
+                                    <input type="text" readonly placeholder="Base postcode" class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm w-32 opacity-70" />
+                                    <select class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm opacity-70" disabled><option>Artic</option></select>
+                                    <select class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm opacity-70" disabled><option>Trailer type...</option></select>
+                                    <span class="px-4 py-2 text-sm font-semibold rounded-lg bg-slate-700 text-slate-400 cursor-not-allowed">Add Vehicle</span>
+                                </div>
+                            </fieldset>
+                        </div>
+                    </div>
                     {% elif current_user and current_user.role == 'loader' %}
                     <p class="text-slate-400 text-sm rounded-lg border border-slate-600/50 px-4 py-3">Loaders don’t register vehicles here — use the Loads and Routes tabs, or ask a haulier admin to add vehicles.</p>
                     {% endif %}

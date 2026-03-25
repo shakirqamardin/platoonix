@@ -203,7 +203,20 @@ def home(
         planned_loads = []
         users = []
         drivers = db.query(models.Driver).filter(models.Driver.haulier_id == haulier.id).order_by(models.Driver.name).all()
-    else:
+    elif current_user and (getattr(current_user, "role", None) or "").strip().lower() == "haulier":
+        # Haulier login but no company linked (company deleted, or account not linked yet).
+        # Do not use the admin branch here — it loads all data while the UI hides admin-only forms.
+        vehicles = []
+        haulier_routes = []
+        loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+        load_interests = []
+        jobs = []
+        payments = []
+        planned_loads = []
+        hauliers = []
+        users = []
+        drivers = []
+    elif current_user and (getattr(current_user, "role", None) or "").strip().lower() == "admin":
         # ADMIN VIEW - see everything
         hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
         vehicles = db.query(models.Vehicle).order_by(models.Vehicle.created_at.desc()).all()
@@ -216,6 +229,18 @@ def home(
         
         users = db.query(models.User).order_by(models.User.email).all()
         drivers = db.query(models.Driver).order_by(models.Driver.name).all()
+    else:
+        # Fallback (e.g. loader without loader_id): minimal lists
+        vehicles = []
+        haulier_routes = []
+        loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+        load_interests = []
+        jobs = []
+        payments = []
+        planned_loads = []
+        hauliers = []
+        users = []
+        drivers = []
 
     load_interests_display = _load_interests_display(load_interests, db)
 
