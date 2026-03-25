@@ -583,18 +583,29 @@ async def create_vehicle_form(
     current_user = get_current_user_optional(request, db)
     if not current_user:
         return RedirectResponse(url="/login", status_code=302)
-    form = dict(await request.form())
+    form = await request.form()
+    role = (getattr(current_user, "role", None) or "").strip().lower()
     try:
-        if current_user.role == "admin":
+        if role == "admin":
             haulier_id_raw = form.get("haulier_id")
-            if not haulier_id_raw:
+            if haulier_id_raw is None or (isinstance(haulier_id_raw, str) and not str(haulier_id_raw).strip()):
                 return RedirectResponse(
                     url="/?section=vehicles&delete_error=Please+pick+a+company",
                     status_code=303,
                 )
-            haulier_id = int(haulier_id_raw)
-        elif current_user.role == "haulier" and current_user.haulier_id:
+            haulier_id = int(str(haulier_id_raw).strip())
+        elif role == "haulier" and current_user.haulier_id:
             haulier_id = int(current_user.haulier_id)
+        elif role == "loader":
+            return RedirectResponse(
+                url="/?section=vehicles&delete_error=Loaders+cannot+add+vehicles+here",
+                status_code=303,
+            )
+        elif role == "haulier" and not current_user.haulier_id:
+            return RedirectResponse(
+                url="/?section=vehicles&delete_error=Your+account+is+not+linked+to+a+haulier+company",
+                status_code=303,
+            )
         else:
             return RedirectResponse(
                 url="/?section=vehicles&delete_error=Not+authorized",
@@ -653,7 +664,7 @@ async def create_vehicle_form(
         except Exception:
             pass
 
-    return RedirectResponse(url="/?section=vehicles", status_code=303)
+    return RedirectResponse(url="/?section=vehicles&vehicle_added=1", status_code=303)
 
 
 def _parse_float(s, default=None):
@@ -825,10 +836,11 @@ def delete_vehicle_form(
     vehicle = db.get(models.Vehicle, vehicle_id)
     if not vehicle:
         return RedirectResponse(url="/?delete_error=Vehicle+not+found", status_code=303)
-    if current_user.role == "haulier":
+    role = (getattr(current_user, "role", None) or "").strip().lower()
+    if role == "haulier":
         if not current_user.haulier_id or vehicle.haulier_id != current_user.haulier_id:
             return RedirectResponse(url="/?section=vehicles&delete_error=Not+authorized", status_code=303)
-    elif current_user.role != "admin":
+    elif role != "admin":
         return RedirectResponse(url="/?section=vehicles&delete_error=Not+authorized", status_code=303)
     if db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id == vehicle_id).first():
         return RedirectResponse(url="/?delete_error=Vehicle+has+jobs", status_code=303)

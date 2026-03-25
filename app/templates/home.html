@@ -694,8 +694,9 @@
                 </div>
                 {% endif %}
                 
-                <!-- Add Company & Vehicle Forms -->
+                <!-- Add Company & Vehicle Forms (admin: create companies + any vehicle; haulier: own company only) -->
                 <div class="space-y-4 mb-6">
+                    {% if current_user and current_user.role == 'admin' %}
                     <form method="post" action="/hauliers" class="flex flex-wrap gap-3 items-end">
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-2">Add Company</label>
@@ -707,11 +708,13 @@
                             </div>
                         </div>
                     </form>
-                    
+                    {% endif %}
+
+                    {% if current_user and current_user.role == 'admin' %}
                     <form method="post" action="/vehicles" id="admin-form-add-vehicle" class="flex flex-wrap gap-3 items-end">
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-2">Add Vehicle</label>
-                            <div class="flex gap-2">
+                            <div class="flex flex-wrap gap-2">
                                 <select name="haulier_id" required class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
                                     {% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}
                                     <option value="" disabled>Select company...</option>
@@ -737,8 +740,42 @@
                             </div>
                         </div>
                     </form>
+                    {% elif current_user and current_user.role == 'haulier' and current_user.haulier_id %}
+                    <form method="post" action="/vehicles" id="admin-form-add-vehicle" class="flex flex-wrap gap-3 items-end">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Add Vehicle</label>
+                            <div class="flex flex-wrap gap-2">
+                                <input type="hidden" name="haulier_id" value="{{ current_user.haulier_id }}" />
+                                <span class="self-center text-slate-300 text-sm rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2" title="Your company">{{ haulier_profile.name if haulier_profile else 'Your company' }}</span>
+                                <input name="registration" id="admin-vehicle-reg" required placeholder="Registration" class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm w-32 uppercase" />
+                                <button type="button" id="admin-btn-dvla-lookup" class="px-3 py-2 text-sm font-medium border border-teal-500/50 bg-teal-600/20 text-teal-300 rounded-lg hover:bg-teal-600/30 transition-all" title="Auto-fill from DVLA">
+                                    🔍 DVLA Lookup
+                                </button>
+                                <input name="base_postcode" placeholder="Base postcode" class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm w-32" title="Where this vehicle is usually empty" />
+                                <select name="vehicle_type" id="admin-vehicle-type" class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+                                    <option value="artic">Artic</option>
+                                    <option value="rigid">Rigid</option>
+                                    <option value="van">Van</option>
+                                </select>
+                                <select name="trailer_type" id="admin-vehicle-trailer" class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+                                    <option value="">Trailer type...</option>
+                                    <option value="curtain_sider">Curtain</option>
+                                    <option value="box">Box</option>
+                                    <option value="flatbed">Flatbed</option>
+                                    <option value="other">Other</option>
+                                </select>
+                                <button type="submit" class="btn-primary px-4 py-2 text-sm font-semibold text-white rounded-lg">Add Vehicle</button>
+                            </div>
+                        </div>
+                    </form>
+                    {% elif current_user and current_user.role == 'haulier' and not current_user.haulier_id %}
+                    <p class="text-amber-200 text-sm rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">Your login is not linked to a haulier company. Ask an admin to link your account (Admin → Manage users).</p>
+                    {% elif current_user and current_user.role == 'loader' %}
+                    <p class="text-slate-400 text-sm rounded-lg border border-slate-600/50 px-4 py-3">Loaders don’t register vehicles here — use the Loads and Routes tabs, or ask a haulier admin to add vehicles.</p>
+                    {% endif %}
                     
                     <!-- Bulk Upload -->
+                    {% if current_user and current_user.role == 'admin' %}
                     <div class="card p-6">
                         <h3 class="text-lg font-semibold mb-4 text-teal-400">📤 Bulk Upload</h3>
                         
@@ -771,6 +808,7 @@
                             </div>
                         </details>
                     </div>
+                    {% endif %}
                 
                 <!-- Vehicles Table -->
                 <div class="overflow-x-auto">
