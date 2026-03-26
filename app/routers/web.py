@@ -963,6 +963,12 @@ async def assign_job_driver(
         driver = db.get(models.Driver, driver_id)
         if not driver or driver.haulier_id != vehicle.haulier_id:
             return RedirectResponse(url="/?section=matches&delete_error=Driver+not+found+for+this+haulier", status_code=303)
+        # First-to-act wins: if already assigned to another driver (office or claim), don't overwrite.
+        if job.driver_id is not None and job.driver_id != driver.id:
+            return RedirectResponse(
+                url="/?section=matches&delete_error=Job+already+assigned.+Unassign+first+to+change+driver",
+                status_code=303,
+            )
         job.driver_id = driver.id
 
     db.add(job)

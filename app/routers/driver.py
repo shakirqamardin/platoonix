@@ -266,6 +266,12 @@ def assign_driver(
         driver = db.get(models.Driver, driver_id)
         if not driver or driver.haulier_id != haulier.id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Driver not found for this haulier")
+        # First-to-act wins: don't silently replace an existing different assignment.
+        if job.driver_id is not None and job.driver_id != driver.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Job already assigned. Unassign first to change driver.",
+            )
         job.driver_id = driver.id
     db.add(job)
     db.commit()
