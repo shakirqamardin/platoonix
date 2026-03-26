@@ -26,6 +26,18 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
+@app.get("/sw.js", include_in_schema=False)
+def service_worker() -> FileResponse:
+    """Serve service worker from root so it can control the whole app scope."""
+    return FileResponse(static_dir / "sw.js", media_type="application/javascript")
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def web_manifest() -> FileResponse:
+    """Serve PWA manifest from root."""
+    return FileResponse(static_dir / "manifest.webmanifest", media_type="application/manifest+json")
+
+
 @app.on_event("startup")
 def check_db_and_create_tables():
     """Check DB connection and create tables if missing (no Shell needed on free tier)."""

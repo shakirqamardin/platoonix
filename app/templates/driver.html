@@ -5,6 +5,8 @@
     <title>Driver – Platoonix</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <meta name="theme-color" content="#020617" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/static/logo.png" />
     <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">
@@ -167,6 +169,12 @@
     </div>
 
     <script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("/sw.js").catch(function () {});
+  });
+}
+
 (function () {
   const jobId = {{ active_job.id if active_job else 'null' }};
   if (!jobId) return;
