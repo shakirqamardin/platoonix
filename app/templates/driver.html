@@ -14,7 +14,7 @@
           <img src="/static/logo.png" alt="Platoonix" class="h-9 w-auto" />
           <span class="text-lg font-semibold">Driver</span>
         </div>
-        <a href="/haulier" class="text-slate-400 hover:text-white text-sm">Back to dashboard</a>
+        <a href="{{ dashboard_url or '/driver-login' }}" class="text-slate-400 hover:text-white text-sm">Back to dashboard</a>
       </header>
 
       {% if request.query_params.get('epod_done') %}<p class="mb-3 text-emerald-400 text-sm rounded-lg bg-emerald-900/20 px-3 py-2">Delivery completed. Payment released.</p>{% endif %}
@@ -25,6 +25,24 @@
         <p class="text-slate-400">No active job. When you’re assigned a backhaul, it will appear here.</p>
         <p class="text-slate-500 text-sm mt-2">Use the haulier dashboard to find and accept loads.</p>
       </section>
+      {% if is_driver_login and available_jobs %}
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mt-4">
+        <h2 class="text-slate-300 font-medium mb-3">Available jobs to claim</h2>
+        <div class="space-y-2">
+          {% for row in available_jobs %}
+          <div class="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-3 flex items-center justify-between gap-3">
+            <div class="text-left">
+              <p class="text-slate-200 text-sm font-medium">Job {{ row.display_number }}{% if row.vehicle_registration %} • {{ row.vehicle_registration }}{% endif %}</p>
+              <p class="text-slate-400 text-xs">{{ row.shipper_name or 'Load' }} • {{ row.pickup_postcode }} → {{ row.delivery_postcode }}</p>
+            </div>
+            <form method="post" action="/driver/claim/{{ row.job.id }}">
+              <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-xs font-semibold text-white">Claim</button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
       {% else %}
       {% set j = active_job %}
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">

@@ -71,6 +71,7 @@ def driver_page(
     if actor_driver is not None:
         q = q.filter(models.BackhaulJob.driver_id == actor_driver.id)
     active_job = q.order_by(models.BackhaulJob.matched_at.desc()).first()
+    available_jobs = []
     loads_on_route_home = []
     show_route_home_hint = False
     base_postcode_used = None
@@ -93,17 +94,69 @@ def driver_page(
                 loads_on_route_home = [{"load": l, "distance_miles": d} for l, d in pairs]
             else:
                 show_route_home_hint = True
+    elif actor_driver is not None:
+        # Driver login with no assigned active job: show unassigned jobs for this haulier so driver can claim one.
+        unassigned = (
+            db.query(models.BackhaulJob)
+            .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
+            .filter(models.Vehicle.haulier_id == haulier.id)
+            .filter(models.BackhaulJob.completed_at.is_(None))
+            .filter(models.BackhaulJob.driver_id.is_(None))
+            .order_by(models.BackhaulJob.matched_at.desc())
+            .all()
+        )
+        for j in unassigned:
+            load = db.get(models.Load, j.load_id)
+            vehicle = db.get(models.Vehicle, j.vehicle_id)
+            available_jobs.append(
+                {
+                    "job": j,
+                    "display_number": j.id + 199,
+                    "shipper_name": (load.shipper_name if load else ""),
+                    "pickup_postcode": (load.pickup_postcode if load else ""),
+                    "delivery_postcode": (load.delivery_postcode if load else ""),
+                    "vehicle_registration": (vehicle.registration if vehicle else ""),
+                }
+            )
     return templates.TemplateResponse(
         "driver.html",
         {
             "request": request,
             "active_job": active_job,
+            "available_jobs": available_jobs,
             "loads_on_route_home": loads_on_route_home,
             "show_route_home_hint": show_route_home_hint,
             "base_postcode_used": base_postcode_used,
             "is_driver_login": bool(actor_driver),
+            "dashboard_url": ("/driver-login" if actor_driver else "/?section=matches"),
         },
     )
+
+
+@router.post("/driver/claim/{job_id}", response_class=RedirectResponse)
+def driver_claim_job(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Driver login: claim an unassigned active job from their own haulier."""
+    result = _haulier_or_driver_context(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    haulier, actor_driver = result
+    if actor_driver is None:
+        return RedirectResponse(url="/driver?error=Driver+login+required", status_code=303)
+    job = _driver_job_for_haulier(job_id, haulier, db, actor_driver=None)
+    if not job:
+        return RedirectResponse(url="/driver?error=Job+not+found", status_code=303)
+    if job.completed_at:
+        return RedirectResponse(url="/driver?error=Job+already+completed", status_code=303)
+    if job.driver_id not in (None, actor_driver.id):
+        return RedirectResponse(url="/driver?error=Job+already+assigned", status_code=303)
+    job.driver_id = actor_driver.id
+    db.add(job)
+    db.commit()
+    return RedirectResponse(url="/driver", status_code=303)
 
 
 def _driver_job_for_haulier(
