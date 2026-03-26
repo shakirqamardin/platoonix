@@ -31,6 +31,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # haulier, loader, admin
+    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     haulier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("hauliers.id"), nullable=True)
     loader_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loaders.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

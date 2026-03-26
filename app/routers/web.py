@@ -180,7 +180,7 @@ def home(
         hauliers = []
         vehicles = []
         haulier_routes = []
-        users = []
+        users = db.query(models.User).filter(models.User.loader_id == loader.id).order_by(models.User.email).all()
         drivers = []
     elif current_user and current_user.haulier_id:
         # HAULIER VIEW - only their vehicles and jobs
@@ -201,7 +201,7 @@ def home(
         # No loader-specific data
         hauliers = [haulier]  # Just their own company
         planned_loads = []
-        users = []
+        users = db.query(models.User).filter(models.User.haulier_id == haulier.id).order_by(models.User.email).all()
         drivers = db.query(models.Driver).filter(models.Driver.haulier_id == haulier.id).order_by(models.Driver.name).all()
     elif current_user and (getattr(current_user, "role", None) or "").strip().lower() == "haulier":
         # Haulier login but no company linked (company deleted, or account not linked yet).
@@ -251,6 +251,8 @@ def home(
     deleted = request.query_params.get("deleted")
     driver_error = request.query_params.get("driver_error")
     driver_ok = request.query_params.get("driver_ok")
+    team_error = request.query_params.get("team_error")
+    team_ok = request.query_params.get("team_ok")
     create_login_error = request.query_params.get("create_login_error")
     create_login_ok = request.query_params.get("create_login_ok")
     try:
@@ -298,6 +300,8 @@ def home(
             "deleted": deleted,
             "driver_error": driver_error,
             "driver_ok": driver_ok,
+            "team_error": team_error,
+            "team_ok": team_ok,
             "create_login_error": create_login_error,
             "create_login_ok": create_login_ok,
             "open_loads_count": open_loads_count,
@@ -1418,6 +1422,96 @@ def delete_my_driver_account(
     db.delete(driver)
     db.commit()
     return RedirectResponse(url=base + "&driver_ok=" + quote_plus("Driver deleted"), status_code=303)
+
+
+@router.post("/my-team", response_class=RedirectResponse)
+async def create_company_team_user(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Haulier/loader: create another office login for the same company."""
+    from urllib.parse import quote_plus
+
+    current_user = get_current_user_optional(request, db)
+    base = "/?section=my-team"
+
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&team_error=" + quote_plus(msg), status_code=303)
+
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    role = (getattr(current_user, "role", None) or "").strip().lower()
+    if role not in ("haulier", "loader"):
+        return redirect_error("Only haulier and loader accounts can manage team logins")
+    if role == "haulier" and not current_user.haulier_id:
+        return redirect_error("Your account is not linked to a haulier company")
+    if role == "loader" and not current_user.loader_id:
+        return redirect_error("Your account is not linked to a loader company")
+
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    email = (form.get("email") or "").strip().lower()
+    phone = (form.get("phone") or "").strip() or None
+    password = form.get("password") or ""
+    if not name or not email or not password:
+        return redirect_error("Name, email and password are required")
+    if len(password) < 6:
+        return redirect_error("Password must be at least 6 characters")
+    if db.query(models.User).filter(models.User.email == email).first():
+        return redirect_error("That email is already used")
+
+    new_user = models.User(
+        email=email,
+        password_hash=hash_password(password),
+        role=role,
+        full_name=name,
+        phone=phone,
+        haulier_id=current_user.haulier_id if role == "haulier" else None,
+        loader_id=current_user.loader_id if role == "loader" else None,
+    )
+    db.add(new_user)
+    db.commit()
+    return RedirectResponse(url=base + "&team_ok=" + quote_plus("Team login created"), status_code=303)
+
+
+@router.post("/my-team/delete/{user_id}", response_class=RedirectResponse)
+def delete_company_team_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Haulier/loader: delete a team login from their own company."""
+    from urllib.parse import quote_plus
+
+    current_user = get_current_user_optional(request, db)
+    base = "/?section=my-team"
+
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&team_error=" + quote_plus(msg), status_code=303)
+
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    if current_user.id == user_id:
+        return redirect_error("You cannot delete your own login")
+    role = (getattr(current_user, "role", None) or "").strip().lower()
+    if role not in ("haulier", "loader"):
+        return redirect_error("Only haulier and loader accounts can manage team logins")
+
+    target = db.get(models.User, user_id)
+    if not target:
+        return redirect_error("User not found")
+    if (getattr(target, "role", None) or "").strip().lower() != role:
+        return redirect_error("User not found in your company")
+    if role == "haulier":
+        if not current_user.haulier_id or target.haulier_id != current_user.haulier_id:
+            return redirect_error("User not found in your company")
+    else:
+        if not current_user.loader_id or target.loader_id != current_user.loader_id:
+            return redirect_error("User not found in your company")
+
+    db.delete(target)
+    db.commit()
+    return RedirectResponse(url=base + "&team_ok=" + quote_plus("Team login deleted"), status_code=303)
 
 
 @router.post("/delete-driver/{driver_id}", response_class=RedirectResponse)
