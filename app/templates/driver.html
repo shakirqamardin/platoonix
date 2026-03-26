@@ -19,6 +19,7 @@
 
       {% if request.query_params.get('epod_done') %}<p class="mb-3 text-emerald-400 text-sm rounded-lg bg-emerald-900/20 px-3 py-2">Delivery completed. Payment released.</p>{% endif %}
       {% if request.query_params.get('done') %}<p class="mb-3 text-slate-400 text-sm rounded-lg bg-slate-800 px-3 py-2">Job already completed.</p>{% endif %}
+      {% if request.query_params.get('error') %}<p class="mb-3 text-amber-300 text-sm rounded-lg bg-amber-900/20 px-3 py-2">{{ request.query_params.get('error') }}</p>{% endif %}
 
       {% if not active_job %}
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-center">

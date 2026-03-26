@@ -151,6 +151,18 @@ def driver_claim_job(
         return RedirectResponse(url="/driver?error=Job+not+found", status_code=303)
     if job.completed_at:
         return RedirectResponse(url="/driver?error=Job+already+completed", status_code=303)
+    existing_active = (
+        db.query(models.BackhaulJob)
+        .filter(models.BackhaulJob.driver_id == actor_driver.id)
+        .filter(models.BackhaulJob.completed_at.is_(None))
+        .order_by(models.BackhaulJob.matched_at.desc())
+        .first()
+    )
+    if existing_active and existing_active.id != job.id:
+        return RedirectResponse(
+            url="/driver?error=You+already+have+an+active+job.+Complete+it+before+claiming+another",
+            status_code=303,
+        )
     if job.driver_id not in (None, actor_driver.id):
         return RedirectResponse(url="/driver?error=Job+already+assigned", status_code=303)
     job.driver_id = actor_driver.id
