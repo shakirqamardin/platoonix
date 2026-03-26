@@ -307,6 +307,7 @@
         {% set _sec = request.query_params.get("section", "find") %}
         {# Non-admins cannot open the Admin tab; avoid broken empty forms #}
         {% set _sec = 'find' if (current_user and current_user.role != 'admin' and _sec == 'admin') else _sec %}
+        {% set _sec = 'find' if (current_user and current_user.role != 'haulier' and _sec == 'my-drivers') else _sec %}
         {% set initial_section = 'find' if (_sec == 'company' and not haulier_profile and not loader_profile) else _sec %}
         
         <!-- Navigation Tabs -->
@@ -337,6 +338,16 @@
                         <span>Vehicles</span>
                     </div>
                 </label>
+
+                {% if current_user and current_user.role == 'haulier' %}
+                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'my-drivers' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                    <input type="radio" name="section" class="hidden" value="my-drivers" {{ 'checked' if initial_section == 'my-drivers' else '' }} />
+                    <div class="flex items-center justify-center gap-2">
+                        <span>👥</span>
+                        <span>My Drivers</span>
+                    </div>
+                </label>
+                {% endif %}
                 
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'loads' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="loads" {{ 'checked' if initial_section == 'loads' else '' }} />
@@ -831,6 +842,106 @@
                 {% endif %}
             </div>
         </section>
+
+        <!-- My Drivers Section (haulier only) -->
+        {% if current_user and current_user.role == 'haulier' %}
+        <section class="section-panel {{ 'active' if initial_section == 'my-drivers' else '' }}" data-section="my-drivers">
+            <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
+                <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
+                    My Drivers
+                </h2>
+                <p class="text-slate-300 text-sm mb-6">Create and manage driver logins for your own haulier company only.</p>
+
+                {% if driver_error %}
+                <div class="glass-card rounded-xl px-4 py-3 border-l-4 border-amber-500 mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">⚠️</span>
+                        <span class="text-amber-200">{{ driver_error }}</span>
+                    </div>
+                </div>
+                {% endif %}
+                {% if driver_ok %}
+                <div class="glass-card rounded-xl px-4 py-3 border-l-4 border-emerald-500 mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">✅</span>
+                        <span class="text-emerald-300">{{ driver_ok }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if current_user.haulier_id %}
+                <div class="glass-card rounded-xl p-5 border border-teal-500/10 mb-6">
+                    <h3 class="text-lg font-semibold text-slate-200 mb-4">Add New Driver</h3>
+                    <form method="post" action="/my-drivers" class="grid md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Driver Name</label>
+                            <input name="name" required placeholder="e.g. Sam Driver" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Driver Email</label>
+                            <input name="email" type="email" required placeholder="driver@company.com" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Driver Phone (optional)</label>
+                            <input name="phone" placeholder="+44..." class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                            <input name="password" type="password" required placeholder="••••••••" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div class="md:col-span-4">
+                            <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg">
+                                Create Driver
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                {% else %}
+                <div class="glass-card rounded-xl px-4 py-3 border-l-4 border-amber-500 mb-6">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">⚠️</span>
+                        <span class="text-amber-200">Your login is not linked to a haulier company yet, so driver management is unavailable.</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="glass-card rounded-xl p-5 border border-slate-700/30">
+                    <h3 class="text-lg font-semibold text-slate-200 mb-4">Your Driver Accounts</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-700">
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Driver Name</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Email</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Phone</th>
+                                    <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for d in drivers %}
+                                <tr class="border-b border-slate-800/50">
+                                    <td class="py-3 px-4 text-slate-200">{{ d.name }}</td>
+                                    <td class="py-3 px-4 text-slate-300">{{ d.email }}</td>
+                                    <td class="py-3 px-4 text-slate-400">{{ d.phone or "-" }}</td>
+                                    <td class="py-3 px-4 text-right">
+                                        <form method="post" action="/my-drivers/delete/{{ d.id }}" class="inline" onsubmit="return confirm('Delete driver {{ d.name }} ({{ d.email }})?');">
+                                            <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if not drivers %}
+                    <p class="text-slate-500 text-sm mt-4">No drivers yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+        {% endif %}
 
         <!-- Loads Section -->
         <section class="section-panel {{ 'active' if initial_section == 'loads' else '' }}" data-section="loads">

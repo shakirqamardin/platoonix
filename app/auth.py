@@ -42,17 +42,46 @@ def get_session_driver_id(request: Request) -> Optional[int]:
     return request.session.get("driver_id")
 
 
+def _maybe_relink_orphan_haulier(db: Session, user: models.User) -> models.User:
+    """If a haulier login has no haulier_id but exactly one Haulier row matches their email, link them.
+
+    Recovers after company-delete (which clears users.haulier_id) or bad data, without needing the Admin tab.
+    If zero or multiple companies match the email, leave unchanged (admin must resolve).
+    """
+    from sqlalchemy import func
+
+    role = (getattr(user, "role", None) or "").strip().lower()
+    if role != "haulier" or user.haulier_id is not None:
+        return user
+    email = (user.email or "").strip().lower()
+    if not email:
+        return user
+    matches = (
+        db.query(models.Haulier)
+        .filter(func.lower(models.Haulier.contact_email) == email)
+        .all()
+    )
+    if len(matches) != 1:
+        return user
+    user.haulier_id = matches[0].id
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def get_current_user_optional(
     request: Request,
     db: Session,
 ) -> Optional[models.User]:
     """Load current user from session; return None if not logged in."""
-    from app.database import get_db
-    # Caller must pass db via Depends(get_db)
     user_id = get_session_user_id(request)
     if not user_id:
         return None
-    return db.get(models.User, user_id)
+    user = db.get(models.User, user_id)
+    if user is None:
+        return None
+    return _maybe_relink_orphan_haulier(db, user)
 
 
 def get_current_driver_optional(

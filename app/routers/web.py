@@ -249,6 +249,8 @@ def home(
     upload_type = request.query_params.get("upload_type")
     delete_error = request.query_params.get("delete_error")
     deleted = request.query_params.get("deleted")
+    driver_error = request.query_params.get("driver_error")
+    driver_ok = request.query_params.get("driver_ok")
     create_login_error = request.query_params.get("create_login_error")
     create_login_ok = request.query_params.get("create_login_ok")
     try:
@@ -294,6 +296,8 @@ def home(
             "upload_type": upload_type or "",
             "delete_error": delete_error,
             "deleted": deleted,
+            "driver_error": driver_error,
+            "driver_ok": driver_ok,
             "create_login_error": create_login_error,
             "create_login_ok": create_login_ok,
             "open_loads_count": open_loads_count,
@@ -1337,6 +1341,83 @@ async def create_driver_account(
     db.add(driver)
     db.commit()
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Driver account created"), status_code=303)
+
+
+@router.post("/my-drivers", response_class=RedirectResponse)
+async def create_my_driver_account(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Haulier: create a driver for their own company only."""
+    from urllib.parse import quote_plus
+
+    current_user = get_current_user_optional(request, db)
+    base = "/?section=my-drivers"
+
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&driver_error=" + quote_plus(msg), status_code=303)
+
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    role = (getattr(current_user, "role", None) or "").strip().lower()
+    if role != "haulier":
+        return redirect_error("Only haulier accounts can manage drivers")
+    if not current_user.haulier_id:
+        return redirect_error("Your account is not linked to a haulier company")
+
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    email = (form.get("email") or "").strip().lower()
+    phone = (form.get("phone") or "").strip() or None
+    password = form.get("password") or ""
+    if not name or not email or not password:
+        return redirect_error("Name, email and password are required")
+    if len(password) < 6:
+        return redirect_error("Password must be at least 6 characters")
+    if db.query(models.Driver).filter(models.Driver.email == email).first():
+        return redirect_error("Driver email already used")
+
+    driver = models.Driver(
+        haulier_id=current_user.haulier_id,
+        name=name,
+        email=email,
+        phone=phone,
+        password_hash=hash_password(password),
+    )
+    db.add(driver)
+    db.commit()
+    return RedirectResponse(url=base + "&driver_ok=" + quote_plus("Driver account created"), status_code=303)
+
+
+@router.post("/my-drivers/delete/{driver_id}", response_class=RedirectResponse)
+def delete_my_driver_account(
+    driver_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Haulier: delete a driver from their own company only."""
+    from urllib.parse import quote_plus
+
+    current_user = get_current_user_optional(request, db)
+    base = "/?section=my-drivers"
+
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&driver_error=" + quote_plus(msg), status_code=303)
+
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    role = (getattr(current_user, "role", None) or "").strip().lower()
+    if role != "haulier":
+        return redirect_error("Only haulier accounts can manage drivers")
+    if not current_user.haulier_id:
+        return redirect_error("Your account is not linked to a haulier company")
+
+    driver = db.get(models.Driver, driver_id)
+    if not driver or driver.haulier_id != current_user.haulier_id:
+        return redirect_error("Driver not found for your company")
+    db.delete(driver)
+    db.commit()
+    return RedirectResponse(url=base + "&driver_ok=" + quote_plus("Driver deleted"), status_code=303)
 
 
 @router.post("/delete-driver/{driver_id}", response_class=RedirectResponse)
