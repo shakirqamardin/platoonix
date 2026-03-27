@@ -30,7 +30,7 @@ def login_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     """Show login form. If already logged in, redirect to role dashboard."""
     driver = get_current_driver_optional(request, db)
     if driver:
-        return RedirectResponse(url="/driver", status_code=302)
+        return RedirectResponse(url="/?section=find", status_code=302)
     user = get_current_user_optional(request, db)
     if user:
         if user.role == "haulier":
@@ -51,7 +51,7 @@ def driver_login_page(request: Request, db: Session = Depends(get_db)) -> HTMLRe
     """Show driver login form."""
     driver = get_current_driver_optional(request, db)
     if driver:
-        return RedirectResponse(url="/driver", status_code=302)
+        return RedirectResponse(url="/?section=find", status_code=302)
     return templates.TemplateResponse(
         "driver_login.html",
         {"request": request, "error": None, "email": ""},
@@ -83,7 +83,7 @@ async def driver_login_submit(
     request.session["driver_id"] = driver.id
     request.session["haulier_id"] = driver.haulier_id
     request.session["role"] = "driver"
-    return RedirectResponse(url="/driver", status_code=302)
+    return RedirectResponse(url="/?section=find", status_code=302)
 
 
 @router.post("/login")
