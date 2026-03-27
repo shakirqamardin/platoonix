@@ -114,6 +114,15 @@ def check_db_and_create_tables():
                 conn.rollback()
                 if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                     print(f"Migration drivers email index: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(text(
+                    "ALTER TABLE drivers ADD COLUMN IF NOT EXISTS vehicle_id INTEGER REFERENCES vehicles(id)"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration drivers.vehicle_id: {e!r}", file=sys.stderr)
             # backhaul_jobs.collected_at: confirmed collection (captures pay)
             try:
                 conn.execute(text(

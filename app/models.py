@@ -99,6 +99,8 @@ class Driver(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     haulier_id: Mapped[int] = mapped_column(ForeignKey("hauliers.id"), nullable=False)
+    # When set, this driver may only use Find Backhaul / express interest for this vehicle (office assigns per driver).
+    vehicle_id: Mapped[Optional[int]] = mapped_column(ForeignKey("vehicles.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50))
@@ -108,6 +110,7 @@ class Driver(Base):
     )
 
     haulier: Mapped["Haulier"] = relationship("Haulier", back_populates="drivers")
+    vehicle: Mapped[Optional["Vehicle"]] = relationship("Vehicle", foreign_keys=[vehicle_id])
     jobs: Mapped[list["BackhaulJob"]] = relationship("BackhaulJob", back_populates="driver")
    
 class Vehicle(Base):

@@ -312,6 +312,8 @@
         {% set _sec = 'find' if (current_user and current_user.role != 'admin' and _sec == 'admin') else _sec %}
         {% set _sec = 'find' if (current_user and current_user.role != 'haulier' and _sec == 'my-drivers') else _sec %}
         {% set _sec = 'find' if (current_user and current_user.role not in ['haulier', 'loader'] and _sec == 'my-team') else _sec %}
+        {# Drivers: Find Backhaul + Matches only (office login handles the rest) #}
+        {% set _sec = 'find' if (current_user and current_user.role == 'driver' and _sec not in ['find', 'matches']) else _sec %}
         {% set initial_section = 'find' if (_sec == 'company' and not haulier_profile and not loader_profile) else _sec %}
         
         <!-- Navigation Tabs -->
@@ -325,7 +327,7 @@
                     </div>
                 </label>
 
-                {% if current_user and (current_user.haulier_id or current_user.loader_id) %}
+                {% if current_user and (current_user.haulier_id or current_user.loader_id) and current_user.role != 'driver' %}
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'company' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="company" {{ 'checked' if initial_section == 'company' else '' }} />
                     <div class="flex items-center justify-center gap-2">
@@ -335,6 +337,7 @@
                 </label>
                 {% endif %}
                 
+                {% if not (current_user and current_user.role == 'driver') %}
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'vehicles' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="vehicles" {{ 'checked' if initial_section == 'vehicles' else '' }} />
                     <div class="flex items-center justify-center gap-2">
@@ -342,6 +345,7 @@
                         <span>Vehicles</span>
                     </div>
                 </label>
+                {% endif %}
 
                 {% if current_user and current_user.role == 'haulier' %}
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'my-drivers' else 'text-slate-300 hover:bg-slate-800/50' }}">
@@ -363,6 +367,7 @@
                 </label>
                 {% endif %}
                 
+                {% if not (current_user and current_user.role == 'driver') %}
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'loads' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="loads" {{ 'checked' if initial_section == 'loads' else '' }} />
                     <div class="flex items-center justify-center gap-2">
@@ -378,6 +383,7 @@
                         <span>Routes</span>
                     </div>
                 </label>
+                {% endif %}
                 
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'matches' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="matches" {{ 'checked' if initial_section == 'matches' else '' }} />
@@ -387,6 +393,7 @@
                     </div>
                 </label>
                 
+                {% if not (current_user and current_user.role == 'driver') %}
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'analytics' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="analytics" {{ 'checked' if initial_section == 'analytics' else '' }} />
                     <div class="flex items-center justify-center gap-2">
@@ -394,6 +401,7 @@
                         <span>Analytics</span>
                     </div>
                 </label>
+                {% endif %}
                 
                 {% if current_user and current_user.role == 'admin' %}
                 <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'admin' else 'text-slate-300 hover:bg-slate-800/50' }}">
@@ -407,7 +415,8 @@
             </div>
         </nav>
 
-        <!-- Company & billing (hauliers + loaders) -->
+        <!-- Company & billing (hauliers + loaders) — not shown on driver-only sessions -->
+        {% if not (current_user and current_user.role == 'driver') %}
         <section class="section-panel {{ 'active' if initial_section == 'company' else '' }}" data-section="company">
             {% if haulier_profile %}
             <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in border border-teal-500/20">
@@ -516,6 +525,7 @@
             <div class="glass-card rounded-2xl p-6 mb-6 text-slate-500 text-sm">Log in as a haulier or loader to manage company details.</div>
             {% endif %}
         </section>
+        {% endif %}
 
         <!-- Find Backhaul Section -->
         <section class="section-panel {{ 'active' if initial_section == 'find' else '' }}" data-section="find">
@@ -523,6 +533,9 @@
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
                     Find Available Loads
                 </h2>
+                {% if current_user and current_user.role == 'driver' %}
+                <p class="text-slate-400 text-sm mb-4">You’re signed in as a <strong class="text-slate-300">driver</strong>. Search below with your vehicle and where you’re empty — same tools as the office. <a href="/driver" class="text-teal-400 hover:underline">Open driver job view</a></p>
+                {% endif %}
                 
                 <div class="glass-card rounded-xl p-4 mb-6 border border-teal-500/20">
                     <p class="text-slate-300 text-sm">
@@ -703,6 +716,7 @@
         </section>
 
         <!-- Vehicles Section -->
+        {% if not (current_user and current_user.role == 'driver') %}
         <section class="section-panel {{ 'active' if initial_section == 'vehicles' else '' }}" data-section="vehicles">
             <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
@@ -856,6 +870,7 @@
                 {% endif %}
             </div>
         </section>
+        {% endif %}
 
         <!-- My Drivers Section (haulier only) -->
         {% if current_user and current_user.role == 'haulier' %}
@@ -886,7 +901,7 @@
                 {% if current_user.haulier_id %}
                 <div class="glass-card rounded-xl p-5 border border-teal-500/10 mb-6">
                     <h3 class="text-lg font-semibold text-slate-200 mb-4">Add New Driver</h3>
-                    <form method="post" action="/my-drivers" class="grid md:grid-cols-4 gap-4">
+                    <form method="post" action="/my-drivers" class="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-2">Driver Name</label>
                             <input name="name" required placeholder="e.g. Sam Driver" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
@@ -900,10 +915,20 @@
                             <input name="phone" placeholder="+44..." class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Vehicle <span class="text-slate-500 font-normal">(optional)</span></label>
+                            <select name="vehicle_id" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+                                <option value="">Any company vehicle</option>
+                                {% for v in vehicles %}
+                                <option value="{{ v.id }}">{{ v.registration }} · {{ v.vehicle_type }}</option>
+                                {% endfor %}
+                            </select>
+                            <p class="text-xs text-slate-500 mt-1">If set, this driver only sees that lorry in Find Backhaul.</p>
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
                             <input name="password" type="password" required placeholder="••••••••" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
                         </div>
-                        <div class="md:col-span-4">
+                        <div class="md:col-span-2 lg:col-span-3 xl:col-span-6">
                             <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg">
                                 Create Driver
                             </button>
@@ -1055,6 +1080,7 @@
         {% endif %}
 
         <!-- Loads Section -->
+        {% if not (current_user and current_user.role == 'driver') %}
         <section class="section-panel {{ 'active' if initial_section == 'loads' else '' }}" data-section="loads">
             <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
@@ -1380,6 +1406,7 @@
                 </div>
             </div>
         </section>
+        {% endif %}
 
         <!-- Matches Section -->
         <section class="section-panel {{ 'active' if initial_section == 'matches' else '' }}" data-section="matches">
@@ -1530,9 +1557,11 @@
                                     </td>
                                     <td class="py-3 px-4 text-right">
                                         <a href="/track/{{ j.id }}" class="text-teal-400 hover:text-teal-300 text-sm font-medium mr-3">Track</a>
+                                        {% if current_user and current_user.role != 'driver' %}
                                         <form method="post" action="/delete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Cancel this job? The load and vehicle can then be deleted if needed.');">
                                             <button type="submit" class="text-red-400 hover:text-red-300 text-sm font-medium">Cancel</button>
                                         </form>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -1554,6 +1583,7 @@
             </div>
         </section>
 <!-- Analytics Section -->
+{% if not (current_user and current_user.role == 'driver') %}
 <section class="section-panel {{ 'active' if initial_section == 'analytics' else '' }}" data-section="analytics">
     <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
         <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
@@ -1584,6 +1614,7 @@
         </div>
     </div>
 </section>
+{% endif %}
 
 <!-- Admin Section (only full user list + create-login forms for role=admin) -->
 {% if current_user and current_user.role == 'admin' %}
@@ -1756,13 +1787,22 @@
                 <!-- Driver Account -->
                 <div class="glass-card rounded-xl p-5 border border-teal-500/10 mt-6">
                     <h3 class="text-lg font-semibold text-slate-200 mb-4">🚗 New Driver</h3>
-                    <form method="post" action="/create-driver" class="grid md:grid-cols-5 gap-4">
+                    <form method="post" action="/create-driver" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-2">Select Haulier</label>
                             <select name="haulier_id" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
                                 <option value="" disabled selected>Pick haulier...</option>
                                 {% for h in hauliers %}
                                 <option value="{{ h.id }}">{{ h.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Vehicle <span class="text-slate-500 font-normal">(optional)</span></label>
+                            <select name="vehicle_id" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+                                <option value="">Any vehicle</option>
+                                {% for v in vehicles %}
+                                <option value="{{ v.id }}">{{ v.registration }} (co. {{ v.haulier_id }})</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -1782,7 +1822,7 @@
                             <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
                             <input name="password" type="password" required placeholder="••••••••" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
                         </div>
-                        <div class="md:col-span-5">
+                        <div class="md:col-span-2 lg:col-span-3">
                             <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg">
                                 Create Driver
                             </button>

@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Form, Query, Request, status
@@ -10,7 +11,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models
-from app.auth import get_current_admin, get_current_user, get_current_user_optional, hash_password
+from app.auth import (
+    get_current_admin,
+    get_current_driver_optional,
+    get_current_user,
+    get_current_user_optional,
+    hash_password,
+)
 from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
@@ -135,13 +142,61 @@ def _load_interests_display(load_interests_list, db: Session):
     return out
 
 
-def _require_user_or_login(request: Request, db: Session) -> Optional[RedirectResponse]:
-    """Any logged-in role may open the dashboard; guests go to /login."""
-    from app.auth import get_current_user_optional
+def _require_user_or_driver_or_login(request: Request, db: Session) -> Optional[RedirectResponse]:
+    """Office user or driver session may open the dashboard; guests go to /login."""
+    if get_current_user_optional(request, db) is not None:
+        return None
+    if get_current_driver_optional(request, db) is not None:
+        return None
+    return RedirectResponse(url="/login", status_code=302)
 
-    if get_current_user_optional(request, db) is None:
-        return RedirectResponse(url="/login", status_code=302)
-    return None
+
+def _driver_portal_user(driver: models.Driver) -> SimpleNamespace:
+    """Template-facing user object for driver-only sessions (Find Backhaul / Matches)."""
+    return SimpleNamespace(
+        id=driver.id,
+        email=driver.email,
+        role="driver",
+        haulier_id=driver.haulier_id,
+        loader_id=None,
+    )
+
+
+def _haulier_scoped_lists(
+    db: Session, haulier: models.Haulier, driver_actor: Optional[models.Driver] = None
+) -> dict:
+    """Haulier dashboard lists; optional driver limits vehicles (and thus jobs) to one lorry."""
+    vq = db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier.id).order_by(models.Vehicle.registration)
+    if driver_actor is not None and driver_actor.vehicle_id is not None:
+        vq = vq.filter(models.Vehicle.id == driver_actor.vehicle_id)
+    vehicles = vq.all()
+    vehicle_ids = [v.id for v in vehicles]
+    jobs = (
+        db.query(models.BackhaulJob)
+        .filter(models.BackhaulJob.vehicle_id.in_(vehicle_ids))
+        .order_by(models.BackhaulJob.matched_at.desc())
+        .all()
+        if vehicle_ids
+        else []
+    )
+    payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
+    loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+    load_interests = db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier.id).all()
+    haulier_routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
+    users = db.query(models.User).filter(models.User.haulier_id == haulier.id).order_by(models.User.email).all()
+    drivers = db.query(models.Driver).filter(models.Driver.haulier_id == haulier.id).order_by(models.Driver.name).all()
+    return {
+        "vehicles": vehicles,
+        "jobs": jobs,
+        "payments": payments,
+        "loads": loads,
+        "load_interests": load_interests,
+        "haulier_routes": haulier_routes,
+        "users": users,
+        "drivers": drivers,
+        "hauliers": [haulier],
+        "planned_loads": [],
+    }
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -149,15 +204,32 @@ def home(
     request: Request,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
-    from app.auth import get_current_user_optional
-
-    login_redir = _require_user_or_login(request, db)
+    login_redir = _require_user_or_driver_or_login(request, db)
     if login_redir is not None:
         return login_redir
     current_user = get_current_user_optional(request, db)
-    
+    driver_actor: Optional[models.Driver] = None
+    if current_user is None:
+        driver_actor = get_current_driver_optional(request, db)
+
     # Role-based filtering
-    if current_user and current_user.loader_id:
+    if driver_actor is not None:
+        haulier = db.get(models.Haulier, driver_actor.haulier_id)
+        if not haulier:
+            return RedirectResponse(url="/driver-login", status_code=302)
+        d = _haulier_scoped_lists(db, haulier, driver_actor)
+        vehicles = d["vehicles"]
+        jobs = d["jobs"]
+        payments = d["payments"]
+        loads = d["loads"]
+        load_interests = d["load_interests"]
+        haulier_routes = d["haulier_routes"]
+        users = d["users"]
+        drivers = d["drivers"]
+        hauliers = d["hauliers"]
+        planned_loads = d["planned_loads"]
+        current_user = _driver_portal_user(driver_actor)
+    elif current_user and current_user.loader_id:
         # LOADER VIEW - only their loads
         loader = db.get(models.Loader, current_user.loader_id)
         loads = db.query(models.Load).filter(models.Load.loader_id == loader.id).order_by(models.Load.created_at.desc()).all()
@@ -266,10 +338,15 @@ def home(
 
     haulier_profile = None
     loader_profile = None
-    if current_user and current_user.haulier_id:
+    if current_user and getattr(current_user, "role", None) != "driver" and current_user.haulier_id:
         haulier_profile = db.get(models.Haulier, current_user.haulier_id)
     elif current_user and current_user.loader_id:
         loader_profile = db.get(models.Loader, current_user.loader_id)
+
+    _driver_for_find = driver_actor if driver_actor is not None else None
+    default_find_vid = ""
+    if _driver_for_find and _driver_for_find.vehicle_id:
+        default_find_vid = str(_driver_for_find.vehicle_id)
 
     _scust, _sconn, _stest = _stripe_dashboard_urls()
 
@@ -307,8 +384,9 @@ def home(
             "open_loads_count": open_loads_count,
             "total_payout": total_payout,
             "matching_results": None,
-            "find_vehicle_id": "",
+            "find_vehicle_id": default_find_vid,
             "find_origin_postcode": "",
+            "find_destination_postcode": "",
             "postcode_lookup_failed": False,
             "match_diagnostic": None,
             "platform_fee_percent": get_settings().platform_fee_percent,
@@ -465,16 +543,20 @@ def find_backhaul_page(
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     """Run smart matching and render home with matching_results (vehicle_id + origin_postcode + optional destination_postcode from query)."""
-    from app.auth import get_current_user_optional
+    from app.services.geocode import get_lat_lon
+    from app.services.matching import find_matching_loads, find_matching_loads_along_route
 
-    login_redir = _require_user_or_login(request, db)
+    login_redir = _require_user_or_driver_or_login(request, db)
     if login_redir is not None:
         return login_redir
-    from app.services.geocode import get_lat_lon
-    from app.services.matching import find_matching_loads_along_route
     current_user = get_current_user_optional(request, db)
+    driver_actor: Optional[models.Driver] = None
+    if current_user is None:
+        driver_actor = get_current_driver_optional(request, db)
 
     vehicle_id_raw = request.query_params.get("vehicle_id", "").strip()
+    if driver_actor and driver_actor.vehicle_id and not vehicle_id_raw:
+        vehicle_id_raw = str(driver_actor.vehicle_id)
     raw_origin = (request.query_params.get("origin_postcode") or "").strip()
     raw_dest = (request.query_params.get("destination_postcode") or "").strip()
     origin_postcode = " ".join(raw_origin.split()).strip() if raw_origin else ""  # collapse spaces
@@ -486,46 +568,146 @@ def find_backhaul_page(
     if vehicle_id_raw and origin_postcode:
         try:
             vehicle_id = int(vehicle_id_raw)
-            # UNIFIED SMART SEARCH: Find loads near pickup + loads along route home
-            if destination_postcode:
-                # Route search: finds loads along entire journey corridor
-                route_pairs = find_matching_loads_along_route(vehicle_id, origin_postcode, destination_postcode, db)
-                # Also find loads near origin (might catch some the route missed)
-                origin_pairs = find_matching_loads(vehicle_id, origin_postcode, db)
-                # Merge and deduplicate by load_id
-                all_pairs = route_pairs + origin_pairs
-                seen_load_ids = set()
-                unique_pairs = []
-                for load, dist, is_perfect, reasons in all_pairs:
-                    if load.id not in seen_load_ids:
-                        seen_load_ids.add(load.id)
-                        unique_pairs.append((load, dist, is_perfect, reasons))
-                pairs = unique_pairs
+            v = db.get(models.Vehicle, vehicle_id)
+            if driver_actor:
+                if not v or v.haulier_id != driver_actor.haulier_id:
+                    matching_results = []
+                elif driver_actor.vehicle_id and driver_actor.vehicle_id != vehicle_id:
+                    matching_results = []
+                else:
+                    if destination_postcode:
+                        route_pairs = find_matching_loads_along_route(vehicle_id, origin_postcode, destination_postcode, db)
+                        origin_pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+                        all_pairs = route_pairs + origin_pairs
+                        seen_load_ids = set()
+                        unique_pairs = []
+                        for load, dist, is_perfect, reasons in all_pairs:
+                            if load.id not in seen_load_ids:
+                                seen_load_ids.add(load.id)
+                                unique_pairs.append((load, dist, is_perfect, reasons))
+                        pairs = unique_pairs
+                    else:
+                        pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+                    matching_results = [
+                        {"load": load, "distance_miles": dist, "is_perfect_match": is_perfect, "mismatch_reasons": reasons}
+                        for load, dist, is_perfect, reasons in pairs
+                    ]
+                    if not matching_results:
+                        open_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
+                        if open_count > 0:
+                            if get_lat_lon(origin_postcode) is None:
+                                postcode_lookup_failed = True
+                            match_diagnostic = _match_diagnostic(vehicle_id, origin_postcode, db)
             else:
-                # Just origin search if no destination
-                pairs = find_matching_loads(vehicle_id, origin_postcode, db)
-            
-            matching_results = [{"load": load, "distance_miles": dist, "is_perfect_match": is_perfect, "mismatch_reasons": reasons} for load, dist, is_perfect, reasons in pairs]
-            if not matching_results:
-                open_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
-                if open_count > 0:
-                    if get_lat_lon(origin_postcode) is None:
-                        postcode_lookup_failed = True
-                    match_diagnostic = _match_diagnostic(vehicle_id, origin_postcode, db)
+                # Office login (loader / haulier / admin): same search as before
+                if destination_postcode:
+                    route_pairs = find_matching_loads_along_route(vehicle_id, origin_postcode, destination_postcode, db)
+                    origin_pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+                    all_pairs = route_pairs + origin_pairs
+                    seen_load_ids = set()
+                    unique_pairs = []
+                    for load, dist, is_perfect, reasons in all_pairs:
+                        if load.id not in seen_load_ids:
+                            seen_load_ids.add(load.id)
+                            unique_pairs.append((load, dist, is_perfect, reasons))
+                    pairs = unique_pairs
+                else:
+                    pairs = find_matching_loads(vehicle_id, origin_postcode, db)
+                matching_results = [
+                    {"load": load, "distance_miles": dist, "is_perfect_match": is_perfect, "mismatch_reasons": reasons}
+                    for load, dist, is_perfect, reasons in pairs
+                ]
+                if not matching_results:
+                    open_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
+                    if open_count > 0:
+                        if get_lat_lon(origin_postcode) is None:
+                            postcode_lookup_failed = True
+                        match_diagnostic = _match_diagnostic(vehicle_id, origin_postcode, db)
         except ValueError:
             matching_results = []
 
-    hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
-    vehicles = db.query(models.Vehicle).order_by(models.Vehicle.created_at.desc()).all()
-    loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
-    jobs = db.query(models.BackhaulJob).order_by(models.BackhaulJob.matched_at.desc()).all()
-    payments = db.query(models.Payment).order_by(models.Payment.created_at.desc()).all()
-    planned_loads = db.query(models.PlannedLoad).order_by(models.PlannedLoad.created_at.desc()).all()
-    haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
-    load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
+    if driver_actor is not None:
+        haulier = db.get(models.Haulier, driver_actor.haulier_id)
+        if not haulier:
+            return RedirectResponse(url="/driver-login", status_code=302)
+        d = _haulier_scoped_lists(db, haulier, driver_actor)
+        vehicles = d["vehicles"]
+        jobs = d["jobs"]
+        payments = d["payments"]
+        loads = d["loads"]
+        load_interests = d["load_interests"]
+        haulier_routes = d["haulier_routes"]
+        users = d["users"]
+        drivers = d["drivers"]
+        hauliers = d["hauliers"]
+        planned_loads = d["planned_loads"]
+        current_user = _driver_portal_user(driver_actor)
+    elif current_user and current_user.loader_id:
+        loader = db.get(models.Loader, current_user.loader_id)
+        loads = db.query(models.Load).filter(models.Load.loader_id == loader.id).order_by(models.Load.created_at.desc()).all()
+        planned_loads = db.query(models.PlannedLoad).filter(models.PlannedLoad.loader_id == loader.id).order_by(models.PlannedLoad.created_at.desc()).all()
+        load_ids = [l.id for l in loads]
+        planned_ids = [p.id for p in planned_loads]
+        load_interests = []
+        if load_ids:
+            load_interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.load_id.in_(load_ids)).all())
+        if planned_ids:
+            load_interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.planned_load_id.in_(planned_ids)).all())
+        jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.load_id.in_(load_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if load_ids else []
+        payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
+        hauliers = []
+        vehicles = []
+        haulier_routes = []
+        users = db.query(models.User).filter(models.User.loader_id == loader.id).order_by(models.User.email).all()
+        drivers = []
+    elif current_user and current_user.haulier_id:
+        haulier = db.get(models.Haulier, current_user.haulier_id)
+        vehicles = db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier.id).order_by(models.Vehicle.registration).all()
+        haulier_routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
+        vehicle_ids = [v.id for v in vehicles]
+        jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id.in_(vehicle_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if vehicle_ids else []
+        payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
+        loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+        load_interests = db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier.id).all()
+        hauliers = [haulier]
+        planned_loads = []
+        users = db.query(models.User).filter(models.User.haulier_id == haulier.id).order_by(models.User.email).all()
+        drivers = db.query(models.Driver).filter(models.Driver.haulier_id == haulier.id).order_by(models.Driver.name).all()
+    elif current_user and (getattr(current_user, "role", None) or "").strip().lower() == "haulier":
+        vehicles = []
+        haulier_routes = []
+        loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+        load_interests = []
+        jobs = []
+        payments = []
+        planned_loads = []
+        hauliers = []
+        users = []
+        drivers = []
+    elif current_user and (getattr(current_user, "role", None) or "").strip().lower() == "admin":
+        hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
+        vehicles = db.query(models.Vehicle).order_by(models.Vehicle.created_at.desc()).all()
+        loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+        jobs = db.query(models.BackhaulJob).order_by(models.BackhaulJob.matched_at.desc()).all()
+        payments = db.query(models.Payment).order_by(models.Payment.created_at.desc()).all()
+        planned_loads = db.query(models.PlannedLoad).order_by(models.PlannedLoad.created_at.desc()).all()
+        haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
+        load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
+        users = db.query(models.User).order_by(models.User.email).all()
+        drivers = db.query(models.Driver).order_by(models.Driver.name).all()
+    else:
+        vehicles = []
+        haulier_routes = []
+        loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
+        load_interests = []
+        jobs = []
+        payments = []
+        planned_loads = []
+        hauliers = []
+        users = []
+        drivers = []
+
     load_interests_display = _load_interests_display(load_interests, db)
-    users = db.query(models.User).order_by(models.User.email).all()
-    drivers = db.query(models.Driver).order_by(models.Driver.name).all()
     try:
         open_loads_count = db.query(models.Load).filter(models.Load.status == models.LoadStatusEnum.OPEN.value).count()
     except Exception:
@@ -537,7 +719,7 @@ def find_backhaul_page(
 
     haulier_profile = None
     loader_profile = None
-    if current_user and current_user.haulier_id:
+    if current_user and getattr(current_user, "role", None) != "driver" and current_user.haulier_id:
         haulier_profile = db.get(models.Haulier, current_user.haulier_id)
     elif current_user and current_user.loader_id:
         loader_profile = db.get(models.Loader, current_user.loader_id)
@@ -569,6 +751,10 @@ def find_backhaul_page(
             "upload_type": "",
             "delete_error": None,
             "deleted": None,
+            "driver_error": None,
+            "driver_ok": None,
+            "team_error": None,
+            "team_ok": None,
             "create_login_error": None,
             "create_login_ok": None,
             "open_loads_count": open_loads_count,
@@ -894,14 +1080,27 @@ def delete_vehicle_form(
 @router.post("/delete-job/{job_id}", response_class=RedirectResponse)
 def delete_job_form(
     job_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
-    """Admin: cancel/delete a backhaul job. Resets load to open and interest to suggested."""
+    """Haulier office or admin: cancel/delete a backhaul job. Resets load to open and interest to suggested."""
+    current_user = get_current_user_optional(request, db)
+    if get_current_driver_optional(request, db) is not None:
+        return RedirectResponse(url="/?section=matches&delete_error=Not+authorized", status_code=303)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    if current_user.role not in ("haulier", "admin"):
+        return RedirectResponse(url="/?section=matches&delete_error=Not+authorized", status_code=303)
+
     job = db.get(models.BackhaulJob, job_id)
     if not job:
         return RedirectResponse(url="/?section=matches&delete_error=Job+not+found", status_code=303)
-    
+
+    vehicle = db.get(models.Vehicle, job.vehicle_id)
+    if current_user.role == "haulier":
+        if not current_user.haulier_id or not vehicle or vehicle.haulier_id != current_user.haulier_id:
+            return RedirectResponse(url="/?section=matches&delete_error=Not+your+job", status_code=303)
+
     # Reset load status to open
     if job.load_id:
         load = db.get(models.Load, job.load_id)
@@ -1095,9 +1294,13 @@ async def show_interest_form(
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
-    """Haulier: express interest in a suggested load or planned load."""
+    """Haulier office or driver: express interest in a suggested load or planned load."""
+    current_user = get_current_user_optional(request, db)
+    driver_actor = get_current_driver_optional(request, db) if current_user is None else None
+    if current_user is None and driver_actor is None:
+        return RedirectResponse(url="/login", status_code=302)
+
     form = dict(await request.form())
     haulier_id = int(form.get("haulier_id"))
     vehicle_id = int(form.get("vehicle_id"))
@@ -1113,6 +1316,22 @@ async def show_interest_form(
         load_id = None
     if not planned_load_id and not load_id:
         return RedirectResponse(url="/", status_code=303)
+
+    v = db.get(models.Vehicle, vehicle_id)
+    if not v or v.haulier_id != haulier_id:
+        return RedirectResponse(url="/?section=matches", status_code=303)
+    if current_user and getattr(current_user, "role", None) == "haulier":
+        if not current_user.haulier_id or current_user.haulier_id != haulier_id:
+            return RedirectResponse(url="/?section=matches", status_code=303)
+    elif current_user and getattr(current_user, "role", None) == "admin":
+        pass
+    elif driver_actor:
+        if driver_actor.haulier_id != haulier_id:
+            return RedirectResponse(url="/?section=matches", status_code=303)
+        if driver_actor.vehicle_id and driver_actor.vehicle_id != vehicle_id:
+            return RedirectResponse(url="/?section=matches", status_code=303)
+    else:
+        return RedirectResponse(url="/?section=matches", status_code=303)
     existing = (
         db.query(models.LoadInterest)
         .filter(
@@ -1341,8 +1560,21 @@ async def create_driver_account(
     if db.query(models.Driver).filter(models.Driver.email == email).first():
         return redirect_error("Driver email already used")
 
+    vehicle_id = None
+    vid_raw = form.get("vehicle_id")
+    if vid_raw and str(vid_raw).strip():
+        try:
+            vid = int(str(vid_raw).strip())
+        except (TypeError, ValueError):
+            return redirect_error("Invalid vehicle")
+        vv = db.get(models.Vehicle, vid)
+        if not vv or vv.haulier_id != haulier_id:
+            return redirect_error("Vehicle must belong to the selected company")
+        vehicle_id = vid
+
     driver = models.Driver(
         haulier_id=haulier_id,
+        vehicle_id=vehicle_id,
         name=name,
         email=email,
         phone=phone,
@@ -1387,8 +1619,21 @@ async def create_my_driver_account(
     if db.query(models.Driver).filter(models.Driver.email == email).first():
         return redirect_error("Driver email already used")
 
+    vehicle_id = None
+    vid_raw = form.get("vehicle_id")
+    if vid_raw and str(vid_raw).strip():
+        try:
+            vid = int(str(vid_raw).strip())
+        except (TypeError, ValueError):
+            return redirect_error("Invalid vehicle")
+        vv = db.get(models.Vehicle, vid)
+        if not vv or vv.haulier_id != current_user.haulier_id:
+            return redirect_error("Invalid vehicle for your company")
+        vehicle_id = vid
+
     driver = models.Driver(
         haulier_id=current_user.haulier_id,
+        vehicle_id=vehicle_id,
         name=name,
         email=email,
         phone=phone,
@@ -1565,17 +1810,32 @@ async def express_interest(
         return _redirect_matches("invalid_interest")
 
     current_user = get_current_user_optional(request, db)
-    if not current_user or current_user.role != "haulier":
+    driver_actor = get_current_driver_optional(request, db) if current_user is None else None
+    if current_user is None and driver_actor is None:
         return RedirectResponse(url="/login", status_code=303)
 
+    haulier_id: Optional[int] = None
+    if current_user and getattr(current_user, "role", None) == "haulier":
+        haulier_id = current_user.haulier_id
+    elif driver_actor is not None:
+        haulier_id = driver_actor.haulier_id
+    else:
+        return RedirectResponse(url="/?section=find", status_code=303)
+
+    if haulier_id is None:
+        return _redirect_matches("invalid_interest")
+
     vehicle = db.get(models.Vehicle, vid)
-    if not vehicle or vehicle.haulier_id != current_user.haulier_id:
+    if not vehicle or vehicle.haulier_id != haulier_id:
         return _redirect_matches("not_your_vehicle")
-    
+    if driver_actor is not None:
+        if driver_actor.vehicle_id and driver_actor.vehicle_id != vid:
+            return _redirect_matches("not_your_vehicle")
+
     existing = db.query(models.LoadInterest).filter(
         models.LoadInterest.load_id == lid,
         models.LoadInterest.vehicle_id == vid,
-        models.LoadInterest.haulier_id == current_user.haulier_id
+        models.LoadInterest.haulier_id == haulier_id,
     ).first()
 
     if existing:
@@ -1584,7 +1844,7 @@ async def express_interest(
     interest = models.LoadInterest(
         load_id=lid,
         vehicle_id=vid,
-        haulier_id=current_user.haulier_id,
+        haulier_id=haulier_id,
         status="expressed",
     )
     db.add(interest)
