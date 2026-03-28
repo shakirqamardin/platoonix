@@ -1343,6 +1343,8 @@ async def show_interest_form(
         )
         .first()
     )
+    is_new_interest = existing is None
+    prev_status = existing.status if existing else None
     if existing:
         existing.status = "expressed"
         if driver_actor:
@@ -1362,6 +1364,21 @@ async def show_interest_form(
         )
         db.add(interest)
         db.commit()
+    if is_new_interest or prev_status != "expressed":
+        try:
+            from app.services.in_app_notifications import record_loader_haulier_interest_notifications
+
+            load_row = db.get(models.Load, load_id) if load_id else None
+            planned_row = db.get(models.PlannedLoad, planned_load_id) if planned_load_id else None
+            record_loader_haulier_interest_notifications(
+                db,
+                load=load_row,
+                planned_load=planned_row,
+                haulier_id=haulier_id,
+                vehicle_id=vehicle_id,
+            )
+        except Exception as e:
+            print(f"[NOTIFY] record_loader_haulier_interest_notifications failed: {e}")
     try:
         from app.services.email_sender import schedule_loader_interest_email
 
@@ -1885,6 +1902,20 @@ async def express_interest(
     db.add(interest)
     db.commit()
     db.refresh(interest)
+
+    try:
+        from app.services.in_app_notifications import record_loader_haulier_interest_notifications
+
+        load_row = db.get(models.Load, lid)
+        record_loader_haulier_interest_notifications(
+            db,
+            load=load_row,
+            planned_load=None,
+            haulier_id=haulier_id,
+            vehicle_id=vid,
+        )
+    except Exception as e:
+        print(f"[NOTIFY] record_loader_haulier_interest_notifications failed: {e}")
 
     try:
         from app.services.email_sender import schedule_loader_interest_email

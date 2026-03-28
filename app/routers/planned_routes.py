@@ -139,22 +139,46 @@ def show_interest(
         .first()
     )
     if existing:
+        prev_status = existing.status
         existing.status = body.status
         db.commit()
         db.refresh(existing)
-        return existing
-    interest = models.LoadInterest(
-        haulier_id=body.haulier_id,
-        vehicle_id=body.vehicle_id,
-        load_id=body.load_id,
-        planned_load_id=body.planned_load_id,
-        expressing_driver_id=body.expressing_driver_id,
-        status=body.status or "expressed",
-    )
-    db.add(interest)
-    db.commit()
-    db.refresh(interest)
-    return interest
+        result = existing
+    else:
+        prev_status = None
+        interest = models.LoadInterest(
+            haulier_id=body.haulier_id,
+            vehicle_id=body.vehicle_id,
+            load_id=body.load_id,
+            planned_load_id=body.planned_load_id,
+            expressing_driver_id=body.expressing_driver_id,
+            status=body.status or "expressed",
+        )
+        db.add(interest)
+        db.commit()
+        db.refresh(interest)
+        result = interest
+
+    new_status = result.status
+    if new_status == "expressed" and (prev_status is None or prev_status != "expressed"):
+        try:
+            from app.services.in_app_notifications import record_loader_haulier_interest_notifications
+
+            load_row = db.get(models.Load, result.load_id) if result.load_id else None
+            planned_row = (
+                db.get(models.PlannedLoad, result.planned_load_id) if result.planned_load_id else None
+            )
+            record_loader_haulier_interest_notifications(
+                db,
+                load=load_row,
+                planned_load=planned_row,
+                haulier_id=body.haulier_id,
+                vehicle_id=body.vehicle_id,
+            )
+        except Exception as e:
+            print(f"[NOTIFY] record_loader_haulier_interest_notifications failed: {e}")
+
+    return result
 
 
 @router.get("/load-interests", response_model=list[schemas.LoadInterestRead])

@@ -1,5 +1,5 @@
-"""Persist in-app notifications for haulier office users and drivers (no email required)."""
-from typing import Set, Tuple
+"""Persist in-app notifications for haulier office users, drivers, and loader office users."""
+from typing import Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -108,6 +108,65 @@ def record_suggested_load_notifications(
                 body=body,
                 link_url="/?section=find",
                 kind=kind,
+            )
+        )
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def record_loader_haulier_interest_notifications(
+    db: Session,
+    *,
+    load: Optional[models.Load] = None,
+    planned_load: Optional[models.PlannedLoad] = None,
+    haulier_id: int,
+    vehicle_id: int,
+) -> None:
+    """
+    Notify loader office users when a haulier (or driver on their behalf) expresses interest.
+    """
+    loader_id: Optional[int] = None
+    title = "Haulier showed interest"
+    link = "/?section=matches"
+
+    haulier = db.get(models.Haulier, haulier_id)
+    haulier_name = (haulier.name if haulier else "A haulier") or "A haulier"
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    reg = (vehicle.registration if vehicle else None) or f"Vehicle #{vehicle_id}"
+
+    if load is not None:
+        loader_id = load.loader_id
+        body = (
+            f"{haulier_name} ({reg}) is interested in your load: {load.shipper_name} — "
+            f"{load.pickup_postcode} → {load.delivery_postcode}"
+        )
+    elif planned_load is not None:
+        loader_id = planned_load.loader_id
+        body = (
+            f"{haulier_name} ({reg}) is interested in your planned load: {planned_load.shipper_name} — "
+            f"{planned_load.pickup_postcode} → {planned_load.delivery_postcode}"
+        )
+    else:
+        return
+
+    if not loader_id:
+        return
+
+    for u in (
+        db.query(models.User)
+        .filter(models.User.loader_id == loader_id, models.User.role == "loader")
+        .all()
+    ):
+        db.add(
+            models.AppNotification(
+                user_id=u.id,
+                driver_id=None,
+                title=title,
+                body=body,
+                link_url=link,
+                kind="haulier_interest",
             )
         )
     try:
