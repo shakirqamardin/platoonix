@@ -60,10 +60,11 @@
       {% endif %}
       {% else %}
       {% set j = active_job %}
+      {% set jload = j.load %}
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
         <h1 class="text-lg font-semibold mb-2">Job {{ j.display_number }}</h1>
-        <p class="text-slate-300 font-mono text-sm">{{ j.pickup_postcode }} → {{ j.delivery_postcode }}</p>
-        <p class="text-slate-500 text-sm">{{ j.shipper_name or 'Load' }}</p>
+        <p class="text-slate-300 font-mono text-sm">{% if jload %}{{ jload.pickup_postcode }} → {{ jload.delivery_postcode }}{% else %}—{% endif %}</p>
+        <p class="text-slate-500 text-sm">{{ jload.shipper_name if jload else 'Load' }}</p>
       </section>
 
       <!-- Live location -->
@@ -136,6 +137,7 @@
       {% if base_postcode_used %}
       <p class="text-slate-500 text-xs mb-1">Route home: delivery → <strong>{{ base_postcode_used }}</strong>{% if request.query_params.get('return_to') %} (driver override){% endif %}</p>
       <form method="get" action="/driver" class="flex flex-wrap items-center gap-2 mb-2">
+        {% if request.query_params.get('job_id') %}<input type="hidden" name="job_id" value="{{ request.query_params.get('job_id') }}" />{% endif %}
         <label class="text-slate-500 text-xs">Override return to:</label>
         <input name="return_to" value="{{ request.query_params.get('return_to') or base_postcode_used }}" placeholder="Postcode" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-white w-28 placeholder-slate-500" />
         <button type="submit" class="rounded bg-slate-600 px-2 py-1.5 text-xs text-white">Update</button>
@@ -165,6 +167,7 @@
       {% elif show_route_home_hint %}
       <p class="text-slate-500 text-xs mt-2 mb-2">Set <strong>Base postcode</strong> in Haulier → My company (or per vehicle in My vehicles). Or enter return postcode here:</p>
       <form method="get" action="/driver" class="flex flex-wrap items-center gap-2 mb-2">
+        {% if request.query_params.get('job_id') %}<input type="hidden" name="job_id" value="{{ request.query_params.get('job_id') }}" />{% endif %}
         <input name="return_to" value="{{ request.query_params.get('return_to') or '' }}" placeholder="Return to postcode" class="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-white w-28 placeholder-slate-500" />
         <button type="submit" class="rounded bg-slate-600 px-2 py-1.5 text-xs text-white">Show loads on route home</button>
       </form>

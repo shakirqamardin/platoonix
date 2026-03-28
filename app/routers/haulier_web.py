@@ -70,7 +70,19 @@ def driver_page(
     )
     if actor_driver is not None:
         q = q.filter(models.BackhaulJob.driver_id == actor_driver.id)
-    active_job = q.order_by(models.BackhaulJob.matched_at.desc()).first()
+    requested_job_id: Optional[int] = None
+    raw_jid = (request.query_params.get("job_id") or "").strip()
+    if raw_jid:
+        try:
+            requested_job_id = int(raw_jid)
+        except ValueError:
+            requested_job_id = None
+    if requested_job_id is not None:
+        active_job = q.filter(models.BackhaulJob.id == requested_job_id).first()
+        if active_job is None:
+            active_job = q.order_by(models.BackhaulJob.matched_at.desc()).first()
+    else:
+        active_job = q.order_by(models.BackhaulJob.matched_at.desc()).first()
     available_jobs = []
     loads_on_route_home = []
     show_route_home_hint = False
@@ -111,7 +123,7 @@ def driver_page(
             available_jobs.append(
                 {
                     "job": j,
-                    "display_number": j.id + 199,
+                    "display_number": j.display_number,
                     "shipper_name": (load.shipper_name if load else ""),
                     "pickup_postcode": (load.pickup_postcode if load else ""),
                     "delivery_postcode": (load.delivery_postcode if load else ""),
