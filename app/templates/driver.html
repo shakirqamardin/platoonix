@@ -17,7 +17,11 @@
           <span class="text-lg font-semibold">Driver</span>
         </div>
         <div class="flex items-center gap-3 text-sm">
-          <a href="{{ dashboard_url or '/driver-login' }}" class="text-slate-400 hover:text-white">Back to dashboard</a>
+          <a href="/?section=find" id="driver-notif-link" class="relative rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:text-white">
+            In-app alerts
+            <span id="driver-notif-badge" class="hidden absolute -top-1 -right-1 min-w-[1rem] h-4 px-0.5 rounded-full bg-amber-500 text-[9px] font-bold text-slate-950 flex items-center justify-center">0</span>
+          </a>
+          <a href="{{ dashboard_url or '/driver-login' }}" class="text-slate-400 hover:text-white">Dashboard</a>
           <a href="/logout" class="text-slate-400 hover:text-white">Sign out</a>
         </div>
       </header>
@@ -234,6 +238,25 @@ if ("serviceWorker" in navigator) {
         .catch(function () { btn.disabled = false; btn.textContent = btn.getAttribute('data-status').replace('_', ' '); });
     });
   });
+})();
+
+(function () {
+  var badge = document.getElementById('driver-notif-badge');
+  if (!badge) return;
+  function tick() {
+    fetch('/api/notifications/unread-count', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var c = d.count || 0;
+        if (c > 0) {
+          badge.textContent = c > 9 ? '9+' : String(c);
+          badge.classList.remove('hidden');
+        } else badge.classList.add('hidden');
+      })
+      .catch(function () {});
+  }
+  tick();
+  setInterval(tick, 60000);
 })();
     </script>
   </body>

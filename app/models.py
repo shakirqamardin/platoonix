@@ -235,11 +235,17 @@ class LoadInterest(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     haulier_id: Mapped[int] = mapped_column(ForeignKey("hauliers.id"), nullable=False)
     vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"), nullable=False)
+    # Set when interest is submitted from a driver login (not haulier office); used to set BackhaulJob.driver_id on accept.
+    expressing_driver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("drivers.id"), nullable=True)
     load_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loads.id"))
     planned_load_id: Mapped[Optional[int]] = mapped_column(ForeignKey("planned_loads.id"))
     status: Mapped[str] = mapped_column(String(20), default="expressed")  # expressed, accepted, declined
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
+    )
+
+    expressing_driver: Mapped[Optional["Driver"]] = relationship(
+        "Driver", foreign_keys=[expressing_driver_id]
     )
 
 
@@ -342,6 +348,26 @@ class Payment(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+class AppNotification(Base):
+    """In-app alerts for office logins (user_id) or driver logins (driver_id)."""
+
+    __tablename__ = "app_notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    driver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("drivers.id"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    link_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+
+
 class DriverLocation(Base):
     __tablename__ = "driver_locations"
 

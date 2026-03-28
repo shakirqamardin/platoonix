@@ -148,6 +148,7 @@ def show_interest(
         vehicle_id=body.vehicle_id,
         load_id=body.load_id,
         planned_load_id=body.planned_load_id,
+        expressing_driver_id=body.expressing_driver_id,
         status=body.status or "expressed",
     )
     db.add(interest)

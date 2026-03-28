@@ -17,6 +17,7 @@ from app.auth import (
     get_current_user,
     get_current_user_optional,
     hash_password,
+    require_loader,
 )
 from app.config import get_settings
 from app.database import get_db
@@ -1344,6 +1345,10 @@ async def show_interest_form(
     )
     if existing:
         existing.status = "expressed"
+        if driver_actor:
+            existing.expressing_driver_id = driver_actor.id
+        elif current_user and getattr(current_user, "role", None) == "haulier":
+            existing.expressing_driver_id = None
         db.commit()
         interest = existing
     else:
@@ -1353,6 +1358,7 @@ async def show_interest_form(
             load_id=load_id,
             planned_load_id=planned_load_id,
             status="expressed",
+            expressing_driver_id=driver_actor.id if driver_actor else None,
         )
         db.add(interest)
         db.commit()
@@ -1370,39 +1376,63 @@ async def accept_interest(
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
-    """Loader: accept haulier's interest and create a backhaul job."""
-    form = dict(await request.form())
-    interest_id = int(form.get("interest_id"))
-    
-    # Get the interest record
-    interest = db.get(models.LoadInterest, interest_id)
-    if not interest:
-        return RedirectResponse(url="/?section=matches", status_code=303)
-    
-    # Update status to accepted
-    interest.status = "accepted"
-    db.commit()
-    
-    # Create the BackhaulJob
+    """Loader (or admin): accept haulier/driver interest and create a backhaul job with driver when known."""
     from datetime import datetime, timezone
+    from urllib.parse import quote_plus
+
+    redir = require_loader(request, db)
+    if redir is not None:
+        return redir
+    current_user = get_current_user_optional(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    form = dict(await request.form())
+    try:
+        interest_id = int(form.get("interest_id"))
+    except (TypeError, ValueError):
+        return RedirectResponse(
+            url="/?section=matches&msg=" + quote_plus("invalid_interest"),
+            status_code=303,
+        )
+
+    interest = db.get(models.LoadInterest, interest_id)
+    if not interest or interest.status != "expressed":
+        return RedirectResponse(url="/?section=matches", status_code=303)
+    if not interest.load_id:
+        return RedirectResponse(
+            url="/?section=matches&msg=" + quote_plus("use_loader_flow_for_planned"),
+            status_code=303,
+        )
+
+    load = db.get(models.Load, interest.load_id)
+    if not load:
+        return RedirectResponse(url="/?section=matches", status_code=303)
+    if current_user.role == "loader":
+        if not current_user.loader_id or load.loader_id != current_user.loader_id:
+            return RedirectResponse(
+                url="/?section=matches&msg=" + quote_plus("not_your_load"),
+                status_code=303,
+            )
+
+    from app.services.job_driver_resolution import resolve_driver_id_for_accepted_interest
+
+    driver_id = resolve_driver_id_for_accepted_interest(db, interest)
+
+    interest.status = "accepted"
     job = models.BackhaulJob(
         vehicle_id=interest.vehicle_id,
         load_id=interest.load_id,
+        driver_id=driver_id,
         matched_at=datetime.now(timezone.utc),
     )
     db.add(job)
+    load.status = models.LoadStatusEnum.MATCHED.value
+    db.add(load)
     db.commit()
     db.refresh(job)
-    
-    # Update load status to matched
-    if interest.load_id:
-        load = db.get(models.Load, interest.load_id)
-        if load:
-            load.status = models.LoadStatusEnum.MATCHED.value
-            db.commit()
-    
+
     try:
         from app.services.email_sender import schedule_haulier_job_email
 
@@ -1839,6 +1869,10 @@ async def express_interest(
     ).first()
 
     if existing:
+        if driver_actor:
+            existing.expressing_driver_id = driver_actor.id
+            db.add(existing)
+            db.commit()
         return RedirectResponse(url="/?section=matches&msg=already_interested", status_code=303)
 
     interest = models.LoadInterest(
@@ -1846,6 +1880,7 @@ async def express_interest(
         vehicle_id=vid,
         haulier_id=haulier_id,
         status="expressed",
+        expressing_driver_id=driver_actor.id if driver_actor else None,
     )
     db.add(interest)
     db.commit()

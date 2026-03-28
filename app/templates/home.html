@@ -211,6 +211,20 @@
                     
                     {% if current_user_email %}
                     <div class="flex items-center gap-3">
+                        <div class="relative" id="notif-bell-wrap">
+                            <button type="button" id="notif-bell-btn" class="relative rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:text-white hover:border-teal-500 hover:bg-slate-800/60 transition-all" aria-label="Notifications">
+                                <span class="text-lg leading-none">🔔</span>
+                                <span id="notif-badge" class="hidden absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-slate-950">0</span>
+                            </button>
+                            <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] max-h-80 overflow-y-auto glass-card rounded-xl border border-slate-700 shadow-xl z-50 text-left">
+                                <div class="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+                                    <span class="text-xs font-semibold text-slate-400">Notifications</span>
+                                    <button type="button" id="notif-mark-all" class="text-xs text-teal-400 hover:underline">Mark all read</button>
+                                </div>
+                                <ul id="notif-list" class="text-sm divide-y divide-slate-800/80"></ul>
+                                <p id="notif-empty" class="px-3 py-4 text-slate-500 text-xs text-center">No notifications yet.</p>
+                            </div>
+                        </div>
                         <div class="flex items-center gap-2 text-sm">
                             <div class="w-8 h-8 rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 flex items-center justify-center font-bold text-white">
                                 {{ current_user_email[0].upper() }}
@@ -600,6 +614,7 @@
                     <button type="button" id="start-alerts-btn" class="px-6 py-3 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-lg transition-all">
                         🔔 Live Alerts
                     </button>
+                    <p class="w-full text-xs text-slate-500 -mt-2 mb-0">Live alerts use the same <strong class="text-slate-400">25-mile</strong> rules as Find Loads. Add <strong class="text-slate-400">Returning to</strong> (base) to watch the <strong class="text-slate-400">empty → base corridor</strong> plus pickups near where you’re empty.</p>
                     
                     <button type="button" id="stop-alerts-btn" class="px-6 py-3 text-sm font-semibold text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-800 transition-all hidden">
                         Stop
@@ -1957,8 +1972,12 @@
                     var postcode = postcodeInput && postcodeInput.value && postcodeInput.value.trim();
                     if (!vehicleId || !postcode) return;
                     
+                    var destInput = document.getElementById('find-destination-postcode');
+                    var dest = destInput && destInput.value && destInput.value.trim();
                     if (eventSource) eventSource.close();
-                    eventSource = new EventSource('/api/alerts/stream?vehicle_id=' + encodeURIComponent(vehicleId) + '&origin_postcode=' + encodeURIComponent(postcode));
+                    var streamUrl = '/api/alerts/stream?vehicle_id=' + encodeURIComponent(vehicleId) + '&origin_postcode=' + encodeURIComponent(postcode);
+                    if (dest) streamUrl += '&destination_postcode=' + encodeURIComponent(dest);
+                    eventSource = new EventSource(streamUrl);
                     
                     if (listEl) listEl.classList.remove('hidden');
                     startBtn.classList.add('hidden');
@@ -1998,6 +2017,87 @@
                     stopBtn.classList.add('hidden');
                 });
             }
+        })();
+        
+        // In-app notifications (header bell)
+        (function () {
+            var bell = document.getElementById('notif-bell-btn');
+            var dropdown = document.getElementById('notif-dropdown');
+            var listEl = document.getElementById('notif-list');
+            var emptyEl = document.getElementById('notif-empty');
+            var badge = document.getElementById('notif-badge');
+            var markAll = document.getElementById('notif-mark-all');
+            if (!bell || !dropdown || !listEl || !emptyEl || !badge) return;
+
+            function escapeHtml(s) {
+                var d = document.createElement('div');
+                d.textContent = s || '';
+                return d.innerHTML;
+            }
+
+            function refreshCount() {
+                fetch('/api/notifications/unread-count', { credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        var c = (d && d.count) || 0;
+                        if (c > 0) {
+                            badge.textContent = c > 99 ? '99+' : String(c);
+                            badge.classList.remove('hidden');
+                        } else badge.classList.add('hidden');
+                    })
+                    .catch(function () {});
+            }
+
+            function renderList(items) {
+                listEl.innerHTML = '';
+                if (!items || !items.length) {
+                    emptyEl.classList.remove('hidden');
+                    return;
+                }
+                emptyEl.classList.add('hidden');
+                items.forEach(function (n) {
+                    var li = document.createElement('li');
+                    li.className = 'px-3 py-2 hover:bg-slate-800/60 cursor-pointer text-left' + (n.read_at ? ' opacity-70' : '');
+                    li.innerHTML = '<div class="font-medium text-slate-200 text-xs">' + escapeHtml(n.title) + '</div>' +
+                        '<div class="text-slate-400 text-xs mt-0.5">' + escapeHtml(n.body || '') + '</div>';
+                    li.addEventListener('click', function () {
+                        if (!n.read_at) {
+                            fetch('/api/notifications/' + n.id + '/read', { method: 'POST', credentials: 'same-origin' })
+                                .then(refreshCount);
+                        }
+                        if (n.link_url) window.location.href = n.link_url;
+                    });
+                    listEl.appendChild(li);
+                });
+            }
+
+            function loadList() {
+                fetch('/api/notifications/list', { credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(renderList)
+                    .catch(function () {});
+            }
+
+            bell.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (dropdown.classList.contains('hidden')) {
+                    dropdown.classList.remove('hidden');
+                    loadList();
+                } else dropdown.classList.add('hidden');
+            });
+            document.addEventListener('click', function () { dropdown.classList.add('hidden'); });
+            dropdown.addEventListener('click', function (e) { e.stopPropagation(); });
+
+            if (markAll) {
+                markAll.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin' })
+                        .then(function () { loadList(); refreshCount(); });
+                });
+            }
+
+            refreshCount();
+            setInterval(refreshCount, 45000);
         })();
         
         // Template download protection

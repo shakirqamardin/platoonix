@@ -252,6 +252,7 @@ class LoadInterestCreate(BaseModel):
     vehicle_id: int
     load_id: Optional[int] = None
     planned_load_id: Optional[int] = None
+    expressing_driver_id: Optional[int] = None
     status: str = Field(default="expressed", description="expressed, accepted, declined")
 
 
@@ -259,6 +260,7 @@ class LoadInterestRead(BaseModel):
     id: int
     haulier_id: int
     vehicle_id: int
+    expressing_driver_id: Optional[int] = None
     load_id: Optional[int]
     planned_load_id: Optional[int]
     status: str

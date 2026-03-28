@@ -1,31 +1,42 @@
 """
-Real-time alerts for hauliers: when a new load is posted that matches their vehicle
-and location, push an event over SSE. Also: when planned routes match, alert hauliers
-to show interest. Subscriptions are (vehicle_id, origin_postcode).
+Real-time alerts: when a new load is posted that matches a subscriber's vehicle and
+empty location (and optional base / return postcode for corridor matching), push SSE.
+Also: planned-route matches. Subscriptions are (vehicle_id, origin_postcode, destination_postcode).
 """
 import queue
 import threading
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
 from app import models
-from app.services.matching import load_matches_vehicle
+from app.services.matching import load_matches_empty_to_base_corridor, load_matches_vehicle
 
 # Thread-safe: sync code (load creation) puts, async SSE gets via executor
 _subscriptions: List[Dict[str, Any]] = []
 _lock = threading.Lock()
 
 
-def add_subscription(vehicle_id: int, origin_postcode: str) -> queue.Queue:
-    """Register a listener; returns a queue that will receive alert dicts."""
+def _norm_pc(s: str) -> str:
+    return " ".join((s or "").strip().split()).upper()
+
+
+def add_subscription(
+    vehicle_id: int,
+    origin_postcode: str,
+    destination_postcode: Optional[str] = None,
+) -> queue.Queue:
+    """Register a listener; optional destination = base / return for 25mi corridor + origin (same as Find Backhaul)."""
     q = queue.Queue()
     with _lock:
-        _subscriptions.append({
-            "vehicle_id": vehicle_id,
-            "origin_postcode": origin_postcode.strip(),
-            "queue": q,
-        })
+        _subscriptions.append(
+            {
+                "vehicle_id": vehicle_id,
+                "origin_postcode": _norm_pc(origin_postcode),
+                "destination_postcode": _norm_pc(destination_postcode or ""),
+                "queue": q,
+            }
+        )
     return q
 
 
@@ -47,6 +58,7 @@ def _create_suggested_interest_and_email(
     db: Session,
     seen_emails: set,
     origin_label: str,
+    seen_in_app: Optional[Set[Tuple[int, int]]] = None,
 ) -> None:
     """Create LoadInterest(suggested) for this load+vehicle if not exists; send email once per haulier."""
     existing = (
@@ -91,6 +103,14 @@ def _create_suggested_interest_and_email(
     except Exception:
         pass
 
+    if seen_in_app is not None:
+        try:
+            from app.services.in_app_notifications import record_suggested_load_notifications
+
+            record_suggested_load_notifications(db, load, haulier_id, vehicle_id, seen_in_app)
+        except Exception:
+            pass
+
 
 def notify_new_load(load: models.Load, db: Session) -> None:
     """
@@ -102,12 +122,18 @@ def notify_new_load(load: models.Load, db: Session) -> None:
     """
     if load.status != models.LoadStatusEnum.OPEN.value:
         return
+
+    from app.services.in_app_notifications import record_live_load_notifications
+
+    live_in_app_done: Set[Tuple[int, int]] = set()
     for sub in _get_subscriptions():
         try:
-            if load_matches_vehicle(
+            dest = (sub.get("destination_postcode") or "").strip()
+            if load_matches_empty_to_base_corridor(
                 load,
                 sub["vehicle_id"],
                 sub["origin_postcode"],
+                dest if dest else None,
                 db,
             ):
                 msg = {
@@ -120,12 +146,13 @@ def notify_new_load(load: models.Load, db: Session) -> None:
                     "volume_m3": load.volume_m3,
                 }
                 sub["queue"].put(msg)
+                record_live_load_notifications(db, load, sub["vehicle_id"], live_in_app_done)
         except Exception:
             pass  # Don't let one subscriber break others
 
     try:
-        from app.services.email_sender import send_email
         seen_emails = set()
+        seen_in_app: Set[Tuple[int, int]] = set()
 
         # Planned routes: create suggested LoadInterest + email
         routes = db.query(models.HaulierRoute).all()
@@ -133,8 +160,13 @@ def notify_new_load(load: models.Load, db: Session) -> None:
             if not load_matches_vehicle(load, route.vehicle_id, route.empty_at_postcode or "", db):
                 continue
             _create_suggested_interest_and_email(
-                load, route.haulier_id, route.vehicle_id, db, seen_emails,
+                load,
+                route.haulier_id,
+                route.vehicle_id,
+                db,
+                seen_emails,
                 "planned route " + (route.empty_at_postcode or ""),
+                seen_in_app=seen_in_app,
             )
 
         # Vehicles with base_postcode: create suggested LoadInterest + email
@@ -147,8 +179,13 @@ def notify_new_load(load: models.Load, db: Session) -> None:
             if not origin or not load_matches_vehicle(load, vehicle.id, origin, db):
                 continue
             _create_suggested_interest_and_email(
-                load, vehicle.haulier_id, vehicle.id, db, seen_emails,
+                load,
+                vehicle.haulier_id,
+                vehicle.id,
+                db,
+                seen_emails,
                 "base " + origin,
+                seen_in_app=seen_in_app,
             )
     except Exception:
         pass
@@ -176,11 +213,18 @@ def notify_matching_loads_for_vehicle(
             .all()
         )
         seen_emails = set()
+        seen_in_app: Set[Tuple[int, int]] = set()
         for load in open_loads:
             if not load_matches_vehicle(load, vehicle_id, origin, db):
                 continue
             _create_suggested_interest_and_email(
-                load, haulier_id, vehicle_id, db, seen_emails, origin_label,
+                load,
+                haulier_id,
+                vehicle_id,
+                db,
+                seen_emails,
+                origin_label,
+                seen_in_app=seen_in_app,
             )
     except Exception:
         pass
@@ -197,7 +241,7 @@ def notify_route_match(
     it and click "Show interest".
     """
     # Push to live subscribers
-    origin = (route.empty_at_postcode or "").strip()
+    origin = _norm_pc(route.empty_at_postcode or "")
     for sub in _get_subscriptions():
         try:
             if sub["vehicle_id"] != route.vehicle_id or sub["origin_postcode"] != origin:

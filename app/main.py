@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
-from app.routers import alerts, hauliers, vehicles, loads, matches, planned_routes, pods, payments, upload, web, auth_web, haulier_web, loader_web, driver, tracking
+from app.routers import alerts, hauliers, vehicles, loads, matches, planned_routes, pods, payments, upload, web, auth_web, haulier_web, loader_web, driver, tracking, notifications
 app = FastAPI(
     title="Backhaul Logistics Platform",
     description="API for automated backhaul matching, ULEZ/CAZ-aware routing, and instant payouts.",
@@ -123,6 +123,15 @@ def check_db_and_create_tables():
                 conn.rollback()
                 if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                     print(f"Migration drivers.vehicle_id: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(text(
+                    "ALTER TABLE load_interests ADD COLUMN IF NOT EXISTS expressing_driver_id INTEGER REFERENCES drivers(id)"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration load_interests.expressing_driver_id: {e!r}", file=sys.stderr)
             # backhaul_jobs.collected_at: confirmed collection (captures pay)
             try:
                 conn.execute(text(
@@ -261,6 +270,7 @@ app.include_router(vehicles.router, prefix="/api/vehicles", tags=["vehicles"])
 app.include_router(loads.router, prefix="/api/loads", tags=["loads"])
 app.include_router(matches.router, prefix="/api/matches", tags=["matches"])
 app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(planned_routes.router, prefix="/api", tags=["planned-routes"])
 app.include_router(pods.router, prefix="/api/pods", tags=["pods"])
 app.include_router(payments.router, prefix="/api/payments", tags=["payments"])

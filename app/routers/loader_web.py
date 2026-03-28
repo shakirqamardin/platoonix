@@ -306,9 +306,14 @@ async def loader_accept_interest(
 
     splits = compute_job_payment_splits(amount_gbp, settings)
 
+    from app.services.job_driver_resolution import resolve_driver_id_for_accepted_interest
+
+    job_driver_id = resolve_driver_id_for_accepted_interest(db, interest)
+
     job = models.BackhaulJob(
         vehicle_id=interest.vehicle_id,
         load_id=load.id,
+        driver_id=job_driver_id,
         matched_at=datetime.now(timezone.utc),
         accepted_at=datetime.now(timezone.utc),
     )

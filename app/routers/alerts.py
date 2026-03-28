@@ -1,9 +1,10 @@
 """
-Real-time alerts for hauliers: SSE stream when new loads match their vehicle + location.
+Real-time alerts: SSE when new loads match vehicle + empty postcode (+ optional base for corridor).
 """
 import asyncio
 import json
 import queue
+from typing import Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
@@ -15,9 +16,14 @@ router = APIRouter()
 KEEPALIVE_SECONDS = 25
 
 
-async def _event_generator(vehicle_id: int, origin_postcode: str, request: Request):
+async def _event_generator(
+    vehicle_id: int,
+    origin_postcode: str,
+    destination_postcode: Optional[str],
+    request: Request,
+):
     """Yield SSE events: keepalive comments and new_load data."""
-    q = add_subscription(vehicle_id, origin_postcode)
+    q = add_subscription(vehicle_id, origin_postcode, destination_postcode)
     try:
         loop = asyncio.get_event_loop()
         while True:
@@ -40,19 +46,22 @@ async def alerts_stream(
     request: Request,
     vehicle_id: int,
     origin_postcode: str,
+    destination_postcode: Optional[str] = None,
 ) -> StreamingResponse:
     """
-    Server-Sent Events stream: open this URL to get real-time alerts when a new load
-    is posted that matches this vehicle and is within 25 miles of origin_postcode.
-    Use the same matching rules as Find backhaul (trailer type, capacity).
+    Server-Sent Events: real-time when a new open load matches this vehicle.
+    - With origin only: pickup within default radius (e.g. 25mi) of empty location.
+    - With origin + destination (base): same as Find Backhaul — corridor from empty→base
+      plus pickup near origin (merged).
     """
     origin_postcode = (origin_postcode or "").strip()
     if not origin_postcode:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="origin_postcode required")
+    dest = (destination_postcode or "").strip() or None
 
     return StreamingResponse(
-        _event_generator(vehicle_id, origin_postcode, request),
+        _event_generator(vehicle_id, origin_postcode, dest, request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

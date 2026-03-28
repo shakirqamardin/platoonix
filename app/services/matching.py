@@ -136,6 +136,30 @@ def load_matches_vehicle(
     return True
 
 
+def load_matches_empty_to_base_corridor(
+    load: models.Load,
+    vehicle_id: int,
+    origin_postcode: str,
+    destination_postcode: Optional[str],
+    db: Session,
+    radius_miles: Optional[int] = None,
+) -> bool:
+    """
+    True if this open load matches the subscriber's search: within default radius (e.g. 25mi)
+    of empty location, or — when destination (base) is set — anywhere along the empty→base
+    corridor (same rules as Find Backhaul merge of route + origin search).
+    """
+    dest = (destination_postcode or "").strip()
+    if not dest:
+        return load_matches_vehicle(load, vehicle_id, origin_postcode, db, radius_miles)
+    route_results = find_matching_loads_along_route(
+        vehicle_id, origin_postcode, dest, db, radius_miles
+    )
+    origin_results = find_matching_loads(vehicle_id, origin_postcode, db, radius_miles)
+    matched_ids = {row[0].id for row in route_results} | {row[0].id for row in origin_results}
+    return load.id in matched_ids
+
+
 def planned_load_matches_route(
     planned_load: models.PlannedLoad,
     route: models.HaulierRoute,
