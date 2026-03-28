@@ -36,6 +36,33 @@ def _haulier_or_redirect(request: Request, db: Session) -> Union[Tuple[models.Us
         return RedirectResponse(url="/login", status_code=302)
     return (user, haulier)
 
+def _driver_visible_group_jobs(
+    db: Session,
+    active_job: models.BackhaulJob,
+    haulier: models.Haulier,
+    actor_driver: Optional[models.Driver],
+) -> list[models.BackhaulJob]:
+    """Incomplete jobs the driver may act on: same multi-drop group, or a single job."""
+    q = (
+        db.query(models.BackhaulJob)
+        .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
+        .filter(models.Vehicle.haulier_id == haulier.id)
+        .filter(models.BackhaulJob.completed_at.is_(None))
+    )
+    if active_job.job_group_uuid:
+        q = q.filter(models.BackhaulJob.job_group_uuid == active_job.job_group_uuid)
+        if actor_driver is not None:
+            # Whole run visible once any grouped job is assigned to this driver (peers may still be null in edge cases).
+            q = q.filter(
+                (models.BackhaulJob.driver_id == actor_driver.id)
+                | (models.BackhaulJob.driver_id.is_(None))
+            )
+        return q.order_by(models.BackhaulJob.matched_at.asc()).all()
+    if actor_driver is not None:
+        q = q.filter(models.BackhaulJob.driver_id == actor_driver.id)
+    return [active_job]
+
+
 def _haulier_or_driver_context(
     request: Request, db: Session
 ) -> Union[Tuple[models.Haulier, Optional[models.Driver]], RedirectResponse]:
@@ -106,6 +133,19 @@ def driver_page(
                 loads_on_route_home = [{"load": l, "distance_miles": d} for l, d in pairs]
             else:
                 show_route_home_hint = True
+    group_jobs: list[models.BackhaulJob] = []
+    is_multi_drop = False
+    group_pickup_all_reached = False
+    group_pickup_all_collected = False
+    group_pickup_all_departed = False
+    if active_job:
+        group_jobs = _driver_visible_group_jobs(db, active_job, haulier, actor_driver)
+        is_multi_drop = len(group_jobs) > 1
+        if is_multi_drop:
+            group_pickup_all_reached = all(g.reached_pickup_at for g in group_jobs)
+            group_pickup_all_collected = all(g.collected_at for g in group_jobs)
+            group_pickup_all_departed = all(g.departed_pickup_at for g in group_jobs)
+
     elif actor_driver is not None:
         # Driver login with no assigned active job: show unassigned jobs for this haulier so driver can claim one.
         unassigned = (
@@ -135,6 +175,11 @@ def driver_page(
         {
             "request": request,
             "active_job": active_job,
+            "group_jobs": group_jobs,
+            "is_multi_drop": is_multi_drop,
+            "group_pickup_all_reached": group_pickup_all_reached,
+            "group_pickup_all_collected": group_pickup_all_collected,
+            "group_pickup_all_departed": group_pickup_all_departed,
             "available_jobs": available_jobs,
             "loads_on_route_home": loads_on_route_home,
             "show_route_home_hint": show_route_home_hint,
@@ -171,13 +216,22 @@ def driver_claim_job(
         .first()
     )
     if existing_active and existing_active.id != job.id:
-        return RedirectResponse(
-            url="/driver?error=You+already+have+an+active+job.+Complete+it+before+claiming+another",
-            status_code=303,
+        same_group = (
+            existing_active.job_group_uuid
+            and job.job_group_uuid
+            and existing_active.job_group_uuid == job.job_group_uuid
         )
+        if not same_group:
+            return RedirectResponse(
+                url="/driver?error=You+already+have+an+active+job.+Complete+it+before+claiming+another",
+                status_code=303,
+            )
     if job.driver_id not in (None, actor_driver.id):
         return RedirectResponse(url="/driver?error=Job+already+assigned", status_code=303)
     job.driver_id = actor_driver.id
+    from app.services.job_groups import propagate_group_driver
+
+    propagate_group_driver(db, job, actor_driver.id)
     db.add(job)
     db.commit()
     return RedirectResponse(url="/driver", status_code=303)

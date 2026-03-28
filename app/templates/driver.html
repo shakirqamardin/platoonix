@@ -61,13 +61,26 @@
       {% else %}
       {% set j = active_job %}
       {% set jload = j.load %}
+      {% if is_multi_drop %}
+      <section class="rounded-xl border border-teal-500/30 bg-teal-950/25 p-4 mb-4">
+        <h1 class="text-lg font-semibold text-teal-200 mb-1">Multi-drop run</h1>
+        <p class="text-slate-300 text-sm mb-2">{{ group_jobs | length }} deliveries · same collection · separate payments &amp; ePOD per drop.</p>
+        <ul class="text-slate-400 text-xs space-y-1">
+          {% for gj in group_jobs %}
+          {% set gjl = gj.load %}
+          <li><span class="text-slate-300 font-mono">{{ gj.display_number }}</span>{% if gjl %} — {{ gjl.shipper_name }} · {{ gjl.pickup_postcode }} → {{ gjl.delivery_postcode }}{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% else %}
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
         <h1 class="text-lg font-semibold mb-2">Job {{ j.display_number }}</h1>
         <p class="text-slate-300 font-mono text-sm">{% if jload %}{{ jload.pickup_postcode }} → {{ jload.delivery_postcode }}{% else %}—{% endif %}</p>
         <p class="text-slate-500 text-sm">{{ jload.shipper_name if jload else 'Load' }}</p>
       </section>
+      {% endif %}
 
-      <!-- Live location -->
+      <!-- Live location (all jobs in group share GPS) -->
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-slate-300 font-medium">Share live location</span>
@@ -75,10 +88,79 @@
             Start
           </button>
         </div>
-        <p id="location-status" class="text-slate-500 text-xs">Off. Others can see your position when sharing.</p>
+        <p id="location-status" class="text-slate-500 text-xs">Off. Others can see your position when sharing.{% if is_multi_drop %} Updates every active job in this run.{% endif %}</p>
       </section>
 
-      <!-- Status timeline: tap to update -->
+      {% if is_multi_drop %}
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
+        <h2 class="text-slate-300 font-medium mb-2">Collection &amp; departure (all drops)</h2>
+        <p class="text-slate-500 text-xs mb-3">One stop at collection: these steps apply to every job in this run. Each loader is still charged separately when you confirm collection.</p>
+        <div class="space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if group_pickup_all_reached %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">1</span>
+            <span class="text-slate-400 flex-1">Reached collection</span>
+            {% if not group_pickup_all_reached %}
+            <button type="button" data-batch-status="reached_pickup" class="driver-batch-pickup-btn rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">I’m here (all)</button>
+            {% else %}
+            <span class="text-emerald-400 text-sm">Done</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if group_pickup_all_collected %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">2</span>
+            <span class="text-slate-400 flex-1">Collected (pay captured, each job)</span>
+            {% if not group_pickup_all_collected %}
+            <button type="button" data-batch-status="collected" class="driver-batch-pickup-btn rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">Collected (all)</button>
+            {% else %}
+            <span class="text-emerald-400 text-sm">Done</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if group_pickup_all_departed %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">3</span>
+            <span class="text-slate-400 flex-1">Departed collection</span>
+            {% if not group_pickup_all_departed %}
+            <button type="button" data-batch-status="departed_pickup" class="driver-batch-pickup-btn rounded-lg bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">Departed (all)</button>
+            {% else %}
+            <span class="text-emerald-400 text-sm">Done</span>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
+        <h2 class="text-slate-300 font-medium mb-3">Each delivery</h2>
+        <p class="text-slate-500 text-xs mb-3">Reach each drop and upload ePOD separately.</p>
+        <div class="space-y-4">
+          {% for gj in group_jobs %}
+          {% set gjl = gj.load %}
+          <div class="rounded-lg border border-slate-700/80 bg-slate-900/50 p-3">
+            <p class="text-slate-200 text-sm font-medium">{{ gj.display_number }}{% if gjl %} · {{ gjl.shipper_name }}{% endif %}</p>
+            <p class="text-slate-400 font-mono text-xs mb-2">{% if gjl %}{{ gjl.delivery_postcode }}{% else %}—{% endif %}</p>
+            <div class="space-y-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-slate-500 text-xs w-28">At delivery</span>
+                {% if not gj.reached_delivery_at %}
+                <button type="button" data-job-id="{{ gj.id }}" data-status="reached_delivery" class="driver-per-job-btn rounded-lg bg-slate-600 hover:bg-slate-500 px-2 py-1 text-xs text-white">I’m here</button>
+                {% else %}
+                <span class="text-emerald-400 text-xs">{{ gj.reached_delivery_at.strftime('%H:%M') }}</span>
+                {% endif %}
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-slate-500 text-xs w-28">ePOD</span>
+                {% if not gj.completed_at %}
+                <a href="/driver/epod?job_id={{ gj.id }}" class="rounded-lg bg-slate-600 hover:bg-slate-500 px-2 py-1 text-xs text-white">Upload</a>
+                {% else %}
+                <span class="text-emerald-400 text-xs">Done</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      <p class="text-slate-500 text-xs mb-2">Track: {% for gj in group_jobs %}<a href="/track/{{ gj.id }}" class="text-emerald-500 hover:underline">{{ gj.display_number }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+
+      {% else %}
+      <!-- Single job: full timeline -->
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 mb-4">
         <h2 class="text-slate-300 font-medium mb-3">Update status</h2>
         <p class="text-slate-500 text-xs mb-3">Tap in order. Collection confirms pay is captured; delivery + ePOD releases payout.</p>
@@ -132,6 +214,7 @@
       </section>
 
       <p class="text-slate-500 text-xs">Admin and loader can watch live at <a href="/track/{{ j.id }}" class="text-emerald-500 hover:underline">Track job</a>.</p>
+      {% endif %}
 
       <!-- Loads on your route home: from delivery back to base, within 25 miles of route -->
       {% if base_postcode_used %}
@@ -184,8 +267,20 @@ if ("serviceWorker" in navigator) {
 }
 
 (function () {
-  const jobId = {{ active_job.id if active_job else 'null' }};
-  if (!jobId) return;
+  const groupJobIds = [{% for gj in group_jobs %}{{ gj.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
+  const isMultiDrop = {{ 'true' if is_multi_drop else 'false' }};
+  if (!groupJobIds.length) return;
+
+  function postLocation(lat, lng) {
+    groupJobIds.forEach(function (jid) {
+      fetch('/api/driver/jobs/' + jid + '/location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: lat, lng: lng }),
+        credentials: 'same-origin'
+      }).catch(function () {});
+    });
+  }
 
   const shareBtn = document.getElementById('share-location-btn');
   const statusEl = document.getElementById('location-status');
@@ -210,12 +305,7 @@ if ("serviceWorker" in navigator) {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         statusEl.textContent = 'Sharing live. Last: ' + new Date().toLocaleTimeString();
-        fetch('/api/driver/jobs/' + jobId + '/location', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat: lat, lng: lng }),
-          credentials: 'same-origin'
-        }).catch(function () {});
+        postLocation(lat, lng);
       },
       function () {
         statusEl.textContent = 'Location unavailable. Check permissions.';
@@ -225,22 +315,73 @@ if ("serviceWorker" in navigator) {
     shareBtn.textContent = 'Stop';
   });
 
-  document.querySelectorAll('.driver-status-btn').forEach(function (btn) {
+  function postJobStatus(jobId, statusVal, btn, okLabel) {
+    return fetch('/api/driver/jobs/' + jobId + '/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: statusVal }),
+      credentials: 'same-origin'
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.status); });
+      return r;
+    });
+  }
+
+  document.querySelectorAll('.driver-batch-pickup-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      const status = this.getAttribute('data-status');
-      if (!status) return;
-      this.disabled = true;
-      this.textContent = '…';
-      fetch('/api/driver/jobs/' + jobId + '/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: status }),
-        credentials: 'same-origin'
-      })
-        .then(function (r) { if (r.ok) window.location.reload(); else this.disabled = false; })
-        .catch(function () { btn.disabled = false; btn.textContent = btn.getAttribute('data-status').replace('_', ' '); });
+      const statusVal = btn.getAttribute('data-batch-status');
+      if (!statusVal) return;
+      btn.disabled = true;
+      var orig = btn.textContent;
+      btn.textContent = '…';
+      (async function () {
+        try {
+          for (var i = 0; i < groupJobIds.length; i++) {
+            await postJobStatus(groupJobIds[i], statusVal, btn, orig);
+          }
+          window.location.reload();
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = orig;
+          alert('Could not update all jobs: ' + (e.message || e));
+        }
+      })();
     });
   });
+
+  document.querySelectorAll('.driver-per-job-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const jid = btn.getAttribute('data-job-id');
+      const statusVal = btn.getAttribute('data-status');
+      if (!jid || !statusVal) return;
+      btn.disabled = true;
+      btn.textContent = '…';
+      postJobStatus(jid, statusVal, btn, '')
+        .then(function () { window.location.reload(); })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'I’m here';
+        });
+    });
+  });
+
+  if (!isMultiDrop) {
+    var singleId = groupJobIds[0];
+    document.querySelectorAll('.driver-status-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const statusVal = btn.getAttribute('data-status');
+        if (!statusVal) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        postJobStatus(singleId, statusVal, btn, '')
+          .then(function () { window.location.reload(); })
+          .catch(function () {
+            btn.disabled = false;
+            btn.textContent = btn.getAttribute('data-status') === 'reached_pickup' ? 'I’m here' : (btn.getAttribute('data-status') === 'collected' ? 'Collected' : (btn.getAttribute('data-status') === 'departed_pickup' ? 'Departed' : 'I’m here'));
+          });
+      });
+    });
+  }
 })();
 
 (function () {

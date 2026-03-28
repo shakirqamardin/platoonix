@@ -121,6 +121,7 @@ class DriverJobRead(BaseModel):
     last_lng: Optional[float] = None
     location_updated_at: Optional[datetime] = None
     payment_status: Optional[str] = None
+    job_group_uuid: Optional[str] = None
 
 
 class DriverLocationUpdate(BaseModel):

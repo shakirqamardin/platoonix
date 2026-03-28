@@ -320,6 +320,10 @@ async def loader_accept_interest(
     db.add(job)
     db.flush()
 
+    from app.services.job_groups import try_link_new_job_pickup_group
+
+    try_link_new_job_pickup_group(db, job)
+
     payment = models.Payment(
         backhaul_job_id=job.id,
         amount_gbp=splits.amount_gbp,

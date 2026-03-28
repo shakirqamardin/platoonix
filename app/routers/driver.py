@@ -95,6 +95,7 @@ def _job_to_driver_read(job: models.BackhaulJob, db: Session) -> schemas.DriverJ
         last_lng=job.last_lng,
         location_updated_at=job.location_updated_at,
         payment_status=payment.status if payment else None,
+        job_group_uuid=job.job_group_uuid,
     )
 
 

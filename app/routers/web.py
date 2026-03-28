@@ -1170,6 +1170,9 @@ async def assign_job_driver(
                 status_code=303,
             )
         job.driver_id = driver.id
+        from app.services.job_groups import propagate_group_driver
+
+        propagate_group_driver(db, job, driver.id)
 
     db.add(job)
     db.commit()
@@ -1447,6 +1450,9 @@ async def accept_interest(
     db.add(job)
     load.status = models.LoadStatusEnum.MATCHED.value
     db.add(load)
+    from app.services.job_groups import try_link_new_job_pickup_group
+
+    try_link_new_job_pickup_group(db, job)
     db.commit()
     db.refresh(job)
 

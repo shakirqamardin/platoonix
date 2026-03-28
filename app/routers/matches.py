@@ -73,6 +73,10 @@ def assign_load_to_vehicle(
     payment.backhaul_job_id = job.id
     db.add(payment)
 
+    from app.services.job_groups import try_link_new_job_pickup_group
+
+    try_link_new_job_pickup_group(db, job)
+
     db.commit()
     db.refresh(job)
 

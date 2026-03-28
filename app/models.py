@@ -264,6 +264,8 @@ class BackhaulJob(Base):
     matched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
+    # Same UUID = one physical run (shared collection); each job still has its own load, payment, ePOD.
+    job_group_uuid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
     accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     reached_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     collected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

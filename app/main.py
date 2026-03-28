@@ -195,6 +195,24 @@ def check_db_and_create_tables():
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration loads booking columns: {e!r}", file=sys.stderr)
             # backhaul_jobs: driver timeline + live GPS
+            try:
+                conn.execute(text(
+                    "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS job_group_uuid VARCHAR(36)"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration backhaul_jobs.job_group_uuid: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_backhaul_jobs_job_group_uuid ON backhaul_jobs (job_group_uuid)"
+                ))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration ix_backhaul_jobs_job_group_uuid: {e!r}", file=sys.stderr)
             for col, typ in (
                 ("reached_pickup_at", "TIMESTAMP WITH TIME ZONE"),
                 ("departed_pickup_at", "TIMESTAMP WITH TIME ZONE"),
