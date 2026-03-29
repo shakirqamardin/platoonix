@@ -32,6 +32,10 @@ def create_load(
         volume_m3=volume_m3,
         pallets=pallets,
         requirements=load_in.requirements,
+        requires_tail_lift=load_in.requires_tail_lift,
+        requires_forklift=load_in.requires_forklift,
+        requires_temp_control=load_in.requires_temp_control,
+        requires_adr=load_in.requires_adr,
         budget_gbp=load_in.budget_gbp,
     )
     db.add(load)

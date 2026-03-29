@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -132,6 +133,11 @@ class Vehicle(Base):
     fuel_type: Mapped[Optional[str]] = mapped_column(String(50))
     dvla_raw: Mapped[Optional[dict]] = mapped_column(JSON)
 
+    has_tail_lift: Mapped[bool] = mapped_column(Boolean, default=False)
+    has_moffett: Mapped[bool] = mapped_column(Boolean, default=False)
+    has_temp_control: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_adr_certified: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
@@ -182,6 +188,10 @@ class Load(Base):
     volume_m3: Mapped[Optional[float]] = mapped_column(Float)
     pallets: Mapped[Optional[float]] = mapped_column(Float)  # if set, volume_m3 = pallets * 1.2 (display both)
     requirements: Mapped[Optional[dict]] = mapped_column(JSON)
+    requires_tail_lift: Mapped[bool] = mapped_column(Boolean, default=False)
+    requires_forklift: Mapped[bool] = mapped_column(Boolean, default=False)
+    requires_temp_control: Mapped[bool] = mapped_column(Boolean, default=False)
+    requires_adr: Mapped[bool] = mapped_column(Boolean, default=False)
     budget_gbp: Mapped[Optional[float]] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(20), default=LoadStatusEnum.OPEN.value)
     created_at: Mapped[datetime] = mapped_column(

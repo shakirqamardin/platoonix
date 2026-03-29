@@ -41,6 +41,10 @@ class VehicleBase(BaseModel):
     )
     capacity_weight_kg: Optional[float] = None
     capacity_volume_m3: Optional[float] = None
+    has_tail_lift: bool = False
+    has_moffett: bool = False
+    has_temp_control: bool = False
+    is_adr_certified: bool = False
 
 
 class VehicleCreate(VehicleBase):
@@ -72,6 +76,10 @@ class LoadBase(BaseModel):
     volume_m3: Optional[float] = None
     pallets: Optional[float] = None
     requirements: Optional[dict[str, Any]] = None
+    requires_tail_lift: bool = False
+    requires_forklift: bool = False
+    requires_temp_control: bool = False
+    requires_adr: bool = False
     budget_gbp: Optional[float] = None
 
 

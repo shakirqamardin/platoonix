@@ -36,6 +36,10 @@ def create_vehicle(
         trailer_type=vehicle_in.trailer_type,
         capacity_weight_kg=vehicle_in.capacity_weight_kg,
         capacity_volume_m3=vehicle_in.capacity_volume_m3,
+        has_tail_lift=vehicle_in.has_tail_lift,
+        has_moffett=vehicle_in.has_moffett,
+        has_temp_control=vehicle_in.has_temp_control,
+        is_adr_certified=vehicle_in.is_adr_certified,
     )
 
     # Enrich with DVLA vehicle data if configured

@@ -241,6 +241,23 @@ def check_db_and_create_tables():
                 if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                     print(f"Migration loaders.stripe_customer_id: {e!r}", file=sys.stderr)
             for col_sql in (
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS has_tail_lift BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS has_moffett BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS has_temp_control BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS is_adr_certified BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS requires_tail_lift BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS requires_forklift BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS requires_temp_control BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS requires_adr BOOLEAN DEFAULT FALSE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration vehicles/loads feature columns: {e!r}", file=sys.stderr)
+            for col_sql in (
                 "ALTER TABLE payments ADD COLUMN IF NOT EXISTS flat_fee_gbp DOUBLE PRECISION DEFAULT 0",
                 "ALTER TABLE payments ADD COLUMN IF NOT EXISTS loader_stripe_payment_intent_id VARCHAR(255)",
             ):

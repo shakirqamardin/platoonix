@@ -11,6 +11,25 @@ from app.services.distance import haversine_miles
 from app.services.geocode import get_lat_lon
 
 
+def vehicle_satisfies_load_equipment_hard(
+    vehicle: models.Vehicle,
+    load: models.Load,
+) -> bool:
+    """
+    When load marks a requirement True, the vehicle must have the matching capability.
+    If not, exclude this load from results (not a near match).
+    """
+    if getattr(load, "requires_tail_lift", False) and not getattr(vehicle, "has_tail_lift", False):
+        return False
+    if getattr(load, "requires_forklift", False) and not getattr(vehicle, "has_moffett", False):
+        return False
+    if getattr(load, "requires_temp_control", False) and not getattr(vehicle, "has_temp_control", False):
+        return False
+    if getattr(load, "requires_adr", False) and not getattr(vehicle, "is_adr_certified", False):
+        return False
+    return True
+
+
 def find_matching_loads(
     vehicle_id: int,
     origin_postcode: str,
@@ -51,6 +70,9 @@ def find_matching_loads(
         if distance > radius:
             continue
 
+        if not vehicle_satisfies_load_equipment_hard(vehicle, load):
+            continue
+
         # Check for perfect match vs near match
         is_perfect_match = True
         mismatch_reasons = []
@@ -68,7 +90,7 @@ def find_matching_loads(
         if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
             is_perfect_match = False
             mismatch_reasons.append(f"Trailer: need {required_trailer}")
-            
+
         if vehicle.capacity_weight_kg is not None and vehicle.capacity_weight_kg > 0:
             if (load.weight_kg or 0) > vehicle.capacity_weight_kg:
                 continue
@@ -114,6 +136,9 @@ def load_matches_vehicle(
         pickup_ll[0], pickup_ll[1],
     )
     if distance > radius:
+        return False
+
+    if not vehicle_satisfies_load_equipment_hard(vehicle, load):
         return False
 
     req = load.requirements or {}
@@ -287,6 +312,9 @@ def find_matching_loads_along_route(
             for lat, lon in points
         )
         if min_dist > radius:
+            continue
+
+        if not vehicle_satisfies_load_equipment_hard(vehicle, load):
             continue
 
         req = load.requirements or {}

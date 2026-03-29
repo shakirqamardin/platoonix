@@ -611,6 +611,10 @@ async def create_load(
         volume_m3=float(cubic_metres) if cubic_metres else None,
         budget_gbp=float(budget_gbp) if budget_gbp else None,
         requirements=requirements,
+        requires_tail_lift=_form_checkbox(form, "requires_tail_lift"),
+        requires_forklift=_form_checkbox(form, "requires_forklift"),
+        requires_temp_control=_form_checkbox(form, "requires_temp_control"),
+        requires_adr=_form_checkbox(form, "requires_adr"),
         status=models.LoadStatusEnum.OPEN.value,
         loader_id=loader_id,
     )
@@ -622,10 +626,10 @@ async def create_load(
 
 def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
     """Explain why each open load did or didn't match (for 'no matches' debugging)."""
-    """Explain why each open load did or didn't match (for 'no matches' debugging)."""
     from app.services.geocode import get_lat_lon
     from app.services.distance import haversine_miles
     from app.config import get_settings
+    from app.services.matching import vehicle_satisfies_load_equipment_hard
 
     vehicle = db.get(models.Vehicle, vehicle_id)
     if not vehicle:
@@ -648,6 +652,15 @@ def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
         dist = round(haversine_miles(origin_ll[0], origin_ll[1], pickup_ll[0], pickup_ll[1]), 1)
         if dist > radius:
             rows.append({"load": load, "reason": f"{dist} mi (over {radius} mi limit)", "distance_miles": dist})
+            continue
+        if not vehicle_satisfies_load_equipment_hard(vehicle, load):
+            rows.append(
+                {
+                    "load": load,
+                    "reason": "Equipment (load requirement not met by vehicle)",
+                    "distance_miles": dist,
+                }
+            )
             continue
         req = load.requirements or {}
         required_trailer = req.get("trailer_type") if isinstance(req, dict) else None
@@ -1002,6 +1015,10 @@ async def create_vehicle_form(
             vehicle_type=vehicle_type,
             trailer_type=trailer_type,
             base_postcode=base_postcode,
+            has_tail_lift=_form_checkbox(form, "has_tail_lift"),
+            has_moffett=_form_checkbox(form, "has_moffett"),
+            has_temp_control=_form_checkbox(form, "has_temp_control"),
+            is_adr_certified=_form_checkbox(form, "is_adr_certified"),
         )
         db.add(vehicle)
         db.commit()
@@ -1031,6 +1048,15 @@ def _parse_float(s, default=None):
         return float(s)
     except (TypeError, ValueError):
         return default
+
+
+def _form_checkbox(form, name: str) -> bool:
+    """HTML checkbox: present → on/true."""
+    v = form.get(name)
+    if v is None:
+        return False
+    s = str(v).strip().lower()
+    return s in ("on", "true", "1", "yes")
 
 @router.post("/upload", response_class=RedirectResponse)
 async def upload_file_form(
