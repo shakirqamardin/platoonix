@@ -15,7 +15,7 @@ self.addEventListener("fetch", (event) => {
   // Cache static assets opportunistically.
   if (url.pathname.startsWith("/static/")) {
     event.respondWith(
-      caches.open("platoonix-static-v1").then(async (cache) => {
+      caches.open("platoonix-static-v2").then(async (cache) => {
         const cached = await cache.match(request);
         if (cached) return cached;
         const response = await fetch(request);
@@ -31,8 +31,8 @@ self.addEventListener("fetch", (event) => {
   // Network-first for dynamic pages/APIs.
   event.respondWith(
     fetch(request).catch(async () => {
-      const cache = await caches.open("platoonix-static-v1");
-      const offlineLogo = await cache.match("/static/logo.png");
+      const cache = await caches.open("platoonix-static-v2");
+      const offlineLogo = await cache.match("/static/icon-192.png");
       if (offlineLogo) return offlineLogo;
       throw new Error("Offline and no cache available");
     })
