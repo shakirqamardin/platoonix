@@ -79,6 +79,10 @@ def assign_load_to_vehicle(
 
     db.commit()
     db.refresh(job)
+    from app.services import vehicle_availability as vehicle_availability_svc
+
+    vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
+    db.commit()
 
     return job
 

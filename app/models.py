@@ -1,5 +1,5 @@
 from enum import Enum
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     JSON,
+    Date,
     Numeric,
     SmallInteger,
     String,
@@ -137,6 +138,14 @@ class Vehicle(Base):
     has_moffett: Mapped[bool] = mapped_column(Boolean, default=False)
     has_temp_control: Mapped[bool] = mapped_column(Boolean, default=False)
     is_adr_certified: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Availability (synced from active BackhaulJob rows via vehicle_availability service)
+    current_job_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("backhaul_jobs.id", use_alter=True),
+        nullable=True,
+        index=True,
+    )
+    available_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
@@ -293,7 +302,7 @@ class BackhaulJob(Base):
     route_geometry: Mapped[Optional[dict]] = mapped_column(JSON)
     ulez_caz_status: Mapped[Optional[str]] = mapped_column(String(50))
     
-    vehicle: Mapped["Vehicle"] = relationship("Vehicle")
+    vehicle: Mapped["Vehicle"] = relationship("Vehicle", foreign_keys=[vehicle_id])
     load: Mapped["Load"] = relationship("Load")
     driver: Mapped[Optional["Driver"]] = relationship("Driver", back_populates="jobs")
     

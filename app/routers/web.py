@@ -24,6 +24,7 @@ from app.database import get_db
 from app.services.matching import find_matching_loads
 from app.services import ratings as ratings_svc
 from app.services import load_pricing as load_pricing_svc
+from app.services import vehicle_availability as vehicle_availability_svc
 
 
 router = APIRouter()
@@ -200,6 +201,16 @@ def _driver_portal_user(driver: models.Driver) -> SimpleNamespace:
         haulier_id=driver.haulier_id,
         loader_id=None,
     )
+
+
+def _vehicle_availability_map(vehicles: list) -> dict:
+    """Per-vehicle labels for Find Backhaul + Vehicles tab (UK local date)."""
+    from datetime import date
+
+    if not vehicles:
+        return {}
+    t = date.today()
+    return {v.id: vehicle_availability_svc.availability_ui(v, t) for v in vehicles}
 
 
 def _haulier_scoped_lists(
@@ -393,6 +404,7 @@ def home(
     rating_ctx = ratings_svc.build_home_rating_context(db, current_user, loads, vehicles)
     rating_ok = request.query_params.get("rating_ok")
     rating_error = request.query_params.get("rating_error")
+    vehicle_availability = _vehicle_availability_map(vehicles)
     return templates.TemplateResponse(
         "home.html",
         {
@@ -432,6 +444,8 @@ def home(
             "find_destination_postcode": "",
             "postcode_lookup_failed": False,
             "match_diagnostic": None,
+            "find_vehicle_busy": False,
+            "vehicle_availability": vehicle_availability,
             "platform_fee_percent": get_settings().platform_fee_percent,
             "loader_flat_fee_gbp": get_settings().loader_flat_fee_gbp,
             "pallet_volume_m3": get_settings().pallet_volume_m3,
@@ -731,11 +745,15 @@ def find_backhaul_page(
     matching_results = None
     postcode_lookup_failed = False
     match_diagnostic = None
+    find_vehicle_busy = False
     if vehicle_id_raw and origin_postcode:
         try:
             vehicle_id = int(vehicle_id_raw)
             v = db.get(models.Vehicle, vehicle_id)
-            if driver_actor:
+            if v is not None and vehicle_availability_svc.vehicle_has_active_job(db, vehicle_id):
+                matching_results = []
+                find_vehicle_busy = True
+            elif driver_actor:
                 if not v or v.haulier_id != driver_actor.haulier_id:
                     matching_results = []
                 elif driver_actor.vehicle_id and driver_actor.vehicle_id != vehicle_id:
@@ -900,6 +918,7 @@ def find_backhaul_page(
     rating_ctx = ratings_svc.build_home_rating_context(db, current_user, loads, vehicles)
     rating_ok = request.query_params.get("rating_ok")
     rating_error = request.query_params.get("rating_error")
+    vehicle_availability = _vehicle_availability_map(vehicles)
 
     return templates.TemplateResponse(
         "home.html",
@@ -940,6 +959,8 @@ def find_backhaul_page(
             "find_destination_postcode": destination_postcode,
             "postcode_lookup_failed": postcode_lookup_failed,
             "match_diagnostic": match_diagnostic,
+            "find_vehicle_busy": find_vehicle_busy,
+            "vehicle_availability": vehicle_availability,
             "platform_fee_percent": get_settings().platform_fee_percent,
             "loader_flat_fee_gbp": get_settings().loader_flat_fee_gbp,
             "pallet_volume_m3": get_settings().pallet_volume_m3,
@@ -1287,6 +1308,7 @@ def delete_job_form(
     if not job:
         return RedirectResponse(url="/?section=matches&delete_error=Job+not+found", status_code=303)
 
+    vehicle_id_for_refresh = job.vehicle_id
     vehicle = db.get(models.Vehicle, job.vehicle_id)
     if current_user.role == "haulier":
         if not current_user.haulier_id or not vehicle or vehicle.haulier_id != current_user.haulier_id:
@@ -1311,6 +1333,7 @@ def delete_job_form(
     db.query(models.Payment).filter(models.Payment.backhaul_job_id == job_id).delete()
     db.query(models.POD).filter(models.POD.backhaul_job_id == job_id).delete()
     db.delete(job)
+    vehicle_availability_svc.refresh_vehicle_availability(db, vehicle_id_for_refresh)
     db.commit()
     return RedirectResponse(url="/?section=matches&deleted=job", status_code=303)
 
@@ -1645,6 +1668,8 @@ async def accept_interest(
     try_link_new_job_pickup_group(db, job)
     db.commit()
     db.refresh(job)
+    vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
+    db.commit()
 
     try:
         from app.services.email_sender import schedule_haulier_job_email
@@ -2074,6 +2099,9 @@ async def express_interest(
     if driver_actor is not None:
         if driver_actor.vehicle_id and driver_actor.vehicle_id != vid:
             return _redirect_matches("not_your_vehicle")
+
+    if vehicle_availability_svc.vehicle_has_active_job(db, vid):
+        return _redirect_matches("vehicle_on_job")
 
     existing = db.query(models.LoadInterest).filter(
         models.LoadInterest.load_id == lid,

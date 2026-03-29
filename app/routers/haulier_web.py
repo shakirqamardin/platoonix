@@ -358,6 +358,9 @@ async def driver_epod_submit(
             payment.status = models.PaymentStatusEnum.PAID_OUT.value
             db.add(payment)
 
+    from app.services import vehicle_availability as vehicle_availability_svc
+
+    vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
     db.commit()
     return RedirectResponse(url="/driver?epod_done=1", status_code=303)
 

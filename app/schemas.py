@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
@@ -57,6 +57,8 @@ class VehicleRead(VehicleBase):
     euro_status: Optional[str]
     fuel_type: Optional[str]
     dvla_raw: Optional[dict]
+    current_job_id: Optional[int] = None
+    available_from: Optional[date] = None
 
     class Config:
         from_attributes = True

@@ -141,6 +141,9 @@ def confirm_pod(
     if job and not job.completed_at:
         job.completed_at = datetime.now(timezone.utc)
         db.add(job)
+        from app.services import vehicle_availability as vehicle_availability_svc
+
+        vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
 
     # ePOD confirmed → pay haulier (loader was charged at collection)
     payment = (

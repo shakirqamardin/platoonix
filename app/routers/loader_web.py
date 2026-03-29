@@ -339,4 +339,8 @@ async def loader_accept_interest(
         db.add(load)
     interest.status = "accepted"
     db.commit()
+    from app.services import vehicle_availability as vehicle_availability_svc
+
+    vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
+    db.commit()
     return RedirectResponse(url="/?section=matches&job_created=1", status_code=303)

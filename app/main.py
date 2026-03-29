@@ -268,6 +268,17 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration payments column: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_job_id INTEGER REFERENCES backhaul_jobs(id)",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS available_from DATE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration vehicles availability: {e!r}", file=sys.stderr)
         # Create or sync admin from ADMIN_EMAIL / ADMIN_PASSWORD
         db = SessionLocal()
         try:
@@ -290,6 +301,18 @@ def check_db_and_create_tables():
                 print(f"Synced admin to: {settings.admin_email}", file=sys.stderr)
         finally:
             db.close()
+
+        db_av = SessionLocal()
+        try:
+            from app.services.vehicle_availability import refresh_all_vehicles
+
+            refresh_all_vehicles(db_av)
+            db_av.commit()
+        except Exception as e:
+            db_av.rollback()
+            print(f"Vehicle availability backfill: {e!r}", file=sys.stderr)
+        finally:
+            db_av.close()
     except Exception as e:
         print(f"Startup error: {e!r}", file=sys.stderr)
         raise

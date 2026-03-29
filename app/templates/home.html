@@ -650,11 +650,14 @@
                             <select id="find-vehicle-id" name="vehicle_id" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all">
                                 <option value="">Choose vehicle...</option>
                                 {% for v in vehicles %}
-                                <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %}>
+                                {% set av = (vehicle_availability|default({})).get(v.id, {}) %}
+                                <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %} {% if av and not av.get('selectable', True) %}disabled{% endif %}>
                                     {{ v.registration }} • {{ v.vehicle_type }}{% if v.trailer_type %} • {{ v.trailer_type }}{% endif %}
+                                    {% if av.get('selectable', True) %} · Available now{% else %} · {{ av.get('label', 'On job') }}{% endif %}
                                 </option>
                                 {% endfor %}
                             </select>
+                            <p class="text-xs text-slate-500 mt-1.5">Vehicles on an active job cannot be selected until the job completes (or is cancelled).</p>
                         </div>
                         
                         <div>
@@ -710,6 +713,15 @@
 
             {% if matching_results is not none %}
             <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.25s">
+                {% if find_vehicle_busy %}
+                <div class="rounded-xl border border-amber-500/40 bg-amber-950/35 px-4 py-3 mb-4 text-sm text-amber-100">
+                    This vehicle has an <strong class="text-amber-200">active job</strong>. Finish or cancel that job before using Find Backhaul with this lorry.
+                    {% for v in vehicles %}{% if find_vehicle_id and (v.id|string) == find_vehicle_id %}
+                    {% set av = (vehicle_availability|default({})).get(v.id, {}) %}
+                    {% if av and not av.get('selectable', True) %}<span class="block mt-1 text-amber-200/90">{{ av.get('label') }}</span>{% endif %}
+                    {% endif %}{% endfor %}
+                </div>
+                {% endif %}
                 {% if find_origin_postcode %}
                 <div class="text-sm text-slate-400 mb-3 glass-card rounded-lg px-4 py-3 border border-teal-500/20">
                     ✓ Searched from: <span class="font-mono text-teal-400">{{ find_origin_postcode }}</span>
@@ -967,11 +979,13 @@
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Type</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Trailer</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Equipment</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Availability</th>
                                 <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for v in vehicles %}
+                            {% set av = (vehicle_availability|default({})).get(v.id, {}) %}
                             <tr class="border-b border-slate-800/50">
                                 <td class="py-3 px-4">
                                     {% for h in hauliers %}
@@ -990,6 +1004,15 @@
                                     {% if v.has_tail_lift|default(false) %}<span class="text-teal-400">✓</span> Tail lift{% endif %}{% if v.has_moffett|default(false) %}{% if v.has_tail_lift|default(false) %} <span class="text-slate-600">|</span> {% endif %}<span class="text-teal-400">✓</span> Moffett{% endif %}{% if v.has_temp_control|default(false) %}{% if v.has_tail_lift|default(false) or v.has_moffett|default(false) %} <span class="text-slate-600">|</span> {% endif %}<span class="text-teal-400">✓</span> Temp{% endif %}{% if v.is_adr_certified|default(false) %}{% if v.has_tail_lift|default(false) or v.has_moffett|default(false) or v.has_temp_control|default(false) %} <span class="text-slate-600">|</span> {% endif %}<span class="text-teal-400">✓</span> ADR{% endif %}
                                     {% if not (v.has_tail_lift|default(false) or v.has_moffett|default(false) or v.has_temp_control|default(false) or v.is_adr_certified|default(false)) %}—{% endif %}
                                 </td>
+                                <td class="py-3 px-4 text-xs whitespace-nowrap">
+                                    {% if av.get('tier', 'free') == 'free' %}
+                                    <span class="text-emerald-400 font-medium">●</span> <span class="text-emerald-200/90">{{ av.get('label', 'Available now') }}</span>
+                                    {% elif av.get('tier') == 'amber' %}
+                                    <span class="text-amber-400 font-medium">●</span> <span class="text-amber-200/90">{{ av.get('label', '') }}</span>
+                                    {% else %}
+                                    <span class="text-red-400 font-medium">●</span> <span class="text-red-200/85">{{ av.get('label', 'On job') }}</span>
+                                    {% endif %}
+                                </td>
                                 <td class="py-3 px-4 text-right">
                                     <form method="post" action="/delete-vehicle/{{ v.id }}" class="inline" onsubmit="return confirm('Delete this vehicle?');">
                                         <button type="submit" class="text-red-400 hover:text-red-300 text-sm font-medium">Delete</button>
@@ -1002,7 +1025,7 @@
                                 {% if not vehicles or not vehicles|selectattr('haulier_id', 'equalto', h.id)|list %}
                                 <tr class="border-b border-slate-800/50 opacity-60 bg-slate-900/30">
                                     <td class="py-3 px-4">{{ h.name }}</td>
-                                    <td class="py-3 px-4 text-slate-500 text-xs italic" colspan="5">No vehicles yet — row below removes the <strong class="text-slate-400 not-italic">company</strong>, not a lorry.</td>
+                                    <td class="py-3 px-4 text-slate-500 text-xs italic" colspan="6">No vehicles yet — row below removes the <strong class="text-slate-400 not-italic">company</strong>, not a lorry.</td>
                                     <td class="py-3 px-4 text-right">
                                         <form method="post" action="/delete-haulier/{{ h.id }}" class="inline" onsubmit="return confirm('Delete this company (haulier) and unlink its logins? No vehicles must remain.');">
                                             <button type="submit" class="text-red-400 hover:text-red-300 text-sm font-medium">Delete company</button>
