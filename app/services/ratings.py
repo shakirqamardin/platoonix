@@ -40,6 +40,15 @@ def format_haulier_line(summary: Optional[tuple[float, int]]) -> str:
     return f"{avg:.1f}★ ({n} deliveries)"
 
 
+def haulier_rating_lines_map(db: Session, haulier_ids: list[int]) -> dict[int, str]:
+    """Display string per haulier id for loader-facing interest cards."""
+    uniq = list(dict.fromkeys(int(h) for h in haulier_ids if h))
+    if not uniq:
+        return {}
+    sums = _avg_count_for_hauliers(db, uniq)
+    return {hid: format_haulier_line(sums.get(hid)) for hid in uniq}
+
+
 def format_loader_line(summary: Optional[tuple[float, int]]) -> str:
     if not summary or summary[1] <= 0:
         return "No ratings yet"

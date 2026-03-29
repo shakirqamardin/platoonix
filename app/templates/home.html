@@ -1697,6 +1697,77 @@
                 <!-- Suggested Matches -->
                 <div class="mb-8">
                     <h3 class="text-lg font-semibold text-slate-200 mb-4">✨ Suggested Matches</h3>
+                    {% if request.query_params.get('interest_declined') %}
+                    <div class="rounded-lg border border-slate-600/50 bg-slate-900/40 px-4 py-2.5 mb-4 text-sm text-slate-300">Interest declined.</div>
+                    {% endif %}
+
+                    {% if current_user and current_user.loader_id %}
+                    <p class="text-slate-400 text-xs mb-4">When a haulier expresses interest, review their company, vehicle, and distance from collection before accepting.</p>
+                    <div class="space-y-4">
+                        {% for row in load_interests_display %}
+                        <div class="rounded-xl border border-slate-700/80 bg-slate-900/50 p-4 sm:p-5 shadow-lg shadow-black/20">
+                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                <div>
+                                    <div class="font-semibold text-white text-base">{{ row.shipper or row.label }}</div>
+                                    <div class="font-mono text-teal-300 text-sm mt-1">{{ row.collection }} <span class="text-slate-500">→</span> {{ row.delivery }}</div>
+                                </div>
+                                <div class="shrink-0">
+                                    {% if row.interest.status == 'suggested' %}
+                                    <span class="badge badge-warning">Suggested</span>
+                                    {% elif row.interest.status == 'expressed' %}
+                                    <span class="badge badge-success">Awaiting your acceptance</span>
+                                    {% elif row.interest.status == 'declined' %}
+                                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded border border-slate-600 text-slate-400">Declined</span>
+                                    {% else %}
+                                    <span class="badge badge-success">{{ row.interest.status }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% if row.haulier_name %}
+                            <div class="mt-4 pt-4 border-t border-slate-700/60 space-y-2 text-sm">
+                                <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                    <span class="text-slate-400">Haulier</span>
+                                    <span class="text-slate-100 font-semibold">{{ row.haulier_name }}</span>
+                                    {% if row.haulier_rating_line %}
+                                    <span class="text-amber-400 font-medium">({{ row.haulier_rating_line }})</span>
+                                    {% endif %}
+                                </div>
+                                {% if row.vehicle_line %}
+                                <div class="text-slate-300"><span class="text-slate-500">Vehicle</span> <span class="text-cyan-200/90">{{ row.vehicle_line }}</span></div>
+                                {% endif %}
+                                {% if row.location_line or row.distance_label %}
+                                <div class="flex flex-wrap gap-x-4 gap-y-1 text-slate-400">
+                                    {% if row.location_line %}<span>{{ row.location_line }}</span>{% endif %}
+                                    {% if row.distance_label %}<span class="text-emerald-400/90">{{ row.distance_label }}</span>{% endif %}
+                                </div>
+                                {% endif %}
+                                {% if row.haulier_contact %}
+                                <div class="text-xs text-slate-500">Contact: <span class="text-slate-400">{{ row.haulier_contact }}</span></div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+
+                            <div class="mt-4 flex flex-wrap items-center gap-2 justify-end">
+                                {% if row.interest.status == 'suggested' %}
+                                <span class="text-sm text-slate-500">Waiting for haulier to express interest.</span>
+                                {% elif row.interest.status == 'expressed' %}
+                                <form method="post" action="/accept-interest" class="inline">
+                                    <input type="hidden" name="interest_id" value="{{ row.interest.id }}" />
+                                    <button type="submit" class="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all">✅ Accept</button>
+                                </form>
+                                <form method="post" action="/decline-interest" class="inline" onsubmit="return confirm('Decline this haulier? They can express interest again later if the load is still open.');">
+                                    <input type="hidden" name="interest_id" value="{{ row.interest.id }}" />
+                                    <button type="submit" class="px-4 py-2 text-sm font-semibold border border-slate-500 text-slate-300 hover:bg-slate-800 rounded-lg transition-all">❌ Decline</button>
+                                </form>
+                                {% elif row.interest.status == 'accepted' %}
+                                <span class="text-emerald-400 text-sm font-medium">✓ Job created</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
@@ -1719,6 +1790,8 @@
                                     <td class="py-3 px-4">
                                         {% if row.interest.status == 'suggested' %}
                                         <span class="badge badge-warning">{{ row.interest.status }}</span>
+                                        {% elif row.interest.status == 'declined' %}
+                                        <span class="text-slate-500 text-xs">declined</span>
                                         {% else %}
                                         <span class="badge badge-success">{{ row.interest.status }}</span>
                                         {% endif %}
@@ -1736,7 +1809,6 @@
                                             </form>
                                             {% elif row.interest.status == 'expressed' %}
                                             {% if current_user and current_user.loader_id %}
-                                            <!-- Only loaders can accept -->
                                             <form method="post" action="/accept-interest" class="inline">
                                                 <input type="hidden" name="interest_id" value="{{ row.interest.id }}" />
                                                 <button type="submit" class="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all">
@@ -1744,7 +1816,6 @@
                                                 </button>
                                             </form>
                                             {% else %}
-                                            <!-- Hauliers see waiting status -->
                                             <span class="text-amber-400 text-sm font-medium">⏳ Awaiting loader</span>
                                             {% endif %}
                                             {% elif row.interest.status == 'accepted' %}
@@ -1756,6 +1827,7 @@
                             </tbody>
                         </table>
                     </div>
+                    {% endif %}
                     {% if not load_interests_display %}
                     <div class="text-center py-8">
                         <div class="text-4xl mb-3">🔍</div>

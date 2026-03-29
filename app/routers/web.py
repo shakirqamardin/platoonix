@@ -188,10 +188,59 @@ def download_template(name: str) -> FileResponse:
     return FileResponse(path, filename=f"{name}.csv", media_type="text/csv")
 
 
+def _vehicle_interest_line(vehicle: models.Vehicle) -> str:
+    """Registration · type · trailer · equipment flags for loader-facing cards."""
+    parts: list[str] = []
+    if vehicle.registration:
+        parts.append(str(vehicle.registration).upper())
+    vt = (vehicle.vehicle_type or "").strip()
+    if vt:
+        parts.append(vt.capitalize())
+    tt = (vehicle.trailer_type or "").strip()
+    if tt:
+        parts.append(tt.replace("_", " ").title())
+    feats: list[str] = []
+    if vehicle.has_tail_lift:
+        feats.append("Tail lift")
+    if vehicle.has_moffett:
+        feats.append("Moffett")
+    if vehicle.has_temp_control:
+        feats.append("Temp")
+    if vehicle.is_adr_certified:
+        feats.append("ADR")
+    if feats:
+        parts.append(", ".join(feats))
+    return " · ".join(p for p in parts if p)
+
+
+def _distance_miles_pickup_to_base(
+    pickup_postcode: str,
+    vehicle: Optional[models.Vehicle],
+    haulier: Optional[models.Haulier],
+) -> Optional[float]:
+    from app.services.distance import haversine_miles
+    from app.services.geocode import get_lat_lon
+
+    base = ""
+    if vehicle and (vehicle.base_postcode or "").strip():
+        base = vehicle.base_postcode.strip()
+    elif haulier and (haulier.base_postcode or "").strip():
+        base = haulier.base_postcode.strip()
+    if not pickup_postcode or not base:
+        return None
+    a = get_lat_lon(pickup_postcode)
+    b = get_lat_lon(base)
+    if not a or not b:
+        return None
+    return round(haversine_miles(a[0], a[1], b[0], b[1]), 1)
+
+
 def _load_interests_display(load_interests_list, db: Session):
-    """Build list of {interest, shipper, collection, delivery, label, loader_rating_line} for template."""
+    """Build rows for Suggested Matches: route, loader rating (for hauliers), haulier/vehicle detail (for loaders)."""
     out = []
     loader_ids_for_ratings: list[int] = []
+    haulier_ids = list(dict.fromkeys(i.haulier_id for i in load_interests_list if i.haulier_id))
+    hr_map = ratings_svc.haulier_rating_lines_map(db, haulier_ids)
     for i in load_interests_list:
         shipper = collection = delivery = label = ""
         loader_id_val: Optional[int] = None
@@ -215,6 +264,32 @@ def _load_interests_display(load_interests_list, db: Session):
                 if pl.loader_id:
                     loader_id_val = pl.loader_id
                     loader_ids_for_ratings.append(loader_id_val)
+
+        h = db.get(models.Haulier, i.haulier_id) if i.haulier_id else None
+        v = db.get(models.Vehicle, i.vehicle_id) if i.vehicle_id else None
+        haulier_name = h.name if h else None
+        haulier_rating_line = hr_map.get(i.haulier_id) if i.haulier_id else None
+        vehicle_line = _vehicle_interest_line(v) if v else None
+        location_line = None
+        distance_miles = None
+        distance_label = None
+        haulier_contact = None
+        if h:
+            c_parts = []
+            if h.contact_email:
+                c_parts.append(h.contact_email)
+            if h.contact_phone:
+                c_parts.append(h.contact_phone)
+            haulier_contact = " · ".join(c_parts) if c_parts else None
+        if v and (v.base_postcode or "").strip():
+            location_line = f"Vehicle base: {v.base_postcode.strip()}"
+        elif h and (h.base_postcode or "").strip():
+            location_line = f"Company base: {h.base_postcode.strip()}"
+        if collection and (v or h):
+            distance_miles = _distance_miles_pickup_to_base(collection, v, h)
+            if distance_miles is not None:
+                distance_label = f"{distance_miles} miles from collection"
+
         out.append({
             "interest": i,
             "shipper": shipper,
@@ -222,6 +297,13 @@ def _load_interests_display(load_interests_list, db: Session):
             "delivery": delivery,
             "label": label or ("Load %s" % (i.load_id or "") if i.load_id else "Planned %s" % (i.planned_load_id or "")),
             "_loader_id": loader_id_val,
+            "haulier_name": haulier_name,
+            "haulier_rating_line": haulier_rating_line,
+            "vehicle_line": vehicle_line,
+            "location_line": location_line,
+            "distance_miles": distance_miles,
+            "distance_label": distance_label,
+            "haulier_contact": haulier_contact,
         })
     lr_map = ratings_svc.loader_rating_lines_map(db, loader_ids_for_ratings)
     for row in out:
@@ -1726,6 +1808,63 @@ async def accept_interest(
         print(f"[EMAIL] schedule_haulier_job_email failed: {e}")
 
     return RedirectResponse(url="/?section=matches", status_code=303)
+
+
+@router.post("/decline-interest", response_class=RedirectResponse)
+async def decline_interest(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Loader or admin: decline expressed interest (haulier cannot be accepted for this expression)."""
+    from urllib.parse import quote_plus
+
+    redir = require_loader(request, db)
+    if redir is not None:
+        return redir
+    current_user = get_current_user_optional(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    form = dict(await request.form())
+    try:
+        interest_id = int(form.get("interest_id"))
+    except (TypeError, ValueError):
+        return RedirectResponse(
+            url="/?section=matches&msg=" + quote_plus("invalid_interest"),
+            status_code=303,
+        )
+
+    interest = db.get(models.LoadInterest, interest_id)
+    if not interest or interest.status != "expressed":
+        return RedirectResponse(url="/?section=matches", status_code=303)
+
+    if interest.load_id:
+        load = db.get(models.Load, interest.load_id)
+        if not load:
+            return RedirectResponse(url="/?section=matches", status_code=303)
+        if current_user.role == "loader":
+            if not current_user.loader_id or load.loader_id != current_user.loader_id:
+                return RedirectResponse(
+                    url="/?section=matches&msg=" + quote_plus("not_your_load"),
+                    status_code=303,
+                )
+    elif interest.planned_load_id:
+        pl = db.get(models.PlannedLoad, interest.planned_load_id)
+        if not pl:
+            return RedirectResponse(url="/?section=matches", status_code=303)
+        if current_user.role == "loader":
+            if not current_user.loader_id or pl.loader_id != current_user.loader_id:
+                return RedirectResponse(
+                    url="/?section=matches&msg=" + quote_plus("not_your_load"),
+                    status_code=303,
+                )
+    else:
+        return RedirectResponse(url="/?section=matches", status_code=303)
+
+    interest.status = "declined"
+    db.add(interest)
+    db.commit()
+    return RedirectResponse(url="/?section=matches&interest_declined=1", status_code=303)
 
 
 @router.post("/create-haulier-account", response_class=RedirectResponse)
