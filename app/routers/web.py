@@ -149,6 +149,12 @@ def api_suggest_load_price(
         trailer_type.strip() or None,
         pickup_window_start.strip() or None,
     )
+    if isinstance(data, dict) and data.get("suggested_gbp") is not None:
+        from app.services.payment_fees import loader_platform_fee_payload
+
+        extra = loader_platform_fee_payload(float(data["suggested_gbp"]), get_settings())
+        if extra:
+            data = {**data, **extra}
     return JSONResponse(data)
 
 
@@ -577,6 +583,8 @@ def home(
             "vehicle_availability": vehicle_availability,
             "platform_fee_percent": get_settings().platform_fee_percent,
             "loader_flat_fee_gbp": get_settings().loader_flat_fee_gbp,
+            "loader_fee_minimum_gbp": get_settings().loader_flat_fee_gbp,
+            "loader_fee_percent_of_load": get_settings().loader_fee_percent_of_load,
             "pallet_volume_m3": get_settings().pallet_volume_m3,
             "current_user_email": (current_user.email if current_user else ""),
             "current_user": current_user,
@@ -940,9 +948,13 @@ def find_backhaul_page(
             matching_results = []
 
     if matching_results:
+        from app.services.payment_fees import loader_platform_fee_payload
+
         ratings_svc.enrich_matching_results_with_loader_ratings(db, matching_results)
+        _settings = get_settings()
         for m in matching_results:
             m["market_rate"] = load_pricing_svc.suggest_for_open_load(m["load"])
+            m["loader_platform_fee"] = loader_platform_fee_payload(m["load"].budget_gbp, _settings)
 
     if driver_actor is not None:
         haulier = db.get(models.Haulier, driver_actor.haulier_id)
@@ -1092,6 +1104,8 @@ def find_backhaul_page(
             "vehicle_availability": vehicle_availability,
             "platform_fee_percent": get_settings().platform_fee_percent,
             "loader_flat_fee_gbp": get_settings().loader_flat_fee_gbp,
+            "loader_fee_minimum_gbp": get_settings().loader_flat_fee_gbp,
+            "loader_fee_percent_of_load": get_settings().loader_fee_percent_of_load,
             "pallet_volume_m3": get_settings().pallet_volume_m3,
             "current_user_email": (current_user.email if current_user else ""),
             "current_user": current_user,

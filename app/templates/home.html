@@ -575,7 +575,7 @@
                     </ul>
                 </div>
                 {% endif %}
-                <p class="text-slate-400 text-sm mb-4">Loads are charged to a card on file at <strong class="text-slate-300">collection</strong>. Add your Stripe Customer ID after you create a customer in Stripe and attach a default payment method.</p>
+                <p class="text-slate-400 text-sm mb-4">Loads are charged to a card on file at <strong class="text-slate-300">collection</strong>. The platform fee is the <strong class="text-slate-300">higher</strong> of £{{ "%.2f"|format(loader_fee_minimum_gbp|default(5)) }} or {{ loader_fee_percent_of_load|default(2) }}% of the load value (applied to the agreed job price). Add your Stripe Customer ID after you create a customer in Stripe and attach a default payment method.</p>
                 <p class="text-xs text-slate-500 mb-4 rounded-lg border border-slate-700/80 bg-slate-900/40 px-3 py-2">
                     <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Create a Stripe account</a> if needed. Dashboard links use {% if stripe_is_test_mode %}<span class="text-amber-400">test</span>{% else %}<span class="text-emerald-400">live</span>{% endif %} mode from your API key.
                 </p>
@@ -830,7 +830,12 @@
                                         <div class="text-xs text-cyan-300/90 mt-1">{{ m.market_rate.detail_line }}</div>
                                         {% endif %}
                                         <div class="text-xs text-slate-500">Haulier net: £{{ "%.2f"|format(m.load.budget_gbp * (1 - platform_fee_percent/100)) }} (after {{ platform_fee_percent|round(1) }}%)</div>
-                                        <div class="text-xs text-slate-500">Loader charged load + £{{ "%.2f"|format(loader_flat_fee_gbp|default(5)) }} fee at collection</div>
+                                        {% if m.loader_platform_fee %}
+                                        <div class="text-xs text-amber-200/90 mt-1">Platform fee: {{ m.loader_platform_fee.loader_platform_fee_detail }}</div>
+                                        <div class="text-xs text-slate-500">Charged at collection: £{{ "%.2f"|format(m.loader_platform_fee.loader_total_at_collection_gbp) }} (load + platform fee)</div>
+                                        {% else %}
+                                        <div class="text-xs text-slate-500">Platform fee: £{{ "%.2f"|format(loader_fee_minimum_gbp|default(5)) }} min. or {{ loader_fee_percent_of_load|default(2) }}% of load (whichever is higher)</div>
+                                        {% endif %}
                                         {% else %}
                                         <span class="text-slate-500">—</span>
                                         {% if m.market_rate and m.market_rate.suggested_gbp is not none %}
@@ -1269,7 +1274,7 @@
                 <!-- Add Load Form -->
                 <div class="glass-card rounded-xl p-5 mb-6 border border-teal-500/10">
                     <h3 class="text-lg font-semibold text-slate-200 mb-4">➕ Add New Load</h3>
-                    <form id="add-load-form" method="post" action="/loads" data-pallet-volume-m3="{{ pallet_volume_m3|default(1.2) }}">
+                    <form id="add-load-form" method="post" action="/loads" data-pallet-volume-m3="{{ pallet_volume_m3|default(1.2) }}" data-loader-fee-min="{{ loader_fee_minimum_gbp|default(5) }}" data-loader-fee-pct="{{ loader_fee_percent_of_load|default(2) }}">
                         <div class="grid md:grid-cols-3 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Shipper</label>
@@ -1349,6 +1354,7 @@
                             <label class="block text-sm font-medium text-slate-300 mb-2">Budget (£)</label>
                             <input id="load-budget-gbp" name="budget_gbp" type="number" step="0.01" placeholder="e.g. 150.00" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                             <p class="text-xs text-slate-500 mt-1">We suggest a price from route miles × £1.50 + vehicle/trailer surcharges (+20% if pickup is within 24 hours). You can edit the amount. Set <code class="text-slate-400">GOOGLE_MAPS_API_KEY</code> for road distance; otherwise we use straight-line miles.</p>
+                            <div id="load-platform-fee-line" class="text-xs text-amber-200/90 mt-2 min-h-[1.25rem] rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2" aria-live="polite"></div>
                         </div>
                         <div class="w-full mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300 rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-3">
                             <span class="text-slate-500 font-medium w-full sm:w-auto">Equipment requirements <span class="text-slate-600 font-normal">(matching enforces these)</span></span>
@@ -1404,8 +1410,51 @@
                         if (!form) return;
                         var out = document.getElementById("load-price-suggestion");
                         var budget = document.getElementById("load-budget-gbp");
+                        var feeLine = document.getElementById("load-platform-fee-line");
                         if (!out || !budget) return;
                         var t = null;
+                        function fmtMoney(n) {
+                            return "£" + n.toFixed(2);
+                        }
+                        function updatePlatformFeeFromBudget() {
+                            if (!feeLine) return;
+                            var min = parseFloat(form.dataset.loaderFeeMin || "5");
+                            var pct = parseFloat(form.dataset.loaderFeePct || "2");
+                            if (isNaN(min)) min = 5;
+                            if (isNaN(pct)) pct = 2;
+                            var raw = (budget.value || "").trim();
+                            if (!raw) {
+                                feeLine.textContent = "";
+                                return;
+                            }
+                            var amt = parseFloat(raw);
+                            if (isNaN(amt) || amt <= 0) {
+                                feeLine.textContent = "";
+                                return;
+                            }
+                            var pctPart = Math.round(amt * (pct / 100) * 100) / 100;
+                            var fee = Math.round(Math.max(min, pctPart) * 100) / 100;
+                            var total = Math.round((amt + fee) * 100) / 100;
+                            var detail;
+                            if (pctPart + 1e-9 < min) {
+                                detail = fmtMoney(fee) + " (minimum)";
+                            } else {
+                                detail = fmtMoney(fee) + " (" + pct + "% of " + fmtMoney(amt) + ")";
+                            }
+                            feeLine.textContent = "Platform fee: " + detail + " · Total at collection: " + fmtMoney(total);
+                        }
+                        function applyFeeFromApi(data) {
+                            if (!feeLine || !data) return;
+                            if (data.loader_platform_fee_detail != null && data.loader_total_at_collection_gbp != null) {
+                                feeLine.textContent =
+                                    "Platform fee: " +
+                                    data.loader_platform_fee_detail +
+                                    " · Total at collection: £" +
+                                    Number(data.loader_total_at_collection_gbp).toFixed(2);
+                            } else {
+                                updatePlatformFeeFromBudget();
+                            }
+                        }
                         function scheduleFetch() {
                             clearTimeout(t);
                             t = setTimeout(fetchSuggestion, 450);
@@ -1417,6 +1466,7 @@
                             del = del.trim();
                             if (pu.length < 5 || del.length < 5) {
                                 out.textContent = "";
+                                if (feeLine) feeLine.textContent = "";
                                 return;
                             }
                             var vt = (form.querySelector('[name="vehicle_type_required"]') || {}).value || "";
@@ -1433,6 +1483,7 @@
                                 .then(function (r) {
                                     if (r.status === 401) {
                                         out.textContent = "";
+                                        if (feeLine) feeLine.textContent = "";
                                         return null;
                                     }
                                     return r.json();
@@ -1444,16 +1495,20 @@
                                         if (!budget.dataset.userEdited) {
                                             budget.value = Number(data.suggested_gbp).toFixed(2);
                                         }
+                                        applyFeeFromApi(data);
                                     } else {
                                         out.textContent = data.detail_line || data.distance_note || "Enter postcodes to see a suggested price.";
+                                        applyFeeFromApi(data);
                                     }
                                 })
                                 .catch(function () {
                                     out.textContent = "";
+                                    if (feeLine) feeLine.textContent = "";
                                 });
                         }
                         budget.addEventListener("input", function () {
                             budget.dataset.userEdited = "1";
+                            updatePlatformFeeFromBudget();
                         });
                         ["pickup_postcode", "delivery_postcode", "vehicle_type_required", "trailer_type_required", "pickup_window_start"].forEach(function (name) {
                             var el = form.querySelector('[name="' + name + '"]');
@@ -1461,6 +1516,7 @@
                             el.addEventListener("input", scheduleFetch);
                             el.addEventListener("change", scheduleFetch);
                         });
+                        updatePlatformFeeFromBudget();
                     })();
                     </script>
                 </div>
@@ -1890,9 +1946,24 @@
                                             <span class="text-slate-300 text-xs">{{ assigned.name }}</span>
                                         {% endif %}
                                     </td>
-                                    <td class="py-3 px-4">
+                                    <td class="py-3 px-4 align-top">
                                         {% for p in payments %}
                                             {% if p.backhaul_job_id == j.id %}
+                                            {% if current_user and current_user.loader_id %}
+                                            <div class="text-xs space-y-1 text-left max-w-[14rem]">
+                                                <div class="text-slate-400">Load value <span class="text-slate-200 font-medium">£{{ (p.amount_gbp or 0)|round(2) }}</span></div>
+                                                <div class="text-slate-400">Platform fee <span class="text-amber-200/90">£{{ (p.flat_fee_gbp or 0)|round(2) }}</span></div>
+                                                <div class="text-slate-500">Your charge at collection <span class="text-white font-semibold">£{{ p.total_loader_charge_gbp|round(2) }}</span></div>
+                                                <div class="text-slate-500">Haulier net £{{ (p.net_payout_gbp or 0)|round(2) }}</div>
+                                                <div class="flex items-center gap-2 pt-0.5">
+                                                    {% if p.status == 'paid_out' %}
+                                                    <span class="badge badge-success">{{ p.status }}</span>
+                                                    {% else %}
+                                                    <span class="badge badge-warning">{{ p.status }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            {% else %}
                                             <div class="flex items-center gap-2">
                                                 <span class="font-semibold text-emerald-400">£{{ (p.net_payout_gbp or 0)|round(2) }}</span>
                                                 {% if p.status == 'paid_out' %}
@@ -1901,6 +1972,7 @@
                                                 <span class="badge badge-warning">{{ p.status }}</span>
                                                 {% endif %}
                                             </div>
+                                            {% endif %}
                                             {% endif %}
                                         {% endfor %}
                                     </td>
@@ -1958,7 +2030,7 @@
                 </div>
                 
                 <p class="text-xs text-slate-500 mt-6">
-                    Pricing: {{ platform_fee_percent|round(1) }}% of load value (haulier net shown above); loaders are charged the load + £{{ "%.2f"|format(loader_flat_fee_gbp|default(5)) }} flat fee at collection (pickup). Haulier payout runs after delivery (ePOD). To delete a load or vehicle that &quot;has jobs&quot;, cancel the job here first.
+                    Pricing: {{ platform_fee_percent|round(1) }}% of load value (haulier net shown above). Loaders pay load value plus a platform fee of the higher of £{{ "%.2f"|format(loader_fee_minimum_gbp|default(5)) }} or {{ loader_fee_percent_of_load|default(2) }}% of that value, charged at collection (pickup). Haulier payout runs after delivery (ePOD). To delete a load or vehicle that &quot;has jobs&quot;, cancel the job here first.
                 </p>
             </div>
         </section>

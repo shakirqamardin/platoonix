@@ -27,8 +27,9 @@ class Settings(BaseSettings):
     # Matching defaults
     default_backhaul_radius_miles: int = 25
 
-    # Pricing: % of load value kept by platform; flat £ charged to loader (covers card fees / ops)
-    loader_flat_fee_gbp: float = 5.0
+    # Loader platform fee (charged at collection, on top of load value): max(minimum, percent of load)
+    loader_flat_fee_gbp: float = 5.0  # minimum £ when 2% would be lower
+    loader_fee_percent_of_load: float = 2.0  # percentage of load value when that is >= minimum
 
     # Pallets → volume: 1 pallet = this many m³ (euro pallet ~1.2)
     pallet_volume_m3: float = 1.2

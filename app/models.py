@@ -355,7 +355,7 @@ class Payment(Base):
     amount_gbp: Mapped[float] = mapped_column(Float, nullable=False)
     fee_gbp: Mapped[float] = mapped_column(Float, default=0.0)
     net_payout_gbp: Mapped[float] = mapped_column(Float, nullable=False)
-    # Flat fee (e.g. £5) charged to loader on top of load value; platform keeps (covers Stripe/card overhead)
+    # Platform fee charged to loader on top of load value (hybrid: max of minimum £ or % of load)
     flat_fee_gbp: Mapped[float] = mapped_column(Float, default=0.0)
     # Stripe PaymentIntent id for the loader charge (pi_...); haulier transfer may use provider_payment_id
     loader_stripe_payment_intent_id: Mapped[Optional[str]] = mapped_column(String(255))

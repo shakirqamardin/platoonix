@@ -9,6 +9,7 @@ from app import models, schemas
 from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
+from app.services.payment_fees import compute_job_payment_splits, compute_loader_platform_fee_gbp
 
 
 router = APIRouter()
@@ -48,12 +49,10 @@ def assign_load_to_vehicle(
     load.status = models.LoadStatusEnum.MATCHED.value
     db.add(load)
 
-    from app.services.payment_fees import compute_job_payment_splits
-
     if body.fee_gbp is not None:
         fee_gbp = round(float(body.fee_gbp), 2)
         net_payout_gbp = round(body.amount_gbp - fee_gbp, 2)
-        flat_fee_gbp = round(float(getattr(settings, "loader_flat_fee_gbp", 5.0) or 0.0), 2)
+        flat_fee_gbp, _ = compute_loader_platform_fee_gbp(body.amount_gbp, settings)
     else:
         splits = compute_job_payment_splits(body.amount_gbp, settings)
         fee_gbp = splits.fee_gbp
