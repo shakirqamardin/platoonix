@@ -1,0 +1,29 @@
+{% extends "base_auth.html" %}
+{% block title %}{{ title }} · {{ job_display }}{% endblock %}
+{% block content %}
+  <h1 class="text-lg font-semibold text-slate-200 mb-1">{{ title }}</h1>
+  <p class="text-slate-400 text-sm mb-1">{{ question }}</p>
+  <p class="text-slate-500 text-xs mb-4">{{ job_display }} · {{ load.pickup_postcode }} → {{ load.delivery_postcode }} · <span class="text-slate-400">{{ counterparty }}</span></p>
+  {% if request.query_params.get('error') == 'stars' %}
+  <p class="mb-3 text-amber-300 text-sm">Please choose a rating from 1 to 5 stars.</p>
+  {% endif %}
+  <form method="post" action="/rate-job/{{ job.id }}" class="space-y-4 max-w-md">
+    <div>
+      <label class="block text-slate-400 text-sm mb-2">Rating</label>
+      <div class="flex flex-wrap gap-2">
+        {% for s in [1,2,3,4,5] %}
+        <label class="cursor-pointer">
+          <input type="radio" name="rating" value="{{ s }}" required class="peer sr-only" />
+          <span class="inline-flex items-center justify-center w-11 h-11 rounded-lg border border-slate-600 bg-slate-900/80 text-slate-300 peer-checked:border-teal-500 peer-checked:bg-teal-900/40 peer-checked:text-teal-200 text-sm font-semibold">{{ s }}★</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    <div>
+      <label class="block text-slate-400 text-sm mb-1">Comment <span class="text-slate-600">(optional)</span></label>
+      <textarea name="comment" rows="3" maxlength="2000" placeholder="Optional feedback" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500"></textarea>
+    </div>
+    <button type="submit" class="rounded-lg bg-teal-600 hover:bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white w-full">Submit rating</button>
+  </form>
+  <p class="text-slate-500 text-sm mt-4"><a href="/?section=company" class="text-teal-400 hover:underline">Back to dashboard</a></p>
+{% endblock %}

@@ -321,6 +321,43 @@
                 </div>
             </div>
             {% endif %}
+
+            {% if rating_ok %}
+            <div class="glass-card rounded-xl px-4 py-3 border-l-4 border-emerald-500">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">⭐</span>
+                    <span class="text-emerald-300">Thanks — your rating was saved.</span>
+                </div>
+            </div>
+            {% endif %}
+            {% if rating_error %}
+            <div class="glass-card rounded-xl px-4 py-3 border-l-4 border-amber-500">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">⚠️</span>
+                    <span class="text-amber-200">
+                        {% if rating_error == 'already_rated' %}You already rated this job.
+                        {% elif rating_error == 'duplicate' %}Could not save (already submitted).
+                        {% elif rating_error == 'not_eligible' %}You can’t rate this job.
+                        {% elif rating_error == 'invalid_job' %}This job isn’t available for rating.
+                        {% else %}Rating could not be saved.{% endif %}
+                    </span>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if pending_job_ratings and pending_job_ratings|length > 0 %}
+            <div class="glass-card rounded-xl px-4 py-3 border-l-4 border-cyan-500 bg-slate-900/40">
+                <div class="text-cyan-200 text-sm font-semibold mb-2">Rate your last completed job(s)</div>
+                <ul class="space-y-2">
+                    {% for pr in pending_job_ratings[:5] %}
+                    <li class="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span class="text-slate-300"><span class="text-slate-500 font-mono">{{ pr.job_label }}</span> · {{ pr.route }} · {{ pr.counterparty }}</span>
+                        <a href="/rate-job/{{ pr.job.id }}" class="shrink-0 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-white">{{ pr.title }}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
         </div>
 
         {% set _sec = request.query_params.get("section", "find") %}
@@ -444,6 +481,23 @@
             {% if haulier_profile %}
             <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in border border-teal-500/20">
                 <h2 class="text-2xl font-display font-bold mb-2 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">My company</h2>
+                {% if haulier_rating_line %}
+                <p class="text-teal-200 text-sm font-medium mb-3">{{ haulier_rating_line }}</p>
+                {% endif %}
+                {% if haulier_reviews and haulier_reviews|length > 0 %}
+                <div class="mb-4 rounded-xl border border-slate-700/80 bg-slate-900/50 p-4">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Recent reviews</h3>
+                    <ul class="space-y-2 text-sm">
+                        {% for r in haulier_reviews[:6] %}
+                        <li class="border-b border-slate-800/80 pb-2 last:border-0 last:pb-0">
+                            <span class="text-amber-300">{{ '★' * r.rating }}</span>
+                            <span class="text-slate-500 text-xs ml-2">{{ r.rater_label }}</span>
+                            {% if r.comment %}<p class="text-slate-300 mt-1">{{ r.comment }}</p>{% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
                 <p class="text-slate-400 text-sm mb-4">Contact details, default base, payouts via Stripe Connect, and optional UK bank details for manual records.</p>
                 <p class="text-xs text-slate-500 mb-6 rounded-lg border border-slate-700/80 bg-slate-900/40 px-3 py-2">
                     No Stripe account yet?
@@ -504,6 +558,23 @@
             {% elif loader_profile %}
             <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in border border-cyan-500/20">
                 <h2 class="text-2xl font-display font-bold mb-2 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">Company &amp; billing</h2>
+                {% if loader_rating_line %}
+                <p class="text-cyan-200 text-sm font-medium mb-3">{{ loader_rating_line }}</p>
+                {% endif %}
+                {% if loader_reviews and loader_reviews|length > 0 %}
+                <div class="mb-4 rounded-xl border border-slate-700/80 bg-slate-900/50 p-4">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Recent reviews</h3>
+                    <ul class="space-y-2 text-sm">
+                        {% for r in loader_reviews[:6] %}
+                        <li class="border-b border-slate-800/80 pb-2 last:border-0 last:pb-0">
+                            <span class="text-amber-300">{{ '★' * r.rating }}</span>
+                            <span class="text-slate-500 text-xs ml-2">{{ r.rater_label }}</span>
+                            {% if r.comment %}<p class="text-slate-300 mt-1">{{ r.comment }}</p>{% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
                 <p class="text-slate-400 text-sm mb-4">Loads are charged to a card on file at <strong class="text-slate-300">collection</strong>. Add your Stripe Customer ID after you create a customer in Stripe and attach a default payment method.</p>
                 <p class="text-xs text-slate-500 mb-4 rounded-lg border border-slate-700/80 bg-slate-900/40 px-3 py-2">
                     <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Create a Stripe account</a> if needed. Dashboard links use {% if stripe_is_test_mode %}<span class="text-amber-400">test</span>{% else %}<span class="text-emerald-400">live</span>{% endif %} mode from your API key.
@@ -664,6 +735,7 @@
                                 <tr class="border-b border-slate-700">
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Match</th>
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Load / Route</th>
+                                    <th class="py-3 px-3 text-left font-semibold text-slate-400">Loader rating</th>
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Distance</th>
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Requirements</th>
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Budget</th>
@@ -687,6 +759,9 @@
                                             Pallets: {% if m.load.pallets %}{{ m.load.pallets }}{% else %}-{% endif %} ·
                                             Volume: {% if m.load.volume_m3 %}{{ m.load.volume_m3 }} m³{% else %}-{% endif %}
                                         </div>
+                                    </td>
+                                    <td class="py-3 px-3 text-xs text-cyan-200/90 whitespace-nowrap">
+                                        {% if m.loader_rating_line %}{{ m.loader_rating_line }}{% else %}—{% endif %}
                                     </td>
                                     <td class="py-3 px-3">
                                         <span class="font-semibold {% if m.is_perfect_match %}text-green-300{% else %}text-amber-300{% endif %}">{{ m.distance_miles }} mi</span>
@@ -845,6 +920,7 @@
                         <thead>
                             <tr class="border-b border-slate-700">
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Company</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Rating</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Registration</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Type</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Trailer</th>
@@ -858,6 +934,9 @@
                                     {% for h in hauliers %}
                                         {% if h.id == v.haulier_id %}{{ h.name }}{% endif %}
                                     {% endfor %}
+                                </td>
+                                <td class="py-3 px-4 text-xs text-teal-200/90 whitespace-nowrap">
+                                    {% if v.haulier_id and haulier_rating_by_haulier_id and v.haulier_id in haulier_rating_by_haulier_id %}{{ haulier_rating_by_haulier_id[v.haulier_id] }}{% else %}—{% endif %}
                                 </td>
                                 <td class="py-3 px-4 font-mono text-teal-300">{{ v.registration }}</td>
                                 <td class="py-3 px-4">
@@ -876,7 +955,7 @@
                                 {% if not vehicles or not vehicles|selectattr('haulier_id', 'equalto', h.id)|list %}
                                 <tr class="border-b border-slate-800/50 opacity-60 bg-slate-900/30">
                                     <td class="py-3 px-4">{{ h.name }}</td>
-                                    <td class="py-3 px-4 text-slate-500 text-xs italic" colspan="3">No vehicles yet — row below removes the <strong class="text-slate-400 not-italic">company</strong>, not a lorry.</td>
+                                    <td class="py-3 px-4 text-slate-500 text-xs italic" colspan="4">No vehicles yet — row below removes the <strong class="text-slate-400 not-italic">company</strong>, not a lorry.</td>
                                     <td class="py-3 px-4 text-right">
                                         <form method="post" action="/delete-haulier/{{ h.id }}" class="inline" onsubmit="return confirm('Delete this company (haulier) and unlink its logins? No vehicles must remain.');">
                                             <button type="submit" class="text-red-400 hover:text-red-300 text-sm font-medium">Delete company</button>
@@ -1278,6 +1357,7 @@
                         <thead>
                             <tr class="border-b border-slate-700">
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Shipper</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Loader rating</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Booking</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Route</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Schedule</th>
@@ -1291,6 +1371,9 @@
                             {% for l in loads %}
                             <tr class="border-b border-slate-800/50">
                                 <td class="py-3 px-4 font-medium">{{ l.shipper_name }}</td>
+                                <td class="py-3 px-4 text-xs text-cyan-200/90 whitespace-nowrap">
+                                    {% if l.loader_id and loader_rating_by_loader_id and l.loader_id in loader_rating_by_loader_id %}{{ loader_rating_by_loader_id[l.loader_id] }}{% else %}—{% endif %}
+                                </td>
                                 <td class="py-3 px-4 text-slate-400 text-sm max-w-[10rem]">
                                     {% if l.booking_ref %}{{ l.booking_ref }}{% if l.booking_name %} · {{ l.booking_name }}{% endif %}{% elif l.booking_name %}{{ l.booking_name }}{% else %}—{% endif %}
                                 </td>
@@ -1463,6 +1546,7 @@
                             <thead>
                                 <tr class="border-b border-slate-700">
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Shipper</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Loader rating</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Collection</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Delivery</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Status</th>
@@ -1473,6 +1557,7 @@
                                 {% for row in load_interests_display %}
                                 <tr class="border-b border-slate-800/50">
                                     <td class="py-3 px-4 font-medium">{{ row.shipper or row.label }}</td>
+                                    <td class="py-3 px-4 text-xs text-cyan-200/90 whitespace-nowrap">{% if row.loader_rating_line %}{{ row.loader_rating_line }}{% else %}—{% endif %}</td>
                                     <td class="py-3 px-4 font-mono text-teal-300">{{ row.collection }}</td>
                                     <td class="py-3 px-4 font-mono text-slate-300">{{ row.delivery }}</td>
                                     <td class="py-3 px-4">

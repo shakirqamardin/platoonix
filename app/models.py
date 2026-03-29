@@ -9,8 +9,10 @@ from sqlalchemy import (
     Integer,
     JSON,
     Numeric,
+    SmallInteger,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -385,3 +387,28 @@ class DriverLocation(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+class JobRating(Base):
+    """
+    Mutual trust after job completion (ePOD + completed_at).
+    Loader → haulier: rated_haulier_id set; haulier → loader: rated_loader_id set.
+    One row per rater per job (UniqueConstraint job_id + rater_user_id).
+    """
+
+    __tablename__ = "job_ratings"
+    __table_args__ = (UniqueConstraint("job_id", "rater_user_id", name="uq_job_ratings_job_rater"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("backhaul_jobs.id"), nullable=False, index=True)
+    rater_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    rated_haulier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("hauliers.id"), nullable=True, index=True)
+    rated_loader_id: Mapped[Optional[int]] = mapped_column(ForeignKey("loaders.id"), nullable=True, index=True)
+    rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # 1–5
+    comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow
+    )
+
+    job: Mapped["BackhaulJob"] = relationship("BackhaulJob")
+    rater: Mapped["User"] = relationship("User", foreign_keys=[rater_user_id])

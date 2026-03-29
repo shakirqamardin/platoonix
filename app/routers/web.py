@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Form, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -22,6 +22,7 @@ from app.auth import (
 from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
+from app.services import ratings as ratings_svc
 
 
 router = APIRouter()
@@ -115,10 +116,12 @@ def download_template(name: str) -> FileResponse:
 
 
 def _load_interests_display(load_interests_list, db: Session):
-    """Build list of {interest, shipper, collection, delivery, label} for template."""
+    """Build list of {interest, shipper, collection, delivery, label, loader_rating_line} for template."""
     out = []
+    loader_ids_for_ratings: list[int] = []
     for i in load_interests_list:
         shipper = collection = delivery = label = ""
+        loader_id_val: Optional[int] = None
         if i.load_id:
             load = db.get(models.Load, i.load_id)
             if load:
@@ -126,6 +129,9 @@ def _load_interests_display(load_interests_list, db: Session):
                 collection = load.pickup_postcode or ""
                 delivery = load.delivery_postcode or ""
                 label = "Load %d" % load.id
+                if load.loader_id:
+                    loader_id_val = load.loader_id
+                    loader_ids_for_ratings.append(loader_id_val)
         elif i.planned_load_id:
             pl = db.get(models.PlannedLoad, i.planned_load_id)
             if pl:
@@ -133,13 +139,21 @@ def _load_interests_display(load_interests_list, db: Session):
                 collection = pl.pickup_postcode or ""
                 delivery = pl.delivery_postcode or ""
                 label = "Planned %d" % pl.id
+                if pl.loader_id:
+                    loader_id_val = pl.loader_id
+                    loader_ids_for_ratings.append(loader_id_val)
         out.append({
             "interest": i,
             "shipper": shipper,
             "collection": collection,
             "delivery": delivery,
             "label": label or ("Load %s" % (i.load_id or "") if i.load_id else "Planned %s" % (i.planned_load_id or "")),
+            "_loader_id": loader_id_val,
         })
+    lr_map = ratings_svc.loader_rating_lines_map(db, loader_ids_for_ratings)
+    for row in out:
+        lid = row.pop("_loader_id", None)
+        row["loader_rating_line"] = lr_map.get(lid) if lid is not None else None
     return out
 
 
@@ -351,6 +365,9 @@ def home(
 
     _scust, _sconn, _stest = _stripe_dashboard_urls()
 
+    rating_ctx = ratings_svc.build_home_rating_context(db, current_user, loads, vehicles)
+    rating_ok = request.query_params.get("rating_ok")
+    rating_error = request.query_params.get("rating_error")
     return templates.TemplateResponse(
         "home.html",
         {
@@ -395,8 +412,118 @@ def home(
             "pallet_volume_m3": get_settings().pallet_volume_m3,
             "current_user_email": (current_user.email if current_user else ""),
             "current_user": current_user,
+            "rating_ok": rating_ok,
+            "rating_error": rating_error,
+            **rating_ctx,
         },
     )
+
+
+@router.get("/rate-job/{job_id}", response_class=HTMLResponse, response_model=None)
+def rate_job_page(
+    request: Request,
+    job_id: int,
+    db: Session = Depends(get_db),
+) -> Union[HTMLResponse, RedirectResponse]:
+    """5-star rating form after job completion (loader ↔ haulier)."""
+    user = get_current_user_optional(request, db)
+    if not user or user.role == "driver":
+        return RedirectResponse(url="/login", status_code=302)
+    job = db.get(models.BackhaulJob, job_id)
+    if not job or not job.completed_at:
+        return RedirectResponse(url="/?section=loads&rating_error=invalid_job", status_code=303)
+    if ratings_svc.has_rated_job(db, job.id, user.id):
+        return RedirectResponse(url="/?section=company&rating_error=already_rated", status_code=303)
+    load = db.get(models.Load, job.load_id)
+    vehicle = db.get(models.Vehicle, job.vehicle_id)
+    if not load or not vehicle:
+        return RedirectResponse(url="/?rating_error=invalid_job", status_code=303)
+
+    direction: Optional[str] = None
+    title = ""
+    question = ""
+    if user.loader_id and load.loader_id == user.loader_id:
+        direction = "loader_to_haulier"
+        title = "How was the delivery?"
+        question = "Rate the haulier for this completed job."
+    elif user.haulier_id and vehicle.haulier_id == user.haulier_id and load.loader_id:
+        direction = "haulier_to_loader"
+        title = "How was the load / shipper?"
+        question = "Rate the loader for this completed job."
+    else:
+        return RedirectResponse(url="/?section=find&rating_error=not_eligible", status_code=303)
+
+    haulier = db.get(models.Haulier, vehicle.haulier_id)
+    loader = db.get(models.Loader, load.loader_id) if load.loader_id else None
+    return templates.TemplateResponse(
+        "rate_job.html",
+        {
+            "request": request,
+            "job": job,
+            "load": load,
+            "job_display": job.display_number,
+            "direction": direction,
+            "title": title,
+            "question": question,
+            "counterparty": (haulier.name if direction == "loader_to_haulier" else (loader.name if loader else "Loader")),
+        },
+    )
+
+
+@router.post("/rate-job/{job_id}", response_class=RedirectResponse)
+async def rate_job_submit(
+    request: Request,
+    job_id: int,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    user = get_current_user_optional(request, db)
+    if not user or user.role == "driver":
+        return RedirectResponse(url="/login", status_code=302)
+    job = db.get(models.BackhaulJob, job_id)
+    if not job or not job.completed_at:
+        return RedirectResponse(url="/?rating_error=invalid_job", status_code=303)
+    if ratings_svc.has_rated_job(db, job.id, user.id):
+        return RedirectResponse(url="/?section=company&rating_error=already_rated", status_code=303)
+    load = db.get(models.Load, job.load_id)
+    vehicle = db.get(models.Vehicle, job.vehicle_id)
+    if not load or not vehicle:
+        return RedirectResponse(url="/?rating_error=invalid_job", status_code=303)
+
+    form = await request.form()
+    try:
+        stars = int((form.get("rating") or "0").strip())
+    except ValueError:
+        stars = 0
+    comment = (form.get("comment") or "").strip() or None
+    if stars < 1 or stars > 5:
+        return RedirectResponse(url=f"/rate-job/{job_id}?error=stars", status_code=303)
+
+    rated_h: Optional[int] = None
+    rated_l: Optional[int] = None
+    if user.loader_id and load.loader_id == user.loader_id:
+        rated_h = vehicle.haulier_id
+    elif user.haulier_id and vehicle.haulier_id == user.haulier_id and load.loader_id:
+        rated_l = load.loader_id
+    else:
+        return RedirectResponse(url="/?rating_error=not_eligible", status_code=303)
+
+    row = models.JobRating(
+        job_id=job.id,
+        rater_user_id=user.id,
+        rated_haulier_id=rated_h,
+        rated_loader_id=rated_l,
+        rating=stars,
+        comment=comment,
+    )
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(url="/?section=company&rating_error=duplicate", status_code=303)
+    return RedirectResponse(url="/?section=company&rating_ok=1", status_code=303)
+
+
 @router.post("/loads", response_class=RedirectResponse)
 async def create_load(
     request: Request,
@@ -627,6 +754,9 @@ def find_backhaul_page(
         except ValueError:
             matching_results = []
 
+    if matching_results:
+        ratings_svc.enrich_matching_results_with_loader_ratings(db, matching_results)
+
     if driver_actor is not None:
         haulier = db.get(models.Haulier, driver_actor.haulier_id)
         if not haulier:
@@ -727,6 +857,10 @@ def find_backhaul_page(
 
     _scust, _sconn, _stest = _stripe_dashboard_urls()
 
+    rating_ctx = ratings_svc.build_home_rating_context(db, current_user, loads, vehicles)
+    rating_ok = request.query_params.get("rating_ok")
+    rating_error = request.query_params.get("rating_error")
+
     return templates.TemplateResponse(
         "home.html",
         {
@@ -771,6 +905,9 @@ def find_backhaul_page(
             "pallet_volume_m3": get_settings().pallet_volume_m3,
             "current_user_email": (current_user.email if current_user else ""),
             "current_user": current_user,
+            "rating_ok": rating_ok,
+            "rating_error": rating_error,
+            **rating_ctx,
         },
     )
 
