@@ -27,22 +27,29 @@ def format_postcode_for_api(code: str) -> str:
     return (code[:-3] + " " + code[-3:]).strip().upper()
 
 
+def _coords_from_payload(data: dict) -> Optional[Tuple[float, float]]:
+    """Extract lat/lon from a postcodes.io single-postcode JSON body."""
+    row = data.get("result") or data.get("terminated")
+    if not row or not isinstance(row, dict):
+        return None
+    lat = row.get("latitude")
+    lon = row.get("longitude")
+    if lat is None or lon is None:
+        return None
+    return (float(lat), float(lon))
+
+
 def _lookup(client: httpx.Client, api_code: str, timeout: float = 15.0) -> Optional[Tuple[float, float]]:
     """Single attempt: GET postcodes.io with URL-encoded path. Returns (lat, lon) or None."""
     path = quote(api_code, safe="")
     url = f"{POSTCODES_IO_URL}/{path}"
     try:
         r = client.get(url, timeout=timeout)
-        if r.status_code != 200:
-            return None
         data = r.json()
-        if not data.get("result"):
-            return None
-        lat = data["result"].get("latitude")
-        lon = data["result"].get("longitude")
-        if lat is None or lon is None:
-            return None
-        return (float(lat), float(lon))
+        # 200 = active postcode; 404 may still return `terminated` with historical coordinates
+        if r.status_code in (200, 404):
+            return _coords_from_payload(data)
+        return None
     except Exception:
         return None
 

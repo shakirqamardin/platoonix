@@ -814,10 +814,16 @@
                                     <td class="py-3 px-3">
                                         {% if m.load.budget_gbp %}
                                         <div class="font-semibold text-green-300">£{{ "%.2f"|format(m.load.budget_gbp) }}</div>
+                                        {% if m.market_rate and m.market_rate.suggested_gbp is not none %}
+                                        <div class="text-xs text-cyan-300/90 mt-1">{{ m.market_rate.detail_line }}</div>
+                                        {% endif %}
                                         <div class="text-xs text-slate-500">Haulier net: £{{ "%.2f"|format(m.load.budget_gbp * (1 - platform_fee_percent/100)) }} (after {{ platform_fee_percent|round(1) }}%)</div>
                                         <div class="text-xs text-slate-500">Loader charged load + £{{ "%.2f"|format(loader_flat_fee_gbp|default(5)) }} fee at collection</div>
                                         {% else %}
-                                        <span class="text-slate-500">-</span>
+                                        <span class="text-slate-500">—</span>
+                                        {% if m.market_rate and m.market_rate.suggested_gbp is not none %}
+                                        <div class="text-xs text-cyan-300/90 mt-1">{{ m.market_rate.detail_line }}</div>
+                                        {% endif %}
                                         {% endif %}
                                     </td>
                                     <td class="py-3 px-3 text-right">
@@ -1258,17 +1264,17 @@
                         <div class="grid md:grid-cols-3 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup Postcode</label>
-                                <input name="pickup_postcode" required placeholder="e.g. M1 1AA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm uppercase" />
+                                <input id="load-pickup-postcode" name="pickup_postcode" required placeholder="e.g. M1 1AA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm uppercase" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Delivery Postcode</label>
-                                <input name="delivery_postcode" required placeholder="e.g. B2 4QA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm uppercase" />
+                                <input id="load-delivery-postcode" name="delivery_postcode" required placeholder="e.g. B2 4QA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm uppercase" />
                             </div>
                         </div>
                         <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window start</label>
-                                <input name="pickup_window_start" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <input id="load-pickup-window-start" name="pickup_window_start" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window end</label>
@@ -1287,7 +1293,7 @@
                         <div class="grid md:grid-cols-4 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Vehicle Type</label>
-                                <select name="vehicle_type_required" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm">
+                                <select id="load-vehicle-type" name="vehicle_type_required" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm">
                                     <option value="">Any vehicle</option>
                                     <option value="artic">Artic</option>
                                     <option value="rigid">Rigid</option>
@@ -1296,9 +1302,10 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Trailer Type</label>
-                                <select name="trailer_type_required" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm">
+                                <select id="load-trailer-type" name="trailer_type_required" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm">
                                     <option value="">Any trailer</option>
                                     <option value="curtain_sider">Curtain</option>
+                                    <option value="refrigerated">Refrigerated</option>
                                     <option value="box">Box</option>
                                     <option value="flatbed">Flatbed</option>
                                     <option value="other">Other</option>
@@ -1314,10 +1321,11 @@
                                 <p class="text-xs text-slate-500 mt-1">1 pallet = {{ "%.2f"|format(pallet_volume_m3|default(1.2)) }} m³ — editing one field updates the other.</p>
                             </div>
                         </div>
+                        <div id="load-price-suggestion" class="text-xs text-cyan-300/90 mb-2 min-h-[1.25rem] rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2" aria-live="polite"></div>
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-slate-300 mb-2">Budget (£)</label>
-                            <input name="budget_gbp" type="number" step="0.01" placeholder="e.g. 150.00" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
-                            <p class="text-xs text-slate-500 mt-1">How much you'll pay for this delivery</p>
+                            <input id="load-budget-gbp" name="budget_gbp" type="number" step="0.01" placeholder="e.g. 150.00" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                            <p class="text-xs text-slate-500 mt-1">We suggest a price from route miles × £1.50 + vehicle/trailer surcharges (+20% if pickup is within 24 hours). You can edit the amount. Set <code class="text-slate-400">GOOGLE_MAPS_API_KEY</code> for road distance; otherwise we use straight-line miles.</p>
                         </div>
                         <div class="w-full mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300 rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-3">
                             <span class="text-slate-500 font-medium w-full sm:w-auto">Equipment requirements <span class="text-slate-600 font-normal">(matching enforces these)</span></span>
@@ -1366,6 +1374,69 @@
                             var v = parseFloat(raw);
                             if (isNaN(v) || v < 0) return;
                             palletsEl.value = fmtPallets(v / rate);
+                        });
+                    })();
+                    (function () {
+                        var form = document.getElementById("add-load-form");
+                        if (!form) return;
+                        var out = document.getElementById("load-price-suggestion");
+                        var budget = document.getElementById("load-budget-gbp");
+                        if (!out || !budget) return;
+                        var t = null;
+                        function scheduleFetch() {
+                            clearTimeout(t);
+                            t = setTimeout(fetchSuggestion, 450);
+                        }
+                        function fetchSuggestion() {
+                            var pu = (form.querySelector('[name="pickup_postcode"]') || {}).value || "";
+                            var del = (form.querySelector('[name="delivery_postcode"]') || {}).value || "";
+                            pu = pu.trim();
+                            del = del.trim();
+                            if (pu.length < 5 || del.length < 5) {
+                                out.textContent = "";
+                                return;
+                            }
+                            var vt = (form.querySelector('[name="vehicle_type_required"]') || {}).value || "";
+                            var tt = (form.querySelector('[name="trailer_type_required"]') || {}).value || "";
+                            var pws = (form.querySelector('[name="pickup_window_start"]') || {}).value || "";
+                            var params = new URLSearchParams();
+                            params.set("pickup_postcode", pu);
+                            params.set("delivery_postcode", del);
+                            params.set("vehicle_type", vt);
+                            params.set("trailer_type", tt);
+                            if (pws) params.set("pickup_window_start", pws);
+                            out.textContent = "Calculating…";
+                            fetch("/api/suggest-load-price?" + params.toString(), { credentials: "same-origin" })
+                                .then(function (r) {
+                                    if (r.status === 401) {
+                                        out.textContent = "";
+                                        return null;
+                                    }
+                                    return r.json();
+                                })
+                                .then(function (data) {
+                                    if (!data) return;
+                                    if (data.suggested_gbp != null && data.detail_line) {
+                                        out.textContent = data.detail_line;
+                                        if (!budget.dataset.userEdited) {
+                                            budget.value = Number(data.suggested_gbp).toFixed(2);
+                                        }
+                                    } else {
+                                        out.textContent = data.detail_line || data.distance_note || "Enter postcodes to see a suggested price.";
+                                    }
+                                })
+                                .catch(function () {
+                                    out.textContent = "";
+                                });
+                        }
+                        budget.addEventListener("input", function () {
+                            budget.dataset.userEdited = "1";
+                        });
+                        ["pickup_postcode", "delivery_postcode", "vehicle_type_required", "trailer_type_required", "pickup_window_start"].forEach(function (name) {
+                            var el = form.querySelector('[name="' + name + '"]');
+                            if (!el) return;
+                            el.addEventListener("input", scheduleFetch);
+                            el.addEventListener("change", scheduleFetch);
                         });
                     })();
                     </script>

@@ -23,6 +23,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
 from app.services import ratings as ratings_svc
+from app.services import load_pricing as load_pricing_svc
 
 
 router = APIRouter()
@@ -77,6 +78,30 @@ def confidentiality_page(request: Request) -> HTMLResponse:
         "confidentiality.html",
         {"request": request, "last_updated": "March 2026"},
     )
+
+
+@router.get("/api/suggest-load-price")
+def api_suggest_load_price(
+    request: Request,
+    pickup_postcode: str = Query(""),
+    delivery_postcode: str = Query(""),
+    vehicle_type: str = Query(""),
+    trailer_type: str = Query(""),
+    pickup_window_start: str = Query(""),
+    db: Session = Depends(get_db),
+):
+    """Suggested budget from distance × £1.50/mi + surcharges + optional 24h urgency. Requires login."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+    data = load_pricing_svc.suggest_from_form_params(
+        pickup_postcode.strip(),
+        delivery_postcode.strip(),
+        vehicle_type.strip() or None,
+        trailer_type.strip() or None,
+        pickup_window_start.strip() or None,
+    )
+    return JSONResponse(data)
 
 
 @router.get("/api/dvla-lookup")
@@ -769,6 +794,8 @@ def find_backhaul_page(
 
     if matching_results:
         ratings_svc.enrich_matching_results_with_loader_ratings(db, matching_results)
+        for m in matching_results:
+            m["market_rate"] = load_pricing_svc.suggest_for_open_load(m["load"])
 
     if driver_actor is not None:
         haulier = db.get(models.Haulier, driver_actor.haulier_id)

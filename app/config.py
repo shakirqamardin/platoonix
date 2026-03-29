@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # Stripe (optional): for payouts to hauliers via Connect. Leave unset to skip.
     stripe_secret_key: Optional[str] = None
 
+    # Google Maps: optional Distance Matrix API key for road miles in load price suggestions.
+    # Without it, suggestions use straight-line miles between postcodes (Haversine).
+    google_maps_api_key: Optional[str] = None
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
