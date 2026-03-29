@@ -1672,6 +1672,16 @@
                     Matches & Jobs
                 </h2>
 
+                {% if request.query_params.get('status_updated') %}
+                <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Job status updated.</div>
+                {% endif %}
+                {% if request.query_params.get('job_completed') %}
+                <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Job marked complete.</div>
+                {% endif %}
+                {% if request.query_params.get('job_error') %}
+                <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-2.5 mb-4 text-sm text-amber-100">{{ request.query_params.get('job_error') }}</div>
+                {% endif %}
+
                 {% if current_user and current_user.role == 'driver' %}
                 <div class="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <span class="text-slate-200 text-sm"><strong class="text-amber-200">Track</strong> only shows the map. To <strong class="text-amber-200">start the run</strong> (share location, “I’m here”, collected, ePOD), open <strong>Run job</strong>.</span>
@@ -1767,6 +1777,7 @@
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Route</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Assigned Driver</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Payment</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Status</th>
                                     <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
                                 </tr>
                             </thead>
@@ -1821,16 +1832,44 @@
                                             {% endif %}
                                         {% endfor %}
                                     </td>
-                                    <td class="py-3 px-4 text-right whitespace-nowrap">
-                                        {% if current_user and current_user.role == 'driver' and j.driver_id == current_user.id and not j.completed_at %}
-                                        <a href="/driver?job_id={{ j.id }}" class="inline-block rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-3 py-1.5 mr-2">Run job</a>
-                                        {% endif %}
-                                        <a href="/track/{{ j.id }}" class="text-teal-400 hover:text-teal-300 text-sm font-medium mr-3">Track</a>
-                                        {% if current_user and current_user.role != 'driver' %}
-                                        <form method="post" action="/delete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Cancel this job? The load and vehicle can then be deleted if needed.');">
-                                            <button type="submit" class="text-red-400 hover:text-red-300 text-sm font-medium">Cancel</button>
-                                        </form>
-                                        {% endif %}
+                                    <td class="py-3 px-4 text-xs text-slate-300 max-w-[12rem] align-top">
+                                        {% set st = j | job_status_parts %}
+                                        <div class="font-semibold text-slate-200">{{ st.headline }}</div>
+                                        {% if st.detail %}<div class="text-slate-500 mt-0.5">{{ st.detail }}</div>{% endif %}
+                                    </td>
+                                    <td class="py-3 px-4 text-right align-top whitespace-nowrap">
+                                        <div class="flex flex-col items-end gap-2">
+                                            {% if current_user and current_user.role in ['haulier', 'admin'] and not j.completed_at %}
+                                            <form method="post" action="/update-job-status" class="w-full max-w-[13rem]">
+                                                <input type="hidden" name="job_id" value="{{ j.id }}" />
+                                                <label class="sr-only">Update status</label>
+                                                <select name="status" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-2 py-1.5 text-xs text-slate-200" onchange="if(this.value) this.form.submit()">
+                                                    <option value="">Update status…</option>
+                                                    <option value="reached_pickup">Start (at pickup)</option>
+                                                    <option value="collected">Collected</option>
+                                                    <option value="departed_pickup">Departed pickup</option>
+                                                    <option value="reached_delivery">At delivery</option>
+                                                </select>
+                                            </form>
+                                            <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                                                <a href="/driver/epod?job_id={{ j.id }}" class="text-cyan-400 hover:text-cyan-300 text-xs font-semibold">Upload ePOD</a>
+                                                <form method="post" action="/office-complete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Mark this job complete? Prefer Upload ePOD if you have a delivery note or photo.');">
+                                                    <button type="submit" class="text-amber-400 hover:text-amber-300 text-xs font-semibold">Mark complete</button>
+                                                </form>
+                                            </div>
+                                            {% endif %}
+                                            <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                                                {% if current_user and current_user.role == 'driver' and j.driver_id == current_user.id and not j.completed_at %}
+                                                <a href="/driver?job_id={{ j.id }}" class="inline-block rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold px-2.5 py-1">Run job</a>
+                                                {% endif %}
+                                                <a href="/track/{{ j.id }}" class="text-teal-400 hover:text-teal-300 text-xs font-medium">Track</a>
+                                                {% if current_user and current_user.role != 'driver' %}
+                                                <form method="post" action="/delete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Cancel this job? The load and vehicle can then be deleted if needed.');">
+                                                    <button type="submit" class="text-red-400 hover:text-red-300 text-xs font-medium">Cancel</button>
+                                                </form>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endfor %}

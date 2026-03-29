@@ -30,6 +30,53 @@ from app.services import vehicle_availability as vehicle_availability_svc
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
+
+def _job_status_parts(job):
+    """Jinja filter: {headline, detail} for Backhaul Jobs status column."""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+
+    def ago(dt):
+        if not dt:
+            return ""
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        secs = max(0, (now - dt).total_seconds())
+        if secs < 60:
+            return "just now"
+        if secs < 3600:
+            return f"{int(secs // 60)} min ago"
+        if secs < 86400:
+            return f"{int(secs // 3600)} hrs ago"
+        return f"{int(secs // 86400)} days ago"
+
+    if getattr(job, "completed_at", None):
+        return {"headline": "Completed", "detail": ago(job.completed_at)}
+    if getattr(job, "reached_delivery_at", None):
+        return {"headline": "At delivery", "detail": ago(job.reached_delivery_at)}
+    if getattr(job, "departed_pickup_at", None):
+        return {"headline": "En route", "detail": f"Departed {ago(job.departed_pickup_at)}"}
+    if getattr(job, "collected_at", None):
+        return {"headline": "Collected", "detail": ago(job.collected_at)}
+    if getattr(job, "reached_pickup_at", None):
+        return {"headline": "At pickup", "detail": ago(job.reached_pickup_at)}
+    return {"headline": "Assigned", "detail": "Awaiting start"}
+
+
+templates.env.filters["job_status_parts"] = _job_status_parts
+
+
+def _haulier_or_admin_can_job(user: models.User, job: models.BackhaulJob, db: Session) -> bool:
+    role = (getattr(user, "role", None) or "").strip().lower()
+    if role == "admin":
+        return True
+    if role == "haulier" and user.haulier_id:
+        vehicle = db.get(models.Vehicle, job.vehicle_id)
+        return bool(vehicle and vehicle.haulier_id == user.haulier_id)
+    return False
+
+
 # Folder containing CSV templates (project root / static / templates)
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "templates"
 

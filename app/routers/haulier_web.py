@@ -321,46 +321,24 @@ async def driver_epod_submit(
     (POD_UPLOAD_DIR / safe_name).write_bytes(content)
     file_url = f"/static/uploads/pods/{safe_name}"
 
-    from datetime import datetime, timezone
+    from app.services.job_completion import finalize_job_with_pod_upload
 
-    pod = models.POD(backhaul_job_id=job.id, file_url=file_url, notes=(form.get("notes") or "").strip() or None)
-    db.add(pod)
-    db.flush()
-    pod.status = models.PODStatusEnum.CONFIRMED.value
-    pod.confirmed_at = datetime.now(timezone.utc)
-    job.completed_at = datetime.now(timezone.utc)
-    db.add(job)
-    db.flush()
+    notes = (form.get("notes") or "").strip() or None
+    err = finalize_job_with_pod_upload(db, job, file_url, notes)
+    if err == "Confirm+collection+first":
+        db.rollback()
+        return RedirectResponse(
+            url=f"/driver/epod?job_id={job_id}&error=Confirm+collection+first",
+            status_code=303,
+        )
+    if err:
+        db.rollback()
+        from urllib.parse import quote_plus
 
-    payment = (
-        db.query(models.Payment)
-        .filter(models.Payment.backhaul_job_id == job.id)
-        .order_by(models.Payment.created_at.asc())
-        .first()
-    )
-    if payment:
-        if payment.status == models.PaymentStatusEnum.RESERVED.value:
-            db.rollback()
-            return RedirectResponse(
-                url=f"/driver/epod?job_id={job_id}&error=Confirm+collection+first",
-                status_code=303,
-            )
-        if payment.status == models.PaymentStatusEnum.CAPTURED.value:
-            from app.services.stripe_payout import try_payout_to_haulier
-
-            ok_pay, pay_err = try_payout_to_haulier(payment, db)
-            if not ok_pay and pay_err:
-                db.rollback()
-                return RedirectResponse(
-                    url=f"/driver/epod?job_id={job_id}&error=Payout+failed",
-                    status_code=303,
-                )
-            payment.status = models.PaymentStatusEnum.PAID_OUT.value
-            db.add(payment)
-
-    from app.services import vehicle_availability as vehicle_availability_svc
-
-    vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
+        return RedirectResponse(
+            url=f"/driver/epod?job_id={job_id}&error=" + quote_plus(err),
+            status_code=303,
+        )
     db.commit()
     return RedirectResponse(url="/driver?epod_done=1", status_code=303)
 

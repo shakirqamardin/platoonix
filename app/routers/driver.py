@@ -199,39 +199,12 @@ def update_job_status(
     job = _job_belongs_to_haulier(job_id, haulier, db, actor_driver=driver)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found or not yours")
-    now = datetime.now(timezone.utc)
     status_val = (body.status or "").strip().lower()
-    if status_val == "reached_pickup":
-        job.reached_pickup_at = now
-    elif status_val == "collected":
-        payment = (
-            db.query(models.Payment)
-            .filter(models.Payment.backhaul_job_id == job.id)
-            .order_by(models.Payment.created_at.asc())
-            .first()
-        )
-        if payment and payment.status == models.PaymentStatusEnum.RESERVED.value:
-            from app.services.stripe_loader_charge import try_charge_loader_for_job
+    from app.services.job_status import apply_driver_status_milestone
 
-            ok_charge, charge_err = try_charge_loader_for_job(payment, db)
-            if not ok_charge:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Loader payment failed: {charge_err}. Fix the card or Stripe customer, then retry.",
-                )
-            payment.status = models.PaymentStatusEnum.CAPTURED.value
-            db.add(payment)
-        job.collected_at = now
-    elif status_val == "departed_pickup":
-        job.departed_pickup_at = now
-    elif status_val == "reached_delivery":
-        job.reached_delivery_at = now
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="status must be one of: reached_pickup, collected, departed_pickup, reached_delivery",
-        )
-    db.add(job)
+    err = apply_driver_status_milestone(db, job, status_val)
+    if err:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err)
     db.commit()
     db.refresh(job)
     return _job_to_driver_read(job, db)
