@@ -9,20 +9,20 @@
     <link rel="apple-touch-icon" href="/static/logo.png" />
     <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   </head>
-  <body class="min-h-screen bg-slate-950 text-slate-100">
-    <div class="max-w-lg mx-auto px-4 py-4">
-      <header class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-2">
-          <img src="/static/logo.png" alt="Platoonix" class="h-9 w-auto" />
-          <span class="text-lg font-semibold">Driver</span>
+  <body class="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden">
+    <div class="max-w-lg mx-auto px-4 py-4 w-full min-w-0">
+      <header class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-center gap-2 min-w-0 shrink-0">
+          <img src="/static/logo.png" alt="Platoonix" class="h-9 w-auto shrink-0" />
+          <span class="text-lg font-semibold truncate">Driver</span>
         </div>
-        <div class="flex items-center gap-3 text-sm">
-          <a href="/?section=find" id="driver-notif-link" class="relative rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:text-white">
-            In-app alerts
+        <div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm sm:gap-3 w-full sm:w-auto sm:justify-end">
+          <a href="/?section=find" id="driver-notif-link" class="relative shrink-0 rounded-lg border border-slate-600 px-2 py-1.5 text-slate-300 hover:text-white whitespace-nowrap">
+            <span class="sm:hidden">Alerts</span><span class="hidden sm:inline">In-app alerts</span>
             <span id="driver-notif-badge" class="hidden absolute -top-1 -right-1 min-w-[1rem] h-4 px-0.5 rounded-full bg-amber-500 text-[9px] font-bold text-slate-950 flex items-center justify-center">0</span>
           </a>
-          <a href="{{ dashboard_url or '/driver-login' }}" class="text-slate-400 hover:text-white">Dashboard</a>
-          <a href="/logout" class="text-slate-400 hover:text-white">Sign out</a>
+          <a href="{{ dashboard_url or '/driver-login' }}" class="text-slate-400 hover:text-white whitespace-nowrap">Dashboard</a>
+          <a href="/logout" class="text-slate-400 hover:text-white whitespace-nowrap">Sign out</a>
         </div>
       </header>
 

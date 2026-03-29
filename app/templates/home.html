@@ -166,7 +166,7 @@
     </style>
 </head>
 
-<body class="min-h-screen text-slate-100 bg-slate-950">
+<body class="min-h-screen text-slate-100 bg-slate-950 overflow-x-hidden">
     <!-- Background gradient overlay -->
     <div class="fixed inset-0 pointer-events-none">
         <div class="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-cyan-500/5"></div>
@@ -174,43 +174,40 @@
         <div class="absolute bottom-0 left-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl"></div>
     </div>
     
-    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full min-w-0">
         <!-- Header -->
-        <header class="glass-card rounded-2xl p-4 sm:p-6 mb-6 animate-fade-in">
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <div class="flex items-center gap-4">
-                    <img src="/static/logo.png" alt="Platoonix" class="h-10 w-auto logo-glow" />
-                    <div class="hidden sm:block h-8 w-px bg-slate-700"></div>
-                    <h1 class="hidden sm:block text-xl font-display font-bold bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
+        <header class="glass-card rounded-2xl p-4 sm:p-6 mb-6 animate-fade-in min-w-0">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6 min-w-0">
+                <div class="flex items-center gap-4 min-w-0 shrink">
+                    <img src="/static/logo.png" alt="Platoonix" class="h-10 w-auto logo-glow shrink-0" />
+                    <div class="hidden sm:block h-8 w-px bg-slate-700 shrink-0"></div>
+                    <h1 class="hidden sm:block text-xl font-display font-bold bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent truncate">
                         Smart Haulage Marketplace
                     </h1>
                 </div>
                 
-                <div class="flex items-center gap-4 flex-wrap">
-                    <div class="flex items-center gap-4 text-sm glass-card rounded-xl px-4 py-2.5 border border-slate-700/50">
-                        <div class="flex items-center gap-2">
-                            <span class="text-slate-400">Open</span>
-                            <span class="font-display font-bold text-white">{{ open_loads_count|default(0) }}</span>
+                <div class="flex flex-col gap-3 w-full min-w-0 lg:max-w-full lg:items-end">
+                    <div class="w-full min-w-0 max-w-full grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end gap-x-4 gap-y-2 text-xs sm:text-sm glass-card rounded-xl px-3 py-2.5 sm:px-4 border border-slate-700/50">
+                        <div class="flex items-center justify-between gap-2 sm:justify-start min-w-0">
+                            <span class="text-slate-400 shrink-0">Open</span>
+                            <span class="font-display font-bold text-white tabular-nums">{{ open_loads_count|default(0) }}</span>
                         </div>
-                        <span class="text-slate-600">•</span>
-                        <div class="flex items-center gap-2">
-                            <span class="text-slate-400">Vehicles</span>
-                            <span class="font-display font-bold text-white">{{ vehicles|length }}</span>
+                        <div class="flex items-center justify-between gap-2 sm:justify-start min-w-0">
+                            <span class="text-slate-400 shrink-0">Vehicles</span>
+                            <span class="font-display font-bold text-white tabular-nums">{{ vehicles|length }}</span>
                         </div>
-                        <span class="text-slate-600">•</span>
-                        <div class="flex items-center gap-2">
-                            <span class="text-slate-400">Matched</span>
-                            <span class="font-display font-bold text-teal-400">{{ jobs|length }}</span>
+                        <div class="flex items-center justify-between gap-2 sm:justify-start min-w-0">
+                            <span class="text-slate-400 shrink-0">Matched</span>
+                            <span class="font-display font-bold text-teal-400 tabular-nums">{{ jobs|length }}</span>
                         </div>
-                        <span class="text-slate-600">•</span>
-                        <div class="flex items-center gap-2">
-                            <span class="text-slate-400">Revenue</span>
-                            <span class="font-display font-bold text-emerald-400">£{{ (total_payout|default(0))|round(0) }}</span>
+                        <div class="flex items-center justify-between gap-2 sm:justify-start min-w-0">
+                            <span class="text-slate-400 shrink-0">Revenue</span>
+                            <span class="font-display font-bold text-emerald-400 tabular-nums">£{{ (total_payout|default(0))|round(0) }}</span>
                         </div>
                     </div>
                     
                     {% if current_user_email %}
-                    <div class="flex items-center gap-3">
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full min-w-0 justify-end">
                         <div class="relative" id="notif-bell-wrap">
                             <button type="button" id="notif-bell-btn" class="relative rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:text-white hover:border-teal-500 hover:bg-slate-800/60 transition-all" aria-label="Notifications">
                                 <span class="text-lg leading-none">🔔</span>
@@ -232,11 +229,11 @@
                             <span class="hidden sm:inline text-slate-300">{{ current_user_email }}</span>
                         </div>
                         {% if current_user and current_user.role == 'driver' %}
-                        <a href="/driver" class="rounded-lg bg-teal-600 hover:bg-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all">
+                        <a href="/driver" class="rounded-lg bg-teal-600 hover:bg-teal-500 px-3 py-2 sm:px-4 text-xs sm:text-sm font-semibold text-white shadow-md transition-all whitespace-nowrap shrink-0">
                             Run job
                         </a>
                         {% endif %}
-                        <a href="/logout" class="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:text-white hover:border-teal-500 hover:bg-slate-800/60 transition-all">
+                        <a href="/logout" class="rounded-lg border border-slate-600 px-3 py-2 sm:px-4 text-xs sm:text-sm text-slate-300 hover:text-white hover:border-teal-500 hover:bg-slate-800/60 transition-all whitespace-nowrap shrink-0">
                             Sign out
                         </a>
                     </div>
