@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # Without it, suggestions use straight-line miles between postcodes (Haversine).
     google_maps_api_key: Optional[str] = None
 
+    # Public site URL for share links (WhatsApp, etc.)
+    public_app_base_url: str = "https://platoonix.co.uk"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

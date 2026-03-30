@@ -67,6 +67,17 @@ def _job_status_parts(job):
 templates.env.filters["job_status_parts"] = _job_status_parts
 
 
+def _whatsapp_href_load(load, base_url: str) -> str:
+    if load is None:
+        return "#"
+    from app.whatsapp_share import build_whatsapp_send_url
+
+    return build_whatsapp_send_url(load, base_url or "https://platoonix.co.uk")
+
+
+templates.env.filters["whatsapp_href_load"] = _whatsapp_href_load
+
+
 def _haulier_or_admin_can_job(user: models.User, job: models.BackhaulJob, db: Session) -> bool:
     role = (getattr(user, "role", None) or "").strip().lower()
     if role == "admin":
@@ -250,6 +261,7 @@ def _load_interests_display(load_interests_list, db: Session):
     for i in load_interests_list:
         shipper = collection = delivery = label = ""
         loader_id_val: Optional[int] = None
+        load: Optional[models.Load] = None
         if i.load_id:
             load = db.get(models.Load, i.load_id)
             if load:
@@ -298,6 +310,7 @@ def _load_interests_display(load_interests_list, db: Session):
 
         out.append({
             "interest": i,
+            "load": load,
             "shipper": shipper,
             "collection": collection,
             "delivery": delivery,
@@ -540,6 +553,12 @@ def home(
     rating_ok = request.query_params.get("rating_ok")
     rating_error = request.query_params.get("rating_error")
     vehicle_availability = _vehicle_availability_map(vehicles)
+    _sl = (request.query_params.get("load_id") or "").strip()
+    try:
+        shared_load_id = int(_sl) if _sl else None
+    except ValueError:
+        shared_load_id = None
+    _pub_base = get_settings().public_app_base_url
     return templates.TemplateResponse(
         "home.html",
         {
@@ -590,6 +609,8 @@ def home(
             "current_user": current_user,
             "rating_ok": rating_ok,
             "rating_error": rating_error,
+            "public_app_base_url": _pub_base,
+            "shared_load_id": shared_load_id,
             **rating_ctx,
         },
     )
@@ -1060,6 +1081,12 @@ def find_backhaul_page(
     rating_ok = request.query_params.get("rating_ok")
     rating_error = request.query_params.get("rating_error")
     vehicle_availability = _vehicle_availability_map(vehicles)
+    _sl = (request.query_params.get("load_id") or "").strip()
+    try:
+        shared_load_id = int(_sl) if _sl else None
+    except ValueError:
+        shared_load_id = None
+    _pub_base = get_settings().public_app_base_url
 
     return templates.TemplateResponse(
         "home.html",
@@ -1111,6 +1138,8 @@ def find_backhaul_page(
             "current_user": current_user,
             "rating_ok": rating_ok,
             "rating_error": rating_error,
+            "public_app_base_url": _pub_base,
+            "shared_load_id": shared_load_id,
             **rating_ctx,
         },
     )

@@ -368,11 +368,24 @@
         {# Drivers: Find Backhaul + Matches only (office login handles the rest) #}
         {% set _sec = 'find' if (current_user and current_user.role == 'driver' and _sec not in ['find', 'matches']) else _sec %}
         {% set initial_section = 'find' if (_sec == 'company' and not haulier_profile and not loader_profile) else _sec %}
+        {% set _pub = public_app_base_url|default('https://platoonix.co.uk') %}
+
+        {% macro wa_share_btn(load) -%}
+        {%- if load -%}
+        <a href="{{ load|whatsapp_href_load(_pub) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm transition-colors shrink-0" title="Share on WhatsApp" aria-label="Share this load on WhatsApp">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        </a>
+        {%- endif -%}
+        {%- endmacro %}
         
         <!-- Navigation Tabs -->
-        <nav class="glass-card rounded-2xl p-2 mb-6 animate-fade-in" style="animation-delay: 0.1s">
-            <div class="flex flex-wrap gap-2">
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'find' else 'text-slate-300 hover:bg-slate-800/50' }}">
+        <nav id="main-section-nav" class="glass-card rounded-2xl p-2 mb-6 animate-fade-in relative z-30" style="animation-delay: 0.1s">
+            <div class="flex md:hidden items-center justify-between px-1 py-1">
+                <span class="text-sm font-semibold text-slate-300">Menu</span>
+                <button type="button" id="main-nav-toggle" class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg border border-slate-600 bg-slate-900/80 text-slate-200 hover:bg-slate-800" aria-expanded="false" aria-controls="main-nav-tabs">☰</button>
+            </div>
+            <div id="main-nav-tabs" class="hidden md:flex md:flex-wrap gap-2 p-1 max-md:flex-col max-md:absolute max-md:left-2 max-md:right-2 max-md:top-full max-md:mt-2 max-md:z-50 max-md:bg-slate-900 max-md:border max-md:border-slate-700 max-md:rounded-xl max-md:shadow-xl max-md:p-3">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'find' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="find" {{ 'checked' if initial_section == 'find' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>🔍</span>
@@ -381,14 +394,14 @@
                 </label>
 
                 {% if current_user and current_user.role == 'driver' %}
-                <a href="/driver" class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl transition-all text-center border border-teal-500/40 bg-teal-950/40 text-teal-200 hover:bg-teal-900/50 hover:text-white no-underline flex items-center justify-center gap-2">
+                <a href="/driver" class="section-tab flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center transition-all text-center border border-teal-500/40 bg-teal-950/40 text-teal-200 hover:bg-teal-900/50 hover:text-white no-underline flex items-center justify-center gap-2">
                     <span>🚦</span>
                     <span>Run job</span>
                 </a>
                 {% endif %}
 
                 {% if current_user and (current_user.haulier_id or current_user.loader_id) and current_user.role != 'driver' %}
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'company' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'company' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="company" {{ 'checked' if initial_section == 'company' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>🏢</span>
@@ -398,7 +411,7 @@
                 {% endif %}
                 
                 {% if not (current_user and current_user.role == 'driver') %}
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'vehicles' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'vehicles' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="vehicles" {{ 'checked' if initial_section == 'vehicles' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>🚛</span>
@@ -408,7 +421,7 @@
                 {% endif %}
 
                 {% if current_user and current_user.role == 'haulier' %}
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'my-drivers' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'my-drivers' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="my-drivers" {{ 'checked' if initial_section == 'my-drivers' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>👥</span>
@@ -418,7 +431,7 @@
                 {% endif %}
 
                 {% if current_user and current_user.role in ['haulier', 'loader'] %}
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'my-team' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'my-team' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="my-team" {{ 'checked' if initial_section == 'my-team' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>🧑‍💼</span>
@@ -428,7 +441,7 @@
                 {% endif %}
                 
                 {% if not (current_user and current_user.role == 'driver') %}
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'loads' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'loads' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="loads" {{ 'checked' if initial_section == 'loads' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>📦</span>
@@ -436,7 +449,7 @@
                     </div>
                 </label>
                 
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'routes' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'routes' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="routes" {{ 'checked' if initial_section == 'routes' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>🗺️</span>
@@ -445,7 +458,7 @@
                 </label>
                 {% endif %}
                 
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'matches' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'matches' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="matches" {{ 'checked' if initial_section == 'matches' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>✨</span>
@@ -454,7 +467,7 @@
                 </label>
                 
                 {% if not (current_user and current_user.role == 'driver') %}
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'analytics' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'analytics' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="analytics" {{ 'checked' if initial_section == 'analytics' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>📊</span>
@@ -464,7 +477,7 @@
                 {% endif %}
                 
                 {% if current_user and current_user.role == 'admin' %}
-                <label class="section-tab flex-1 min-w-[120px] px-4 py-3 text-sm font-semibold rounded-xl cursor-pointer transition-all {{ 'active' if initial_section == 'admin' else 'text-slate-300 hover:bg-slate-800/50' }}">
+                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'admin' else 'text-slate-300 hover:bg-slate-800/50' }}">
                     <input type="radio" name="section" class="hidden" value="admin" {{ 'checked' if initial_section == 'admin' else '' }} />
                     <div class="flex items-center justify-center gap-2">
                         <span>⚙️</span>
@@ -627,6 +640,11 @@
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
                     Find Available Loads
                 </h2>
+                {% if shared_load_id is defined and shared_load_id %}
+                <div class="rounded-xl border border-teal-500/30 bg-teal-950/25 px-4 py-3 mb-4 text-sm text-teal-100/95">
+                    <strong class="text-teal-300">Shared load link:</strong> load #{{ shared_load_id }}. Select your vehicle and postcodes, then <strong class="text-white">Find Loads</strong> — if this load is still open and matches, it will appear in the results below.
+                </div>
+                {% endif %}
                 {% if current_user and current_user.role == 'driver' %}
                 <p class="text-slate-400 text-sm mb-4">You’re signed in as a <strong class="text-slate-300">driver</strong>. Search below with your vehicle and where you’re empty — same tools as the office.</p>
                 <div class="rounded-xl border border-teal-500/30 bg-teal-950/30 px-4 py-3 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -643,11 +661,11 @@
                     </p>
                 </div>
                 
-                <form method="get" action="/find-backhaul" class="mb-6">
-                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <form method="get" action="/find-backhaul" class="mb-6 space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="lg:col-span-2">
                             <label class="block text-sm font-medium text-slate-300 mb-2">Select Vehicle</label>
-                            <select id="find-vehicle-id" name="vehicle_id" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all">
+                            <select id="find-vehicle-id" name="vehicle_id" required class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-base sm:text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all">
                                 <option value="">Choose vehicle...</option>
                                 {% for v in vehicles %}
                                 {% set av = (vehicle_availability|default({})).get(v.id, {}) %}
@@ -671,7 +689,7 @@
                                 value="{{ find_origin_postcode or '' }}" 
                                 placeholder="e.g. M1 1AA" 
                                 required
-                                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm uppercase focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" 
+                                class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-base sm:text-sm uppercase focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" 
                             />
                         </div>
                         
@@ -685,25 +703,25 @@
                                 name="destination_postcode" 
                                 value="{{ find_destination_postcode or '' }}" 
                                 placeholder="e.g. MK1 1AA" 
-                                class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-sm uppercase focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" 
+                                class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-base sm:text-sm uppercase focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" 
                             />
                         </div>
                     </div>
                     
-                    <div class="flex flex-wrap items-center gap-3">
-                        <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg flex items-center gap-2">
+                    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+                        <button type="submit" class="btn-primary min-h-[44px] px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg flex items-center justify-center gap-2">
                             <span>🔍</span>
                             <span>Find Loads</span>
                         </button>
                         
-                        <div class="h-6 w-px bg-slate-700"></div>
+                        <div class="hidden sm:block h-6 w-px bg-slate-700 self-center"></div>
                     
-                    <button type="button" id="start-alerts-btn" class="px-6 py-3 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-lg transition-all">
+                    <button type="button" id="start-alerts-btn" class="min-h-[44px] px-6 py-3 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-lg transition-all">
                         🔔 Live Alerts
                     </button>
                     <p class="w-full text-xs text-slate-500 -mt-2 mb-0">Live alerts use the same <strong class="text-slate-400">25-mile</strong> rules as Find Loads. Add <strong class="text-slate-400">Returning to</strong> (base) to watch the <strong class="text-slate-400">empty → base corridor</strong> plus pickups near where you’re empty.</p>
                     
-                    <button type="button" id="stop-alerts-btn" class="px-6 py-3 text-sm font-semibold text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-800 transition-all hidden">
+                    <button type="button" id="stop-alerts-btn" class="min-h-[44px] px-6 py-3 text-sm font-semibold text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-800 transition-all hidden">
                         Stop
                     </button>
                 </form>
@@ -759,7 +777,39 @@
                         </div>
                     </div>
 
-                    <div class="overflow-x-auto rounded-xl border border-slate-800">
+                    <div class="md:hidden space-y-4 mb-4">
+                        {% for m in matching_results %}
+                        <article class="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-3" data-whatsapp-load-id="{{ m.load.id }}">
+                            <div class="flex items-start justify-between gap-2">
+                                {% if m.is_perfect_match %}
+                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-green-900/40 text-green-300 rounded">✓ Perfect</span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-amber-900/40 text-amber-300 rounded">⚠ Near</span>
+                                {% endif %}
+                                <span class="font-semibold {% if m.is_perfect_match %}text-green-300{% else %}text-amber-300{% endif %}">{{ m.distance_miles }} mi</span>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-slate-100">{{ m.load.shipper_name }}</div>
+                                <div class="text-teal-300 font-mono text-sm mt-1">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</div>
+                            </div>
+                            {% if m.load.budget_gbp %}
+                            <div class="text-sm text-green-300 font-semibold">£{{ "%.2f"|format(m.load.budget_gbp) }}</div>
+                            {% endif %}
+                            <div class="flex flex-wrap items-center gap-2 pt-1">
+                                {{ wa_share_btn(m.load) }}
+                                <form method="post" action="/interest" class="inline flex-1 min-w-[10rem]">
+                                    <input type="hidden" name="load_id" value="{{ m.load.id }}">
+                                    <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
+                                    <button type="submit" class="w-full min-h-[44px] px-3 py-2 text-xs font-semibold {% if m.is_perfect_match %}bg-teal-600 hover:bg-teal-700{% else %}bg-amber-600 hover:bg-amber-700{% endif %} text-white rounded-md transition-colors">
+                                        {% if m.is_perfect_match %}Show Interest{% else %}Interest (Explain){% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    </div>
+
+                    <div class="hidden md:block overflow-x-auto rounded-xl border border-slate-800">
                         <table class="w-full min-w-[52rem] text-sm">
                             <thead class="bg-slate-900/60">
                                 <tr class="border-b border-slate-700">
@@ -774,7 +824,7 @@
                             </thead>
                             <tbody>
                                 {% for m in matching_results %}
-                                <tr class="border-b border-slate-800/70 hover:bg-slate-900/40 align-top">
+                                <tr class="border-b border-slate-800/70 hover:bg-slate-900/40 align-top" data-whatsapp-load-id="{{ m.load.id }}">
                                     <td class="py-3 px-3">
                                         {% if m.is_perfect_match %}
                                         <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-green-900/40 text-green-300 rounded">✓ Perfect</span>
@@ -844,13 +894,16 @@
                                         {% endif %}
                                     </td>
                                     <td class="py-3 px-3 text-right">
-                                        <form method="post" action="/interest" class="inline">
-                                            <input type="hidden" name="load_id" value="{{ m.load.id }}">
-                                            <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
-                                            <button type="submit" class="px-3 py-2 text-xs font-semibold {% if m.is_perfect_match %}bg-teal-600 hover:bg-teal-700{% else %}bg-amber-600 hover:bg-amber-700{% endif %} text-white rounded-md transition-colors">
-                                                {% if m.is_perfect_match %}Show Interest{% else %}Interest (Explain){% endif %}
-                                            </button>
-                                        </form>
+                                        <div class="flex flex-wrap items-center justify-end gap-2">
+                                            {{ wa_share_btn(m.load) }}
+                                            <form method="post" action="/interest" class="inline">
+                                                <input type="hidden" name="load_id" value="{{ m.load.id }}">
+                                                <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
+                                                <button type="submit" class="min-h-[44px] px-3 py-2 text-xs font-semibold {% if m.is_perfect_match %}bg-teal-600 hover:bg-teal-700{% else %}bg-amber-600 hover:bg-amber-700{% endif %} text-white rounded-md transition-colors">
+                                                    {% if m.is_perfect_match %}Show Interest{% else %}Interest (Explain){% endif %}
+                                                </button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -974,8 +1027,8 @@
                     </div>
                 
                 <!-- Vehicles Table -->
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                <div class="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <table class="w-full text-sm min-w-[720px]">
                         <thead>
                             <tr class="border-b border-slate-700">
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Company</th>
@@ -1275,10 +1328,10 @@
                 <div class="glass-card rounded-xl p-5 mb-6 border border-teal-500/10">
                     <h3 class="text-lg font-semibold text-slate-200 mb-4">➕ Add New Load</h3>
                     <form id="add-load-form" method="post" action="/loads" data-pallet-volume-m3="{{ pallet_volume_m3|default(1.2) }}" data-loader-fee-min="{{ loader_fee_minimum_gbp|default(5) }}" data-loader-fee-pct="{{ loader_fee_percent_of_load|default(2) }}">
-                        <div class="grid md:grid-cols-3 gap-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Shipper</label>
-                                <input name="shipper_name" required placeholder="Company name" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <input name="shipper_name" required placeholder="Company name" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Booking ref <span class="text-slate-500 font-normal">(optional)</span></label>
@@ -1289,20 +1342,20 @@
                                 <input name="booking_name" placeholder="Customer / job name" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                             </div>
                         </div>
-                        <div class="grid md:grid-cols-3 gap-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup Postcode</label>
-                                <input id="load-pickup-postcode" name="pickup_postcode" required placeholder="e.g. M1 1AA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm uppercase" />
+                                <input id="load-pickup-postcode" name="pickup_postcode" required placeholder="e.g. M1 1AA" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm uppercase" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Delivery Postcode</label>
-                                <input id="load-delivery-postcode" name="delivery_postcode" required placeholder="e.g. B2 4QA" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm uppercase" />
+                                <input id="load-delivery-postcode" name="delivery_postcode" required placeholder="e.g. B2 4QA" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm uppercase" />
                             </div>
                         </div>
-                        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window start</label>
-                                <input id="load-pickup-window-start" name="pickup_window_start" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <input id="load-pickup-window-start" name="pickup_window_start" type="datetime-local" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window end</label>
@@ -1318,10 +1371,10 @@
                             </div>
                         </div>
                         <p class="text-xs text-slate-500 mb-4">Optional — use these for <strong class="text-slate-400 font-medium">timed shipments</strong> (collection and delivery slots). Leave all blank for flexible loads; we then default windows to “now”. If you set only one end of a pair, the other is copied.</p>
-                        <div class="grid md:grid-cols-4 gap-4 mb-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Vehicle Type</label>
-                                <select id="load-vehicle-type" name="vehicle_type_required" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm">
+                                <select id="load-vehicle-type" name="vehicle_type_required" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm">
                                     <option value="">Any vehicle</option>
                                     <option value="artic">Artic</option>
                                     <option value="rigid">Rigid</option>
@@ -1550,8 +1603,23 @@
                 </div>
                 
                 <!-- Loads Table -->
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                <div class="md:hidden space-y-3 mb-4">
+                    {% for l in loads %}
+                    <article class="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-2" data-whatsapp-load-id="{{ l.id }}">
+                        <div class="font-medium text-slate-100">{{ l.shipper_name }}</div>
+                        <div class="font-mono text-teal-300 text-sm">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</div>
+                        <div class="text-xs text-slate-500"><span class="badge badge-success">{{ l.status }}</span></div>
+                        <div class="flex flex-wrap items-center gap-2 pt-2">
+                            {{ wa_share_btn(l) }}
+                            <form method="post" action="/delete-load/{{ l.id }}" class="inline flex-1" onsubmit="return confirm('Delete this load?');">
+                                <button type="submit" class="w-full min-h-[44px] px-3 py-2 text-red-400 border border-red-500/30 rounded-lg text-sm font-medium text-center">Delete</button>
+                            </form>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                <div class="hidden md:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <table class="w-full text-sm min-w-[640px]">
                         <thead>
                             <tr class="border-b border-slate-700">
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Shipper</th>
@@ -1567,7 +1635,7 @@
                         </thead>
                         <tbody>
                             {% for l in loads %}
-                            <tr class="border-b border-slate-800/50">
+                            <tr class="border-b border-slate-800/50" data-whatsapp-load-id="{{ l.id }}">
                                 <td class="py-3 px-4 font-medium">{{ l.shipper_name }}
                                     {% if l.requires_tail_lift|default(false) or l.requires_forklift|default(false) or l.requires_temp_control|default(false) or l.requires_adr|default(false) %}
                                     <div class="text-xs font-normal text-amber-200/90 mt-1">Needs: {% if l.requires_tail_lift|default(false) %}Tail lift{% endif %}{% if l.requires_forklift|default(false) %}{% if l.requires_tail_lift|default(false) %}, {% endif %}Forklift{% endif %}{% if l.requires_temp_control|default(false) %}{% if l.requires_tail_lift|default(false) or l.requires_forklift|default(false) %}, {% endif %}Temp{% endif %}{% if l.requires_adr|default(false) %}{% if l.requires_tail_lift|default(false) or l.requires_forklift|default(false) or l.requires_temp_control|default(false) %}, {% endif %}ADR{% endif %}</div>
@@ -1596,9 +1664,12 @@
                                     <span class="badge badge-success">{{ l.status }}</span>
                                 </td>
                                 <td class="py-3 px-4 text-right">
-                                    <form method="post" action="/delete-load/{{ l.id }}" class="inline" onsubmit="return confirm('Delete this load?');">
-                                        <button type="submit" class="text-red-400 hover:text-red-300 text-sm font-medium">Delete</button>
-                                    </form>
+                                    <div class="flex flex-wrap items-center justify-end gap-2">
+                                        {{ wa_share_btn(l) }}
+                                        <form method="post" action="/delete-load/{{ l.id }}" class="inline" onsubmit="return confirm('Delete this load?');">
+                                            <button type="submit" class="min-h-[44px] px-3 py-2 text-red-400 hover:text-red-300 text-sm font-medium rounded-lg border border-red-500/30 hover:bg-red-950/40">Delete</button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -1767,7 +1838,8 @@
                                     <div class="font-semibold text-white text-base">{{ row.shipper or row.label }}</div>
                                     <div class="font-mono text-teal-300 text-sm mt-1">{{ row.collection }} <span class="text-slate-500">→</span> {{ row.delivery }}</div>
                                 </div>
-                                <div class="shrink-0">
+                                <div class="shrink-0 flex items-center gap-2">
+                                    {{ wa_share_btn(row.load) }}
                                     {% if row.interest.status == 'suggested' %}
                                     <span class="badge badge-warning">Suggested</span>
                                     {% elif row.interest.status == 'expressed' %}
@@ -1853,13 +1925,15 @@
                                         {% endif %}
                                     </td>
                                     <td class="py-3 px-4 text-right">
+                                        <div class="flex flex-wrap items-center justify-end gap-2">
+                                            {{ wa_share_btn(row.load) }}
                                             {% if row.interest.status == 'suggested' %}
                                             <form method="post" action="/show-interest" class="inline">
                                                 <input type="hidden" name="haulier_id" value="{{ row.interest.haulier_id }}" />
                                                 <input type="hidden" name="vehicle_id" value="{{ row.interest.vehicle_id }}" />
                                                 {% if row.interest.planned_load_id %}<input type="hidden" name="planned_load_id" value="{{ row.interest.planned_load_id }}" />{% endif %}
                                                 {% if row.interest.load_id %}<input type="hidden" name="load_id" value="{{ row.interest.load_id }}" />{% endif %}
-                                                <button type="submit" class="px-4 py-2 text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all">
+                                                <button type="submit" class="min-h-[44px] px-4 py-2 text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all">
                                                     👋 Show Interest
                                                 </button>
                                             </form>
@@ -1867,7 +1941,7 @@
                                             {% if current_user and current_user.loader_id %}
                                             <form method="post" action="/accept-interest" class="inline">
                                                 <input type="hidden" name="interest_id" value="{{ row.interest.id }}" />
-                                                <button type="submit" class="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all">
+                                                <button type="submit" class="min-h-[44px] px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all">
                                                     ✅ Accept Job
                                                 </button>
                                             </form>
@@ -1877,6 +1951,7 @@
                                             {% elif row.interest.status == 'accepted' %}
                                             <span class="text-emerald-400 text-sm font-medium">✓ Job Created</span>
                                             {% endif %}
+                                        </div>
                                         </td>
                                 </tr>
                                 {% endfor %}
@@ -2376,6 +2451,55 @@
                 var adminTab = document.querySelector('input[name="section"][value="admin"]');
                 if (adminTab && adminTab.closest('label')) adminTab.closest('label').scrollIntoView({ block: 'nearest' });
             }
+        })();
+
+        (function () {
+            var btn = document.getElementById("main-nav-toggle");
+            var panel = document.getElementById("main-nav-tabs");
+            if (!btn || !panel) return;
+            btn.addEventListener("click", function () {
+                if (window.matchMedia("(min-width: 768px)").matches) return;
+                var open = panel.classList.contains("hidden");
+                if (open) {
+                    panel.classList.remove("hidden");
+                    panel.classList.add("flex", "flex-col");
+                } else {
+                    panel.classList.add("hidden");
+                    panel.classList.remove("flex", "flex-col");
+                }
+                btn.setAttribute("aria-expanded", open ? "true" : "false");
+            });
+            window.addEventListener("resize", function () {
+                if (window.matchMedia("(min-width: 768px)").matches) {
+                    panel.classList.remove("flex", "flex-col");
+                } else {
+                    panel.classList.add("hidden");
+                    panel.classList.remove("flex", "flex-col");
+                    btn.setAttribute("aria-expanded", "false");
+                }
+            });
+            document.querySelectorAll('#main-nav-tabs input[name="section"]').forEach(function (r) {
+                r.addEventListener("change", function () {
+                    if (window.matchMedia("(max-width: 767px)").matches) {
+                        panel.classList.add("hidden");
+                        panel.classList.remove("flex", "flex-col");
+                        btn.setAttribute("aria-expanded", "false");
+                    }
+                });
+            });
+        })();
+
+        (function () {
+            var params = new URLSearchParams(window.location.search);
+            var lid = params.get("load_id");
+            if (!lid) return;
+            setTimeout(function () {
+                var el = document.querySelector('[data-whatsapp-load-id="' + lid.replace(/[^0-9]/g, "") + '"]');
+                if (el) {
+                    el.scrollIntoView({ block: "center", behavior: "smooth" });
+                    el.classList.add("ring-2", "ring-teal-400/70", "rounded-lg");
+                }
+            }, 500);
         })();
         
         // Auto-fill email from company selection
