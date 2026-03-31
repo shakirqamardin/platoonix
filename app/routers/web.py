@@ -126,7 +126,7 @@ def privacy_page(request: Request) -> HTMLResponse:
     """Public Privacy Policy (UK GDPR). No login required."""
     return templates.TemplateResponse(
         "privacy.html",
-        {"request": request, "last_updated": "March 2026"},
+        {"request": request, "last_updated": "31 March 2026"},
     )
 
 
