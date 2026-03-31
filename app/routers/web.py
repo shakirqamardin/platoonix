@@ -117,7 +117,7 @@ def terms_page(request: Request) -> HTMLResponse:
     """Public Terms & Conditions page. No login required."""
     return templates.TemplateResponse(
         "terms.html",
-        {"request": request, "last_updated": "29 March 2026"},
+        {"request": request, "last_updated": "31 March 2026"},
     )
 
 
