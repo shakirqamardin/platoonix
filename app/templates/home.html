@@ -2416,6 +2416,16 @@
         </footer>
     </div>
 
+
+    <div id="cookie-consent-banner" class="hidden fixed bottom-3 left-3 right-3 z-[90] rounded-xl border border-slate-700 bg-slate-900/95 text-slate-200 shadow-2xl backdrop-blur px-4 py-3">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p class="text-xs sm:text-sm">We use cookies to improve your experience. By using this site, you agree to our use of cookies.</p>
+        <div class="flex items-center gap-2 shrink-0">
+          <a href="/privacy#cookies" class="text-xs sm:text-sm text-teal-400 hover:underline">Cookie Policy</a>
+          <button type="button" id="cookie-consent-accept" class="min-h-[40px] px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs sm:text-sm font-semibold">Accept</button>
+        </div>
+      </div>
+    </div>
     <!-- JavaScript -->
     <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
     <script>
@@ -2674,6 +2684,22 @@
             });
         });
         
+
+(function () {
+  var key = 'platoonix_cookie_consent_v1';
+  var banner = document.getElementById('cookie-consent-banner');
+  var accept = document.getElementById('cookie-consent-accept');
+  if (!banner || !accept) return;
+  try {
+    if (localStorage.getItem(key) === 'accepted') return;
+  } catch (e) {}
+  banner.classList.remove('hidden');
+  accept.addEventListener('click', function () {
+    try { localStorage.setItem(key, 'accepted'); } catch (e) {}
+    banner.classList.add('hidden');
+  });
+})();
+
         // DVLA Lookup
         (function() {
             var btn = document.getElementById('admin-btn-dvla-lookup');
