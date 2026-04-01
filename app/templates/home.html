@@ -208,17 +208,17 @@
                     
                     {% if current_user_email %}
                     <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full min-w-0 justify-end">
-                        <div class="relative" id="notif-bell-wrap">
+                        <div class="relative max-md:basis-full max-md:flex max-md:justify-end" id="notif-bell-wrap">
                             <button type="button" id="notif-bell-btn" class="relative rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:text-white hover:border-teal-500 hover:bg-slate-800/60 transition-all" aria-label="Notifications">
                                 <span class="text-lg leading-none">🔔</span>
                                 <span id="notif-badge" class="hidden absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-slate-950">0</span>
                             </button>
-                            <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] max-h-80 overflow-y-auto glass-card rounded-xl border border-slate-700 shadow-xl z-50 text-left" style="z-index: 9999;">
+                            <div id="notif-dropdown" class="hidden absolute mt-2 min-w-0 max-h-80 overflow-y-auto overflow-x-hidden glass-card rounded-xl border border-slate-700 shadow-xl z-50 text-left max-md:inset-x-0 max-md:w-full md:right-0 md:left-auto md:w-[min(22rem,calc(100vw-2rem))]" style="z-index: 9999;">
                                 <div class="flex items-center justify-between px-3 py-2 border-b border-slate-700">
                                     <span class="text-xs font-semibold text-slate-400">Notifications</span>
                                     <button type="button" id="notif-mark-all" class="text-xs text-teal-400 hover:underline">Mark all read</button>
                                 </div>
-                                <ul id="notif-list" class="text-sm divide-y divide-slate-800/80"></ul>
+                                <ul id="notif-list" class="text-sm divide-y divide-slate-800/80 break-words"></ul>
                                 <p id="notif-empty" class="px-3 py-4 text-slate-500 text-xs text-center">No notifications yet.</p>
                             </div>
                         </div>
@@ -2635,9 +2635,9 @@
                 emptyEl.classList.add('hidden');
                 items.forEach(function (n) {
                     var li = document.createElement('li');
-                    li.className = 'px-3 py-2 hover:bg-slate-800/60 cursor-pointer text-left' + (n.read_at ? ' opacity-70' : '');
-                    li.innerHTML = '<div class="font-medium text-slate-200 text-xs">' + escapeHtml(n.title) + '</div>' +
-                        '<div class="text-slate-400 text-xs mt-0.5">' + escapeHtml(n.body || '') + '</div>';
+                    li.className = 'px-3 py-2 hover:bg-slate-800/60 cursor-pointer text-left break-words min-w-0' + (n.read_at ? ' opacity-70' : '');
+                    li.innerHTML = '<div class="font-medium text-slate-200 text-xs break-words">' + escapeHtml(n.title) + '</div>' +
+                        '<div class="text-slate-400 text-xs mt-0.5 break-words">' + escapeHtml(n.body || '') + '</div>';
                     li.addEventListener('click', function () {
                         if (!n.read_at) {
                             fetch('/api/notifications/' + n.id + '/read', { method: 'POST', credentials: 'same-origin' })
