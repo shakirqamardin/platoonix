@@ -72,7 +72,7 @@ def _whatsapp_href_load(load, base_url: str) -> str:
         return "#"
     from app.whatsapp_share import build_whatsapp_send_url
 
-    return build_whatsapp_send_url(load, base_url or "https://platoonix.co.uk")
+    return build_whatsapp_send_url(load, base_url or "https://web-production-7ca42.up.railway.app")
 
 
 templates.env.filters["whatsapp_href_load"] = _whatsapp_href_load

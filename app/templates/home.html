@@ -368,7 +368,7 @@
         {# Drivers: Find Backhaul + Matches only (office login handles the rest) #}
         {% set _sec = 'find' if (current_user and current_user.role == 'driver' and _sec not in ['find', 'matches']) else _sec %}
         {% set initial_section = 'find' if (_sec == 'company' and not haulier_profile and not loader_profile) else _sec %}
-        {% set _pub = public_app_base_url|default('https://platoonix.co.uk') %}
+        {% set _pub = public_app_base_url|default('https://web-production-7ca42.up.railway.app') %}
 
         {% macro wa_share_btn(load) -%}
         {%- if load -%}

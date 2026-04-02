@@ -29,7 +29,7 @@ def load_share_message(load: models.Load, base_url: str) -> str:
         pay = f"£{float(load.budget_gbp):.2f}"
     else:
         pay = "TBC"
-    root = (base_url or "https://platoonix.co.uk").rstrip("/")
+    root = (base_url or "https://web-production-7ca42.up.railway.app").rstrip("/")
     link = f"{root}/?section=find&load_id={load.id}"
     return (
         "🚛 Backhaul Available on Platoonix!\n\n"
