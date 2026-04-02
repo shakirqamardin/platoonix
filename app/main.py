@@ -279,6 +279,19 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration vehicles availability: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_certificate_path VARCHAR(1024)",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_expiry_date DATE",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_status VARCHAR(32) DEFAULT 'unknown'",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_last_checked TIMESTAMP WITH TIME ZONE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration vehicles insurance: {e!r}", file=sys.stderr)
         # Create or sync admin from ADMIN_EMAIL / ADMIN_PASSWORD
         db = SessionLocal()
         try:

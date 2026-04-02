@@ -18,6 +18,7 @@ from app.auth import get_current_driver_optional, get_current_user_optional, req
 from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
+from app.services.insurance_status import calculate_insurance_status, finalize_vehicle_insurance_upload
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -402,6 +403,11 @@ async def haulier_add_vehicle(
     if isinstance(result, RedirectResponse):
         return result
     haulier, actor_driver = result
+    from datetime import date as date_cls
+    from urllib.parse import quote_plus
+
+    from starlette.datastructures import UploadFile
+
     form = await request.form()
     registration = (form.get("registration") or "").upper().strip()
     vehicle_type = form.get("vehicle_type") or "rigid"
@@ -409,6 +415,25 @@ async def haulier_add_vehicle(
     base_postcode = (form.get("base_postcode") or "").strip().upper() or None
     if not registration:
         return RedirectResponse(url="/?section=vehicles&delete_error=Registration+required", status_code=303)
+    insurance_expiry_raw = form.get("insurance_expiry_date")
+    insurance_file = form.get("insurance_certificate")
+    if not insurance_expiry_raw or not str(insurance_expiry_raw).strip():
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus("Insurance expiry date is required"),
+            status_code=303,
+        )
+    try:
+        insurance_expiry = date_cls.fromisoformat(str(insurance_expiry_raw).strip())
+    except ValueError:
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus("Invalid insurance expiry date"),
+            status_code=303,
+        )
+    if not isinstance(insurance_file, UploadFile) or not getattr(insurance_file, "filename", None):
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus("Insurance certificate file is required"),
+            status_code=303,
+        )
     if db.query(models.Vehicle).filter(models.Vehicle.registration == registration).first():
         return RedirectResponse(
             url="/?section=vehicles&delete_error=Registration+already+exists",
@@ -421,6 +446,8 @@ async def haulier_add_vehicle(
             vehicle_type=vehicle_type,
             trailer_type=trailer_type,
             base_postcode=base_postcode,
+            insurance_expiry_date=insurance_expiry,
+            insurance_status=calculate_insurance_status(insurance_expiry),
         )
         db.add(vehicle)
         db.commit()
@@ -428,6 +455,18 @@ async def haulier_add_vehicle(
     except IntegrityError:
         db.rollback()
         return RedirectResponse(url="/?section=vehicles&delete_error=Could+not+save+vehicle", status_code=303)
+    try:
+        await finalize_vehicle_insurance_upload(db, vehicle, insurance_file)
+    except ValueError as exc:
+        try:
+            db.delete(vehicle)
+            db.commit()
+        except Exception:
+            db.rollback()
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus(str(exc)),
+            status_code=303,
+        )
     if base_postcode:
         try:
             from app.services.alert_stream import notify_matching_loads_for_vehicle

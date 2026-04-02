@@ -25,6 +25,11 @@ from app.services.matching import find_matching_loads
 from app.services import ratings as ratings_svc
 from app.services import load_pricing as load_pricing_svc
 from app.services import vehicle_availability as vehicle_availability_svc
+from app.services.insurance_status import (
+    apply_insurance_status_to_vehicles,
+    calculate_insurance_status,
+    finalize_vehicle_insurance_upload,
+)
 
 
 router = APIRouter()
@@ -552,6 +557,7 @@ def home(
     rating_ctx = ratings_svc.build_home_rating_context(db, current_user, loads, vehicles)
     rating_ok = request.query_params.get("rating_ok")
     rating_error = request.query_params.get("rating_error")
+    apply_insurance_status_to_vehicles(vehicles)
     vehicle_availability = _vehicle_availability_map(vehicles)
     _sl = (request.query_params.get("load_id") or "").strip()
     try:
@@ -1080,6 +1086,7 @@ def find_backhaul_page(
     rating_ctx = ratings_svc.build_home_rating_context(db, current_user, loads, vehicles)
     rating_ok = request.query_params.get("rating_ok")
     rating_error = request.query_params.get("rating_error")
+    apply_insurance_status_to_vehicles(vehicles)
     vehicle_availability = _vehicle_availability_map(vehicles)
     _sl = (request.query_params.get("load_id") or "").strip()
     try:
@@ -1227,6 +1234,31 @@ async def create_vehicle_form(
             status_code=303,
         )
 
+    from datetime import date as date_cls
+    from urllib.parse import quote_plus
+
+    from starlette.datastructures import UploadFile
+
+    insurance_expiry_raw = form.get("insurance_expiry_date")
+    insurance_file = form.get("insurance_certificate")
+    if not insurance_expiry_raw or not str(insurance_expiry_raw).strip():
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus("Insurance expiry date is required"),
+            status_code=303,
+        )
+    try:
+        insurance_expiry = date_cls.fromisoformat(str(insurance_expiry_raw).strip())
+    except ValueError:
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus("Invalid insurance expiry date"),
+            status_code=303,
+        )
+    if not isinstance(insurance_file, UploadFile) or not getattr(insurance_file, "filename", None):
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus("Insurance certificate file is required"),
+            status_code=303,
+        )
+
     base_postcode = (form.get("base_postcode") or "").strip().upper() or None
     try:
         vehicle = models.Vehicle(
@@ -1239,6 +1271,8 @@ async def create_vehicle_form(
             has_moffett=_form_checkbox(form, "has_moffett"),
             has_temp_control=_form_checkbox(form, "has_temp_control"),
             is_adr_certified=_form_checkbox(form, "is_adr_certified"),
+            insurance_expiry_date=insurance_expiry,
+            insurance_status=calculate_insurance_status(insurance_expiry),
         )
         db.add(vehicle)
         db.commit()
@@ -1249,6 +1283,20 @@ async def create_vehicle_form(
             url="/?section=vehicles&delete_error=Could+not+save+vehicle",
             status_code=303,
         )
+
+    try:
+        await finalize_vehicle_insurance_upload(db, vehicle, insurance_file)
+    except ValueError as exc:
+        try:
+            db.delete(vehicle)
+            db.commit()
+        except Exception:
+            db.rollback()
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus(str(exc)),
+            status_code=303,
+        )
+
     if base_postcode:
         try:
             from app.services.alert_stream import notify_matching_loads_for_vehicle

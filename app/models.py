@@ -147,6 +147,13 @@ class Vehicle(Base):
     )
     available_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
+    insurance_certificate_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    insurance_expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    insurance_status: Mapped[str] = mapped_column(String(32), default="unknown")
+    insurance_last_checked: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

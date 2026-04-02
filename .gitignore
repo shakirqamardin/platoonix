@@ -26,4 +26,7 @@ build/
 
 # Uploaded ePOD files (stored under static/uploads/pods/)
 static/uploads/
+
+# Vehicle insurance certificates (default: data/insurance/)
+data/insurance/
 node_modules

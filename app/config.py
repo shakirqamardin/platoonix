@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # Public site URL for share links (WhatsApp, etc.). Override via PUBLIC_APP_BASE_URL in env.
     public_app_base_url: str = "https://web-production-7ca42.up.railway.app"
 
+    # Vehicle insurance certificate files (PDF/images). Default: <project>/data/insurance
+    insurance_upload_dir: Optional[str] = None
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

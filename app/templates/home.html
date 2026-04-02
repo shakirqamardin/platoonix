@@ -167,6 +167,17 @@
 </head>
 
 <body class="min-h-screen text-slate-100 bg-slate-950 overflow-x-hidden">
+{% macro insurance_badge_vehicle(v) -%}
+{% if v.insurance_status == 'valid' and v.insurance_expiry_date %}
+  <span class="inline-flex px-2 py-1 text-xs rounded bg-emerald-900/30 text-emerald-400">✅ Insurance valid until {{ v.insurance_expiry_date.strftime('%d %b %Y') }}</span>
+{% elif v.insurance_status == 'expiring_soon' and v.insurance_expiry_date %}
+  <span class="inline-flex px-2 py-1 text-xs rounded bg-amber-900/30 text-amber-400">⚠️ Insurance expires {{ v.insurance_expiry_date.strftime('%d %b %Y') }}</span>
+{% elif v.insurance_status == 'expired' %}
+  <span class="inline-flex px-2 py-1 text-xs rounded bg-red-900/30 text-red-400">❌ Insurance expired{% if v.insurance_expiry_date %} {{ v.insurance_expiry_date.strftime('%d %b %Y') }}{% endif %}</span>
+{% else %}
+  <span class="inline-flex px-2 py-1 text-xs rounded bg-slate-700/30 text-slate-400">⚠️ Insurance not uploaded</span>
+{% endif %}
+{%- endmacro %}
     <!-- Background gradient overlay -->
     <div class="fixed inset-0 pointer-events-none">
         <div class="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-cyan-500/5"></div>
@@ -672,6 +683,7 @@
                                 <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %} {% if av and not av.get('selectable', True) %}disabled{% endif %}>
                                     {{ v.registration }} • {{ v.vehicle_type }}{% if v.trailer_type %} • {{ v.trailer_type }}{% endif %}
                                     {% if av.get('selectable', True) %} · Available now{% else %} · {{ av.get('label', 'On job') }}{% endif %}
+                                    {% if v.insurance_status == 'expired' %} · INS EXPIRED{% elif v.insurance_status == 'expiring_soon' %} · INS EXPIRING{% endif %}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -754,6 +766,11 @@
                     {% if find_vehicle_id %}
                         {% for vv in vehicles %}
                             {% if vv.id|string == find_vehicle_id %}
+                            {% if vv.insurance_status == 'expired' %}
+                            <div class="bg-red-900/20 border border-red-600/30 rounded-lg p-3 mb-2">
+                                <p class="text-red-400 text-sm">⚠️ WARNING: This vehicle's insurance has expired. Proceed with caution or contact haulier to verify coverage.</p>
+                            </div>
+                            {% endif %}
                             <p class="text-xs text-slate-400 mb-3 rounded-lg border border-slate-700/50 bg-slate-900/30 px-3 py-2">
                                 <span class="text-slate-500">Selected vehicle</span>
                                 <span class="font-mono text-teal-300 ml-1">{{ vv.registration }}</span>
@@ -765,6 +782,7 @@
                                 {% if vv.has_temp_control|default(false) %}<span class="text-teal-400">✓</span> Temp{% else %}<span class="text-slate-600">○</span> Temp{% endif %}
                                 <span class="text-slate-600 mx-1">|</span>
                                 {% if vv.is_adr_certified|default(false) %}<span class="text-teal-400">✓</span> ADR{% else %}<span class="text-slate-600">○</span> ADR{% endif %}
+                                <span class="block mt-2">{{ insurance_badge_vehicle(vv) }}</span>
                             </p>
                             {% endif %}
                         {% endfor %}
@@ -955,10 +973,10 @@
                         </div>
                     </form>
                     
-                    <form method="post" action="/vehicles" id="admin-form-add-vehicle" class="flex flex-wrap gap-3 items-end">
+                    <form method="post" action="/vehicles" id="admin-form-add-vehicle" enctype="multipart/form-data" class="space-y-3 w-full max-w-6xl">
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-2">Add Vehicle</label>
-                            <div class="flex gap-2">
+                            <div class="flex flex-wrap gap-2 items-end">
                                 <select name="haulier_id" required class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
                                     {% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}
                                     <option value="" disabled>Select company...</option>
@@ -988,6 +1006,16 @@
                                 <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="has_moffett" class="rounded border-slate-600 bg-slate-900" /> Moffett</label>
                                 <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="has_temp_control" class="rounded border-slate-600 bg-slate-900" /> Temp control</label>
                                 <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="is_adr_certified" class="rounded border-slate-600 bg-slate-900" /> ADR</label>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 max-w-xl">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Insurance certificate (PDF or image) <span class="text-red-400">*</span></label>
+                                    <input type="file" name="insurance_certificate" accept=".pdf,application/pdf,image/jpeg,image/png,image/webp" required class="block w-full text-sm text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-slate-100 hover:file:bg-slate-600" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Insurance expiry date <span class="text-red-400">*</span></label>
+                                    <input type="date" name="insurance_expiry_date" required class="w-full min-h-[40px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm text-slate-200" />
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -1058,6 +1086,7 @@
                             <span class="text-red-400 font-medium">●</span> <span class="text-red-200/85">{{ av.get('label', 'On job') }}</span>
                             {% endif %}
                         </div>
+                        <div class="pt-1">{{ insurance_badge_vehicle(v) }}</div>
                     </article>
                     {% endfor %}
                     {% for h in hauliers %}
@@ -1073,7 +1102,7 @@
                     {% endfor %}
                 </div>
                 <div class="hidden md:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-                    <table class="w-full text-sm min-w-[720px]">
+                    <table class="w-full text-sm min-w-[56rem]">
                         <thead>
                             <tr class="border-b border-slate-700">
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Company</th>
@@ -1082,6 +1111,7 @@
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Type</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Trailer</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Equipment</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400 min-w-[10rem]">Insurance</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Availability</th>
                                 <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
                             </tr>
@@ -1107,6 +1137,7 @@
                                     {% if v.has_tail_lift|default(false) %}<span class="text-teal-400">✓</span> Tail lift{% endif %}{% if v.has_moffett|default(false) %}{% if v.has_tail_lift|default(false) %} <span class="text-slate-600">|</span> {% endif %}<span class="text-teal-400">✓</span> Moffett{% endif %}{% if v.has_temp_control|default(false) %}{% if v.has_tail_lift|default(false) or v.has_moffett|default(false) %} <span class="text-slate-600">|</span> {% endif %}<span class="text-teal-400">✓</span> Temp{% endif %}{% if v.is_adr_certified|default(false) %}{% if v.has_tail_lift|default(false) or v.has_moffett|default(false) or v.has_temp_control|default(false) %} <span class="text-slate-600">|</span> {% endif %}<span class="text-teal-400">✓</span> ADR{% endif %}
                                     {% if not (v.has_tail_lift|default(false) or v.has_moffett|default(false) or v.has_temp_control|default(false) or v.is_adr_certified|default(false)) %}—{% endif %}
                                 </td>
+                                <td class="py-3 px-4 align-top text-xs">{{ insurance_badge_vehicle(v) }}</td>
                                 <td class="py-3 px-4 text-xs whitespace-nowrap">
                                     {% if av.get('tier', 'free') == 'free' %}
                                     <span class="text-emerald-400 font-medium">●</span> <span class="text-emerald-200/90">{{ av.get('label', 'Available now') }}</span>
@@ -1128,7 +1159,7 @@
                                 {% if not vehicles or not vehicles|selectattr('haulier_id', 'equalto', h.id)|list %}
                                 <tr class="border-b border-slate-800/50 opacity-60 bg-slate-900/30">
                                     <td class="py-3 px-4">{{ h.name }}</td>
-                                    <td class="py-3 px-4 text-slate-500 text-xs italic" colspan="6">No vehicles yet — row below removes the <strong class="text-slate-400 not-italic">company</strong>, not a lorry.</td>
+                                    <td class="py-3 px-4 text-slate-500 text-xs italic" colspan="7">No vehicles yet — row below removes the <strong class="text-slate-400 not-italic">company</strong>, not a lorry.</td>
                                     <td class="py-3 px-4 text-right">
                                         <form method="post" action="/delete-haulier/{{ h.id }}" class="inline" onsubmit="return confirm('Delete this company (haulier) and unlink its logins? No vehicles must remain.');">
                                             <button type="submit" class="text-red-400 hover:text-red-300 text-sm font-medium">Delete company</button>
