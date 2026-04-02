@@ -1000,6 +1000,33 @@
                                 </select>
                                 <button type="submit" class="btn-primary px-4 py-2 text-sm font-semibold text-white rounded-lg">Add Vehicle</button>
                             </div>
+                            <p id="dvla-lookup-msg" class="mt-2 text-xs min-h-[1.25rem] text-slate-400" role="status" aria-live="polite"></p>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 mt-1 max-w-5xl">
+                                <div>
+                                    <label class="text-[10px] uppercase tracking-wide text-slate-500 block mb-0.5">Make (DVLA)</label>
+                                    <input type="text" name="vehicle_make" id="vehicle-dvla-make" readonly tabindex="-1" class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200" placeholder="—" autocomplete="off" />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] uppercase tracking-wide text-slate-500 block mb-0.5">Model</label>
+                                    <input type="text" name="vehicle_model" id="vehicle-dvla-model" readonly tabindex="-1" class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200" placeholder="—" autocomplete="off" />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] uppercase tracking-wide text-slate-500 block mb-0.5">Colour</label>
+                                    <input type="text" name="vehicle_colour" id="vehicle-dvla-colour" readonly tabindex="-1" class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200" placeholder="—" autocomplete="off" />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] uppercase tracking-wide text-slate-500 block mb-0.5">Year</label>
+                                    <input type="number" name="vehicle_year" id="vehicle-dvla-year" readonly tabindex="-1" class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200" placeholder="—" autocomplete="off" />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] uppercase tracking-wide text-slate-500 block mb-0.5">MOT</label>
+                                    <input type="text" name="vehicle_mot_status" id="vehicle-dvla-mot" readonly tabindex="-1" class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200" placeholder="—" autocomplete="off" />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] uppercase tracking-wide text-slate-500 block mb-0.5">Tax</label>
+                                    <input type="text" name="vehicle_tax_status" id="vehicle-dvla-tax" readonly tabindex="-1" class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200" placeholder="—" autocomplete="off" />
+                                </div>
+                            </div>
                             <div class="w-full mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300">
                                 <span class="text-slate-500 font-medium mr-1">Equipment:</span>
                                 <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="has_tail_lift" class="rounded border-slate-600 bg-slate-900" /> Tail lift</label>
@@ -1064,6 +1091,9 @@
                                 <div class="font-medium text-slate-100">{% for h in hauliers %}{% if h.id == v.haulier_id %}{{ h.name }}{% endif %}{% endfor %}</div>
                                 <div class="text-xs text-teal-200/90 mt-1">Rating: {% if v.haulier_id and haulier_rating_by_haulier_id and v.haulier_id in haulier_rating_by_haulier_id %}{{ haulier_rating_by_haulier_id[v.haulier_id] }}{% else %}—{% endif %}</div>
                                 <div class="font-mono text-teal-300 text-sm mt-1">{{ v.registration }}</div>
+                                {% if v.make or v.model or v.colour or v.year %}
+                                <div class="text-xs text-slate-500 mt-1">{{ (v.make or '') }} {{ (v.model or '') }}{% if v.colour %} · {{ v.colour }}{% endif %}{% if v.year %} · {{ v.year }}{% endif %}</div>
+                                {% endif %}
                             </div>
                             <form method="post" action="/delete-vehicle/{{ v.id }}" class="shrink-0" onsubmit="return confirm('Delete this vehicle?');">
                                 <button type="submit" class="text-red-400 hover:text-red-300 text-sm font-medium">Delete</button>
@@ -1128,7 +1158,12 @@
                                 <td class="py-3 px-4 text-xs text-teal-200/90 whitespace-nowrap">
                                     {% if v.haulier_id and haulier_rating_by_haulier_id and v.haulier_id in haulier_rating_by_haulier_id %}{{ haulier_rating_by_haulier_id[v.haulier_id] }}{% else %}—{% endif %}
                                 </td>
-                                <td class="py-3 px-4 font-mono text-teal-300">{{ v.registration }}</td>
+                                <td class="py-3 px-4 font-mono text-teal-300">
+                                    {{ v.registration }}
+                                    {% if v.make or v.model or v.colour or v.year %}
+                                    <div class="font-sans text-xs text-slate-500 font-normal mt-1">{{ (v.make or '') }} {{ (v.model or '') }}{% if v.colour %} · {{ v.colour }}{% endif %}{% if v.year %} · {{ v.year }}{% endif %}</div>
+                                    {% endif %}
+                                </td>
                                 <td class="py-3 px-4">
                                     <span class="badge badge-success">{{ v.vehicle_type }}</span>
                                 </td>
@@ -2783,42 +2818,101 @@
   });
 })();
 
-        // DVLA Lookup
+        // DVLA Lookup (fills vehicle type + make/model/colour/year/MOT/tax from API)
         (function() {
             var btn = document.getElementById('admin-btn-dvla-lookup');
             var regInput = document.getElementById('admin-vehicle-reg');
             var typeSelect = document.getElementById('admin-vehicle-type');
             var trailerSelect = document.getElementById('admin-vehicle-trailer');
-            
+            var msgEl = document.getElementById('dvla-lookup-msg');
+            var mk = document.getElementById('vehicle-dvla-make');
+            var md = document.getElementById('vehicle-dvla-model');
+            var col = document.getElementById('vehicle-dvla-colour');
+            var yr = document.getElementById('vehicle-dvla-year');
+            var mot = document.getElementById('vehicle-dvla-mot');
+            var tax = document.getElementById('vehicle-dvla-tax');
+
+            function setMsg(text, isError) {
+                if (!msgEl) return;
+                msgEl.textContent = text || '';
+                msgEl.className = 'mt-2 text-xs min-h-[1.25rem] ' + (isError ? 'text-red-400' : 'text-emerald-400/90');
+            }
+
+            function clearDvlaFields() {
+                [mk, md, col, yr, mot, tax].forEach(function (el) {
+                    if (el) el.value = '';
+                });
+            }
+
             if (!btn || !regInput || !typeSelect) return;
-            
+
             btn.addEventListener('click', function() {
                 var reg = (regInput.value || '').trim().replace(/\s/g, '');
-                if (reg.length < 2) return;
-                
+                if (reg.length < 2) {
+                    setMsg('Enter a registration (at least 2 characters) first.', true);
+                    return;
+                }
+
                 btn.disabled = true;
                 btn.textContent = '⏳ Looking up...';
-                
-                fetch('/api/dvla-lookup?reg=' + encodeURIComponent(reg))
+                setMsg('Contacting DVLA…', false);
+                clearDvlaFields();
+
+                fetch('/api/dvla-lookup?reg=' + encodeURIComponent(reg), { credentials: 'same-origin' })
                     .then(function(r) {
                         return r.json().then(function(d) {
-                            return { ok: r.ok, data: d };
+                            return { status: r.status, data: d };
                         });
                     })
                     .then(function(o) {
                         btn.disabled = false;
                         btn.textContent = '🔍 DVLA Lookup';
-                        
-                        if (o.ok && o.data.vehicle_type) {
-                            typeSelect.value = o.data.vehicle_type;
-                            if (o.data.trailer_type && trailerSelect.querySelector('option[value="' + o.data.trailer_type + '"]')) {
-                                trailerSelect.value = o.data.trailer_type;
-                            }
+
+                        var d = o.data || {};
+                        if (o.status === 401) {
+                            setMsg('You must be logged in to use DVLA lookup.', true);
+                            return;
                         }
+                        if (o.status === 503) {
+                            setMsg(d.error || 'DVLA is not configured (set DVLA_API_KEY on the server).', true);
+                            return;
+                        }
+                        if (o.status === 502) {
+                            setMsg(d.error || 'DVLA service error.', true);
+                            return;
+                        }
+                        if (d.error && !d.vehicle_type) {
+                            setMsg(d.error, true);
+                            return;
+                        }
+                        if (d.error && d.vehicle_type) {
+                            setMsg(d.error + ' (using default type).', true);
+                            typeSelect.value = d.vehicle_type;
+                            return;
+                        }
+
+                        if (d.vehicle_type) {
+                            typeSelect.value = d.vehicle_type;
+                        }
+                        if (trailerSelect && d.trailer_type && trailerSelect.querySelector('option[value="' + d.trailer_type + '"]')) {
+                            trailerSelect.value = d.trailer_type;
+                        }
+                        if (mk) mk.value = d.make || '';
+                        if (md) md.value = d.model || '';
+                        if (col) col.value = d.colour || '';
+                        if (yr) yr.value = d.year != null && d.year !== '' ? String(d.year) : '';
+                        if (mot) mot.value = d.mot_status || '';
+                        if (tax) tax.value = d.tax_status || '';
+
+                        var bits = [];
+                        if (d.make || d.model) bits.push((d.make || '') + ' ' + (d.model || '').trim());
+                        if (d.colour) bits.push(d.colour);
+                        setMsg(bits.length ? ('Filled from DVLA: ' + bits.filter(Boolean).join(' · ')) : 'DVLA lookup OK — vehicle type updated.', false);
                     })
                     .catch(function() {
                         btn.disabled = false;
-                        btn.textContent = "🔍 DVLA Lookup";
+                        btn.textContent = '🔍 DVLA Lookup';
+                        setMsg('Network error — could not reach the server.', true);
                     });
             });
         })();

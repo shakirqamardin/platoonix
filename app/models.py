@@ -129,7 +129,13 @@ class Vehicle(Base):
     capacity_volume_m3: Mapped[Optional[float]] = mapped_column(Float)
     base_postcode: Mapped[Optional[str]] = mapped_column(String(20))  # default empty location for automatic matching
 
-    # DVLA / emissions
+    # DVLA / emissions (full response also in dvla_raw)
+    make: Mapped[Optional[str]] = mapped_column(String(128))
+    model: Mapped[Optional[str]] = mapped_column(String(128))
+    colour: Mapped[Optional[str]] = mapped_column(String(64))
+    year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    mot_status: Mapped[Optional[str]] = mapped_column(String(128))
+    tax_status: Mapped[Optional[str]] = mapped_column(String(128))
     euro_status: Mapped[Optional[str]] = mapped_column(String(20))
     fuel_type: Mapped[Optional[str]] = mapped_column(String(50))
     dvla_raw: Mapped[Optional[dict]] = mapped_column(JSON)

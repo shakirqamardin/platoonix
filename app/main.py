@@ -292,6 +292,21 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration vehicles insurance: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS make VARCHAR(128)",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS model VARCHAR(128)",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS colour VARCHAR(64)",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS year INTEGER",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS mot_status VARCHAR(128)",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS tax_status VARCHAR(128)",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration vehicles DVLA display columns: {e!r}", file=sys.stderr)
         # Create or sync admin from ADMIN_EMAIL / ADMIN_PASSWORD
         db = SessionLocal()
         try:

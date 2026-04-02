@@ -439,6 +439,19 @@ async def haulier_add_vehicle(
             url="/?section=vehicles&delete_error=Registration+already+exists",
             status_code=303,
         )
+
+    def _optional_str(name: str, maxlen: int):
+        s = (form.get(name) or "").strip()
+        return s[:maxlen] if s else None
+
+    vy_raw = form.get("vehicle_year")
+    vehicle_year = None
+    if vy_raw not in (None, ""):
+        try:
+            vehicle_year = int(str(vy_raw).strip())
+        except ValueError:
+            vehicle_year = None
+
     try:
         vehicle = models.Vehicle(
             haulier_id=haulier.id,
@@ -446,6 +459,12 @@ async def haulier_add_vehicle(
             vehicle_type=vehicle_type,
             trailer_type=trailer_type,
             base_postcode=base_postcode,
+            make=_optional_str("vehicle_make", 128),
+            model=_optional_str("vehicle_model", 128),
+            colour=_optional_str("vehicle_colour", 64),
+            year=vehicle_year,
+            mot_status=_optional_str("vehicle_mot_status", 128),
+            tax_status=_optional_str("vehicle_tax_status", 128),
             insurance_expiry_date=insurance_expiry,
             insurance_status=calculate_insurance_status(insurance_expiry),
         )

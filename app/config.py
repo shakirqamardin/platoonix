@@ -20,7 +20,7 @@ class Settings(BaseSettings):
             )
         return v
 
-    # External integrations (placeholders for now)
+    # DVLA Vehicle Enquiry API — set env var DVLA_API_KEY (e.g. Railway / Render)
     dvla_api_key: Optional[str] = None
     dvla_base_url: str = "https://driver-vehicle-licensing.api.gov.uk"
 

@@ -48,13 +48,23 @@ def lookup_vehicle_by_registration(registration: str) -> Optional[Dict[str, Any]
 def suggest_vehicle_form_from_dvla(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Map DVLA API response to form fields: vehicle_type (artic/rigid/van), optional trailer hint.
-    DVLA returns revenueWeight (kg), wheelplan (e.g. "2 axle rigid", "3 or more axle artic"), make, model, fuelType.
+    DVLA returns revenueWeight, wheelplan, make, model, colour, yearOfManufacture, motStatus, taxStatus, fuelType, etc.
     """
+    year_val = data.get("yearOfManufacture")
+    try:
+        year_int = int(year_val) if year_val is not None else None
+    except (TypeError, ValueError):
+        year_int = None
+
     out: Dict[str, Any] = {
         "vehicle_type": "rigid",
         "trailer_type": None,
         "make": data.get("make"),
         "model": data.get("model"),
+        "colour": data.get("colour"),
+        "year": year_int,
+        "mot_status": data.get("motStatus"),
+        "tax_status": data.get("taxStatus"),
         "fuel_type": data.get("fuelType"),
         "revenue_weight_kg": data.get("revenueWeight"),
     }

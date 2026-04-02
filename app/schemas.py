@@ -54,6 +54,12 @@ class VehicleCreate(VehicleBase):
 class VehicleRead(VehicleBase):
     id: int
     haulier_id: int
+    make: Optional[str] = None
+    model: Optional[str] = None
+    colour: Optional[str] = None
+    year: Optional[int] = None
+    mot_status: Optional[str] = None
+    tax_status: Optional[str] = None
     euro_status: Optional[str]
     fuel_type: Optional[str]
     dvla_raw: Optional[dict]

@@ -182,18 +182,33 @@ def dvla_lookup(
 ):
     """DVLA lookup by registration; returns suggested vehicle_type and details for auto-filling add-vehicle form. Requires login."""
     from app.services.dvla import DvlaError, lookup_vehicle_by_registration, suggest_vehicle_form_from_dvla
+
     user = get_current_user_optional(request, db)
     if not user:
         return JSONResponse({"error": "Login required"}, status_code=401)
     reg = (reg or "").strip().upper().replace(" ", "")
     if len(reg) < 2:
         return JSONResponse({"error": "Registration required"}, status_code=400)
+
+    settings = get_settings()
+    if not settings.dvla_api_key:
+        return JSONResponse(
+            {
+                "error": "DVLA is not configured on the server. Set DVLA_API_KEY in environment (e.g. Railway variables).",
+                "configured": False,
+            },
+            status_code=503,
+        )
+
     try:
         data = lookup_vehicle_by_registration(reg)
     except DvlaError as e:
         return JSONResponse({"error": str(e)}, status_code=502)
     if not data:
-        return JSONResponse({"error": "Vehicle not found", "vehicle_type": "rigid"}, status_code=200)
+        return JSONResponse(
+            {"error": "No vehicle data returned from DVLA for this registration.", "vehicle_type": "rigid"},
+            status_code=200,
+        )
     return JSONResponse(suggest_vehicle_form_from_dvla(data))
 
 
@@ -1260,6 +1275,19 @@ async def create_vehicle_form(
         )
 
     base_postcode = (form.get("base_postcode") or "").strip().upper() or None
+
+    def _optional_str(name: str, maxlen: int) -> Optional[str]:
+        s = (form.get(name) or "").strip()
+        return s[:maxlen] if s else None
+
+    vy_raw = form.get("vehicle_year")
+    vehicle_year: Optional[int] = None
+    if vy_raw not in (None, ""):
+        try:
+            vehicle_year = int(str(vy_raw).strip())
+        except ValueError:
+            vehicle_year = None
+
     try:
         vehicle = models.Vehicle(
             haulier_id=haulier_id,
@@ -1267,6 +1295,12 @@ async def create_vehicle_form(
             vehicle_type=vehicle_type,
             trailer_type=trailer_type,
             base_postcode=base_postcode,
+            make=_optional_str("vehicle_make", 128),
+            model=_optional_str("vehicle_model", 128),
+            colour=_optional_str("vehicle_colour", 64),
+            year=vehicle_year,
+            mot_status=_optional_str("vehicle_mot_status", 128),
+            tax_status=_optional_str("vehicle_tax_status", 128),
             has_tail_lift=_form_checkbox(form, "has_tail_lift"),
             has_moffett=_form_checkbox(form, "has_moffett"),
             has_temp_control=_form_checkbox(form, "has_temp_control"),
