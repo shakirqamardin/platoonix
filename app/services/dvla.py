@@ -49,6 +49,10 @@ def suggest_vehicle_form_from_dvla(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Map DVLA API response to form fields: vehicle_type (artic/rigid/van), optional trailer hint.
     DVLA returns revenueWeight, wheelplan, make, model, colour, yearOfManufacture, motStatus, taxStatus, fuelType, etc.
+
+    Note: motStatus may be the literal string "No details held by DVLA" — that is a normal enum value
+    meaning DVLA does not expose MOT test data in this API for that vehicle, not a failure. Live MOT
+    history is held by DVSA (separate MOT History API / check-mot.service.gov.uk).
     """
     year_val = data.get("yearOfManufacture")
     try:

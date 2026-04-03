@@ -1027,6 +1027,11 @@
                                     <input type="text" name="vehicle_tax_status" id="vehicle-dvla-tax" readonly tabindex="-1" class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200" placeholder="—" autocomplete="off" />
                                 </div>
                             </div>
+                            <p class="text-[10px] text-slate-500 mt-2 max-w-4xl leading-relaxed">
+                                <strong class="text-slate-400">Why “No details held by DVLA” on MOT?</strong>
+                                That text is copied from DVLA’s own API when they don’t hold an MOT snapshot for this vehicle in this feed (common for some HGVs). It does <em>not</em> mean the registration is wrong.
+                                MOT test dates and results come from <strong class="text-slate-400">DVSA</strong> (e.g. <a href="https://www.gov.uk/check-mot-status" class="text-teal-400 hover:underline" target="_blank" rel="noopener">check MOT</a>) — a different database from the DVLA Vehicle Enquiry API we use here. The vehicle tax check website can also differ from this API for edge cases.
+                            </p>
                             <div class="w-full mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300">
                                 <span class="text-slate-500 font-medium mr-1">Equipment:</span>
                                 <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="has_tail_lift" class="rounded border-slate-600 bg-slate-900" /> Tail lift</label>
