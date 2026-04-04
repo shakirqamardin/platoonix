@@ -180,7 +180,16 @@ def loads_on_route_home(
         return []
     from app.services.matching import find_matching_loads_along_route
     pairs = find_matching_loads_along_route(vid, from_postcode.strip(), to_postcode.strip(), db)
-    return [{"load_id": l.id, "shipper_name": l.shipper_name, "pickup_postcode": l.pickup_postcode, "delivery_postcode": l.delivery_postcode, "distance_miles": d} for l, d in pairs]
+    return [
+        {
+            "load_id": l.id,
+            "shipper_name": l.shipper_name,
+            "pickup_postcode": l.pickup_postcode,
+            "delivery_postcode": l.delivery_postcode,
+            "distance_miles": d,
+        }
+        for l, d, _, _ in pairs
+    ]
 
 
 @router.post("/jobs/{job_id}/status", response_model=schemas.DriverJobRead)

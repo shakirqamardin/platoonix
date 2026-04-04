@@ -131,7 +131,7 @@ def driver_page(
                     base,
                     db,
                 )
-                loads_on_route_home = [{"load": l, "distance_miles": d} for l, d in pairs]
+                loads_on_route_home = [{"load": l, "distance_miles": d} for l, d, _, _ in pairs]
             else:
                 show_route_home_hint = True
     group_jobs: list[models.BackhaulJob] = []

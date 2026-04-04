@@ -255,8 +255,9 @@ def _distance_miles_pickup_to_base(
     vehicle: Optional[models.Vehicle],
     haulier: Optional[models.Haulier],
 ) -> Optional[float]:
-    from app.services.distance import haversine_miles
+    from app.config import get_settings
     from app.services.geocode import get_lat_lon
+    from app.services.road_distance import single_road_miles_between_postcodes
 
     base = ""
     if vehicle and (vehicle.base_postcode or "").strip():
@@ -265,11 +266,16 @@ def _distance_miles_pickup_to_base(
         base = haulier.base_postcode.strip()
     if not pickup_postcode or not base:
         return None
-    a = get_lat_lon(pickup_postcode)
-    b = get_lat_lon(base)
-    if not a or not b:
+    if not get_lat_lon(pickup_postcode) or not get_lat_lon(base):
         return None
-    return round(haversine_miles(a[0], a[1], b[0], b[1]), 1)
+    settings = get_settings()
+    return single_road_miles_between_postcodes(
+        pickup_postcode,
+        base,
+        settings.openrouteservice_api_key,
+        settings.mapbox_access_token,
+        settings.google_maps_api_key,
+    )
 
 
 def _load_interests_display(load_interests_list, db: Session):
@@ -844,30 +850,48 @@ async def create_load(
 
 def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
     """Explain why each open load did or didn't match (for 'no matches' debugging)."""
-    from app.services.geocode import get_lat_lon
-    from app.services.distance import haversine_miles
     from app.config import get_settings
+    from app.services.geocode import get_lat_lon, normalize_postcode
     from app.services.matching import vehicle_satisfies_load_equipment_hard
+    from app.services.road_distance import road_distances_from_origin_to_postcodes
 
     vehicle = db.get(models.Vehicle, vehicle_id)
     if not vehicle:
         return {"origin_ok": False, "origin_reason": "Vehicle not found", "loads": []}
-    origin_ll = get_lat_lon(origin_postcode)
-    if not origin_ll:
+    if not get_lat_lon(origin_postcode):
         return {"origin_ok": False, "origin_reason": "Postcode lookup failed", "loads": []}
-    radius = get_settings().default_backhaul_radius_miles
+    settings = get_settings()
+    radius = settings.default_backhaul_radius_miles
     open_loads = (
         db.query(models.Load)
         .filter(models.Load.status == models.LoadStatusEnum.OPEN.value)
         .all()
     )
+    pickup_pcs = [load.pickup_postcode for load in open_loads]
+    dist_map, src = road_distances_from_origin_to_postcodes(
+        origin_postcode,
+        pickup_pcs,
+        settings.openrouteservice_api_key,
+        settings.mapbox_access_token,
+        settings.google_maps_api_key,
+    )
     rows = []
     for load in open_loads:
-        pickup_ll = get_lat_lon(load.pickup_postcode)
-        if not pickup_ll:
+        if not get_lat_lon(load.pickup_postcode):
             rows.append({"load": load, "reason": "Pickup postcode lookup failed", "distance_miles": None})
             continue
-        dist = round(haversine_miles(origin_ll[0], origin_ll[1], pickup_ll[0], pickup_ll[1]), 1)
+        pc = normalize_postcode(load.pickup_postcode)
+        dist = dist_map.get(pc)
+        if src == "none" or dist is None:
+            rows.append(
+                {
+                    "load": load,
+                    "reason": "Road distance unavailable (set OPENROUTESERVICE_API_KEY, MAPBOX_ACCESS_TOKEN, or GOOGLE_MAPS_API_KEY)",
+                    "distance_miles": None,
+                }
+            )
+            continue
+        dist = round(dist, 1)
         if dist > radius:
             rows.append({"load": load, "reason": f"{dist} mi (over {radius} mi limit)", "distance_miles": dist})
             continue

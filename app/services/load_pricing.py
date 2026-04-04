@@ -107,8 +107,13 @@ def suggest_for_open_load(load: models.Load) -> dict[str, Any]:
     Full suggestion for an open load (Find Backhaul). Uses requirements JSON for vehicle/trailer.
     """
     settings = get_settings()
-    key = settings.google_maps_api_key
-    dist, src, note = resolve_distance_miles(load.pickup_postcode, load.delivery_postcode, key)
+    dist, src, note = resolve_distance_miles(
+        load.pickup_postcode,
+        load.delivery_postcode,
+        settings.openrouteservice_api_key,
+        settings.mapbox_access_token,
+        settings.google_maps_api_key,
+    )
     if dist is None:
         return {
             "suggested_gbp": None,
@@ -122,7 +127,7 @@ def suggest_for_open_load(load: models.Load) -> dict[str, Any]:
     tt = (req.get("trailer_type") or "").strip() or None
     urgent = pickup_is_urgent(load.pickup_window_start)
     total, breakdown = compute_suggested_price_gbp(dist, vt, tt, urgent)
-    src_label = "road" if src == "google" else "straight-line"
+    src_label = "road" if src in ("google", "openrouteservice", "mapbox") else "unavailable"
     line = human_summary_line(vt, tt, dist, src_label, urgent)
     return {
         "suggested_gbp": total,
@@ -141,8 +146,13 @@ def suggest_from_form_params(
 ) -> dict[str, Any]:
     """For load creation form (API). pickup_window_start_iso: optional ISO from datetime-local."""
     settings = get_settings()
-    key = settings.google_maps_api_key
-    dist, src, note = resolve_distance_miles(pickup_postcode, delivery_postcode, key)
+    dist, src, note = resolve_distance_miles(
+        pickup_postcode,
+        delivery_postcode,
+        settings.openrouteservice_api_key,
+        settings.mapbox_access_token,
+        settings.google_maps_api_key,
+    )
     urgent = False
     ps_dt: Optional[datetime] = None
     if pickup_window_start_iso and str(pickup_window_start_iso).strip():
@@ -165,7 +175,7 @@ def suggest_from_form_params(
     vt = (vehicle_type or "").strip() or None
     tt = (trailer_type or "").strip() or None
     total, breakdown = compute_suggested_price_gbp(dist, vt, tt, urgent)
-    src_label = "road" if src == "google" else "straight-line"
+    src_label = "road" if src in ("google", "openrouteservice", "mapbox") else "unavailable"
     summary = human_summary_line(vt, tt, dist, src_label, urgent)
     display = (
         f"Suggested price: £{total:.2f} (based on {summary})"

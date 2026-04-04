@@ -55,8 +55,12 @@ class Settings(BaseSettings):
     # Stripe (optional): for payouts to hauliers via Connect. Leave unset to skip.
     stripe_secret_key: Optional[str] = None
 
-    # Google Maps: optional Distance Matrix API key for road miles in load price suggestions.
-    # Without it, suggestions use straight-line miles between postcodes (Haversine).
+    # Road routing (matching, pricing, distances): at least one recommended.
+    # OpenRouteService: free tier at https://openrouteservice.org/ — matrix + HGV profile.
+    openrouteservice_api_key: Optional[str] = None
+    # Mapbox Matrix API — good Google alternative (https://www.mapbox.com/pricing/).
+    mapbox_access_token: Optional[str] = None
+    # Google Distance Matrix (optional last resort if ORS and Mapbox unset or fail).
     google_maps_api_key: Optional[str] = None
 
     # Public site URL for share links (WhatsApp, etc.). Override via PUBLIC_APP_BASE_URL in env.

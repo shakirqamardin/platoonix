@@ -118,6 +118,6 @@ def find_loads_for_vehicle(
     pairs = find_matching_loads(vehicle_id, origin_postcode.strip(), db, radius_miles)
     return [
         schemas.LoadMatchResult(load=load, distance_miles=dist)
-        for load, dist in pairs
+        for load, dist, _, _ in pairs
     ]
 
