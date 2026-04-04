@@ -1522,7 +1522,7 @@
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-slate-300 mb-2">Budget (£)</label>
                             <input id="load-budget-gbp" name="budget_gbp" type="number" step="0.01" placeholder="e.g. 150.00" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
-                            <p class="text-xs text-slate-500 mt-1">We suggest a price from road miles × £1.50 + vehicle/trailer surcharges (+20% if pickup is within 24 hours). You can edit the amount. Set <code class="text-slate-400">OPENROUTESERVICE_API_KEY</code>, <code class="text-slate-400">MAPBOX_ACCESS_TOKEN</code>, or <code class="text-slate-400">GOOGLE_MAPS_API_KEY</code> for driving distances (tried in that order).</p>
+                            <p class="text-xs text-slate-500 mt-1">We calculate suggested prices from real road miles × £1.50, plus vehicle and trailer surcharges, and +20% when pickup is within 24 hours. Distances use HGV-oriented road routing (OpenRouteService) where configured—not straight-line “as the crow flies.” You can adjust the amount to suit the job.</p>
                             <div id="load-platform-fee-line" class="text-xs text-amber-200/90 mt-2 min-h-[1.25rem] rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2" aria-live="polite"></div>
                         </div>
                         <div class="w-full mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300 rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-3">
