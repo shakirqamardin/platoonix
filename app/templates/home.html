@@ -109,6 +109,19 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* datetime-local: light calendar icon on dark inputs (WebKit / Blink) */
+        #add-load-form input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(1.15);
+            opacity: 0.9;
+            cursor: pointer;
+            padding: 0.2rem;
+            margin-left: 0.25rem;
+        }
+        #add-load-form input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+            filter: invert(1) brightness(1.35);
+        }
         
         .badge {
             display: inline-flex;
@@ -1471,19 +1484,19 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window start</label>
-                                <input id="load-pickup-window-start" name="pickup_window_start" type="datetime-local" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm" />
+                                <input id="load-pickup-window-start" name="pickup_window_start" type="datetime-local" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm text-slate-200 placeholder:text-slate-500" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window end</label>
-                                <input name="pickup_window_end" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <input name="pickup_window_end" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Delivery window start</label>
-                                <input name="delivery_window_start" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <input name="delivery_window_start" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Delivery window end</label>
-                                <input name="delivery_window_end" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                                <input name="delivery_window_end" type="datetime-local" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500" />
                             </div>
                         </div>
                         <p class="text-xs text-slate-500 mb-4">Optional — use these for <strong class="text-slate-400 font-medium">timed shipments</strong> (collection and delivery slots). Leave all blank for flexible loads; we then default windows to “now”. If you set only one end of a pair, the other is copied.</p>
@@ -1518,12 +1531,12 @@
                                 <p class="text-xs text-slate-500 mt-1">1 pallet = {{ "%.2f"|format(pallet_volume_m3|default(1.2)) }} m³ — editing one field updates the other.</p>
                             </div>
                         </div>
-                        <div id="load-price-suggestion" class="text-xs text-cyan-300/90 mb-2 min-h-[1.25rem] rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2" aria-live="polite"></div>
+                        <div id="load-price-suggestion" class="hidden text-xs text-cyan-300/90 mb-2 rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2" aria-live="polite"></div>
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-slate-300 mb-2">Budget (£)</label>
                             <input id="load-budget-gbp" name="budget_gbp" type="number" step="0.01" placeholder="e.g. 150.00" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                             <p class="text-xs text-slate-500 mt-1">We calculate suggested prices from real road miles × £1.50, plus vehicle and trailer surcharges, and +20% when pickup is within 24 hours. Distances use HGV-oriented road routing (OpenRouteService) where configured—not straight-line “as the crow flies.” You can adjust the amount to suit the job.</p>
-                            <div id="load-platform-fee-line" class="text-xs text-amber-200/90 mt-2 min-h-[1.25rem] rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2" aria-live="polite"></div>
+                            <div id="load-platform-fee-line" class="hidden text-xs text-teal-200/95 mt-2 rounded-lg border border-teal-500/25 bg-teal-950/25 px-3 py-2" aria-live="polite"></div>
                         </div>
                         <div class="w-full mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300 rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-3">
                             <span class="text-slate-500 font-medium w-full sm:w-auto">Equipment requirements <span class="text-slate-600 font-normal">(matching enforces these)</span></span>
@@ -1585,6 +1598,14 @@
                         function fmtMoney(n) {
                             return "£" + n.toFixed(2);
                         }
+                        function hideSuggestionBox(el) {
+                            if (!el) return;
+                            el.textContent = "";
+                            el.classList.add("hidden");
+                        }
+                        function showSuggestionBox(el) {
+                            if (el) el.classList.remove("hidden");
+                        }
                         function updatePlatformFeeFromBudget() {
                             if (!feeLine) return;
                             var min = parseFloat(form.dataset.loaderFeeMin || "5");
@@ -1593,12 +1614,12 @@
                             if (isNaN(pct)) pct = 2;
                             var raw = (budget.value || "").trim();
                             if (!raw) {
-                                feeLine.textContent = "";
+                                hideSuggestionBox(feeLine);
                                 return;
                             }
                             var amt = parseFloat(raw);
                             if (isNaN(amt) || amt <= 0) {
-                                feeLine.textContent = "";
+                                hideSuggestionBox(feeLine);
                                 return;
                             }
                             var pctPart = Math.round(amt * (pct / 100) * 100) / 100;
@@ -1611,6 +1632,7 @@
                                 detail = fmtMoney(fee) + " (" + pct + "% of " + fmtMoney(amt) + ")";
                             }
                             feeLine.textContent = "Platform fee: " + detail + " · Total at collection: " + fmtMoney(total);
+                            showSuggestionBox(feeLine);
                         }
                         function applyFeeFromApi(data) {
                             if (!feeLine || !data) return;
@@ -1620,6 +1642,7 @@
                                     data.loader_platform_fee_detail +
                                     " · Total at collection: £" +
                                     Number(data.loader_total_at_collection_gbp).toFixed(2);
+                                showSuggestionBox(feeLine);
                             } else {
                                 updatePlatformFeeFromBudget();
                             }
@@ -1634,8 +1657,8 @@
                             pu = pu.trim();
                             del = del.trim();
                             if (pu.length < 5 || del.length < 5) {
-                                out.textContent = "";
-                                if (feeLine) feeLine.textContent = "";
+                                hideSuggestionBox(out);
+                                hideSuggestionBox(feeLine);
                                 return;
                             }
                             var vt = (form.querySelector('[name="vehicle_type_required"]') || {}).value || "";
@@ -1648,11 +1671,13 @@
                             params.set("trailer_type", tt);
                             if (pws) params.set("pickup_window_start", pws);
                             out.textContent = "Calculating…";
+                            showSuggestionBox(out);
+                            hideSuggestionBox(feeLine);
                             fetch("/api/suggest-load-price?" + params.toString(), { credentials: "same-origin" })
                                 .then(function (r) {
                                     if (r.status === 401) {
-                                        out.textContent = "";
-                                        if (feeLine) feeLine.textContent = "";
+                                        hideSuggestionBox(out);
+                                        hideSuggestionBox(feeLine);
                                         return null;
                                     }
                                     return r.json();
@@ -1661,18 +1686,20 @@
                                     if (!data) return;
                                     if (data.suggested_gbp != null && data.detail_line) {
                                         out.textContent = data.detail_line;
+                                        showSuggestionBox(out);
                                         if (!budget.dataset.userEdited) {
                                             budget.value = Number(data.suggested_gbp).toFixed(2);
                                         }
                                         applyFeeFromApi(data);
                                     } else {
                                         out.textContent = data.detail_line || data.distance_note || "Enter postcodes to see a suggested price.";
+                                        showSuggestionBox(out);
                                         applyFeeFromApi(data);
                                     }
                                 })
                                 .catch(function () {
-                                    out.textContent = "";
-                                    if (feeLine) feeLine.textContent = "";
+                                    hideSuggestionBox(out);
+                                    hideSuggestionBox(feeLine);
                                 });
                         }
                         budget.addEventListener("input", function () {
