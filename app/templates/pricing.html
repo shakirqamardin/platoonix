@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pricing – Platoonix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  </head>
+  <body class="min-h-screen text-slate-100 bg-slate-950">
+    <div class="max-w-3xl mx-auto px-4 py-8 pb-16">
+      <header class="mb-10">
+        <a href="/" class="inline-flex items-center gap-2 text-slate-400 hover:text-white no-underline mb-4">
+          <img src="/static/logo.png" alt="Platoonix" class="h-8 w-auto" />
+          <span class="font-semibold">Platoonix</span>
+        </a>
+        <h1 class="text-2xl sm:text-3xl font-semibold text-white tracking-tight">How pricing works</h1>
+        <p class="text-slate-400 text-sm sm:text-base mt-3 leading-relaxed">
+          Platoonix is a discovery platform connecting loaders with hauliers for backhaul opportunities.
+        </p>
+      </header>
+
+      <div class="space-y-6 text-slate-300 text-sm sm:text-base leading-relaxed">
+        <section class="rounded-xl border border-slate-700/80 bg-slate-900/50 p-5 sm:p-6">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-teal-400 mb-4 pb-3 border-b border-slate-700">For loaders</h2>
+          <ol class="list-decimal pl-5 space-y-2 text-slate-300">
+            <li>You set your budget for the load</li>
+            <li>We charge a £{{ "%.2f"|format(loader_booking_fee_gbp) }} booking fee</li>
+            <li>Payment held securely until delivery</li>
+          </ol>
+          <div class="mt-5 rounded-lg border border-slate-600/60 bg-slate-950/60 px-4 py-4 font-mono text-xs sm:text-sm text-slate-300 space-y-1">
+            <p>Example:</p>
+            <p>Load budget: £{{ "%.0f"|format(example_load_gbp) }}</p>
+            <p>Booking fee: £{{ "%.2f"|format(loader_booking_fee_gbp) }}</p>
+            <hr class="border-slate-700 my-3" />
+            <p class="text-white font-semibold">Total you pay: £{{ "%.2f"|format(example_load_gbp + loader_booking_fee_gbp) }}</p>
+          </div>
+        </section>
+
+        <section class="rounded-xl border border-slate-700/80 bg-slate-900/50 p-5 sm:p-6">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-teal-400 mb-4 pb-3 border-b border-slate-700">For hauliers</h2>
+          <ol class="list-decimal pl-5 space-y-2 text-slate-300">
+            <li>You see loads along your route</li>
+            <li>You choose which loads to accept</li>
+            <li>We charge {{ "%.0f"|format(platform_fee_percent) }}% service fee</li>
+          </ol>
+          <div class="mt-5 rounded-lg border border-slate-600/60 bg-slate-950/60 px-4 py-4 font-mono text-xs sm:text-sm text-slate-300 space-y-1">
+            <p>Example:</p>
+            <p>Load budget: £{{ "%.0f"|format(example_load_gbp) }}</p>
+            <p>Service fee: £{{ "%.2f"|format(example_service_fee_gbp) }} ({{ "%.0f"|format(platform_fee_percent) }}%)</p>
+            <hr class="border-slate-700 my-3" />
+            <p class="text-white font-semibold">You receive: £{{ "%.2f"|format(example_haulier_net_gbp) }}</p>
+          </div>
+        </section>
+
+        <section class="rounded-xl border border-slate-700/80 bg-slate-900/50 p-5 sm:p-6">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-teal-400 mb-4 pb-3 border-b border-slate-700">What the {{ "%.0f"|format(platform_fee_percent) }}% covers</h2>
+          <ul class="list-disc pl-5 space-y-2 text-slate-400">
+            <li>Location-based matching (25-mile corridor search)</li>
+            <li>Real road distance calculation (HGV routing)</li>
+            <li>Payment processing (secure escrow)</li>
+            <li>Insurance verification</li>
+            <li>DVLA vehicle checks</li>
+            <li>Communication tools</li>
+            <li>Dispute resolution</li>
+            <li>Platform maintenance</li>
+          </ul>
+        </section>
+
+        <section class="rounded-xl border border-teal-500/30 bg-teal-950/20 p-5 sm:p-6">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-teal-300 mb-3">No hidden fees</h2>
+          <ul class="space-y-2 text-slate-300">
+            <li>What you see is what you pay.</li>
+            <li>No subscription fees.</li>
+            <li>No monthly charges.</li>
+            <li>Pay only when you use the platform.</li>
+          </ul>
+        </section>
+
+        <p class="text-center text-slate-400 text-sm pt-2">
+          Questions? Email:
+          <a href="mailto:support@platoonix.co.uk" class="text-teal-400 hover:text-teal-300 underline-offset-2 hover:underline">support@platoonix.co.uk</a>
+        </p>
+      </div>
+
+      <p class="mt-10 flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm border-t border-slate-800 pt-8">
+        <a href="/terms" class="text-teal-400 hover:text-teal-300">Terms</a>
+        <span class="text-slate-600">•</span>
+        <a href="/privacy" class="text-teal-400 hover:text-teal-300">Privacy</a>
+        <span class="text-slate-600">•</span>
+        <a href="/confidentiality" class="text-teal-400 hover:text-teal-300">Confidentiality</a>
+        <span class="text-slate-600">•</span>
+        <a href="/login" class="text-teal-400 hover:text-teal-300">Login</a>
+      </p>
+    </div>
+
+    <footer class="text-center text-sm text-slate-500 py-8 border-t border-slate-800">
+      <p>© 2026 Platoonix Ltd · Company No: 17133701</p>
+    </footer>
+  </body>
+</html>

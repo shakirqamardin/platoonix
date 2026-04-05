@@ -136,6 +136,28 @@ def privacy_page(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/pricing", response_class=HTMLResponse)
+def pricing_page(request: Request) -> HTMLResponse:
+    """Public pricing and fees explanation. No login required."""
+    settings = get_settings()
+    booking = float(settings.loader_flat_fee_gbp or 5)
+    pct = float(settings.platform_fee_percent or 8)
+    example_load = 300.0
+    example_service = round(example_load * (pct / 100.0), 2)
+    example_net = round(example_load - example_service, 2)
+    return templates.TemplateResponse(
+        "pricing.html",
+        {
+            "request": request,
+            "loader_booking_fee_gbp": booking,
+            "platform_fee_percent": pct,
+            "example_load_gbp": example_load,
+            "example_service_fee_gbp": example_service,
+            "example_haulier_net_gbp": example_net,
+        },
+    )
+
+
 @router.get("/confidentiality", response_class=HTMLResponse)
 def confidentiality_page(request: Request) -> HTMLResponse:
     """Public Confidentiality & Non-Disclosure page. No login required."""
