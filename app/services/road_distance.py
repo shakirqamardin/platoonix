@@ -9,7 +9,9 @@ from app.services.geocode import format_postcode_for_api, get_lat_lon, normalize
 
 DistanceSource = Literal["openrouteservice", "mapbox", "google", "none"]
 
-ORS_MATRIX_URL = "https://api.openrouteservice.org/v2/matrix/driving-hgv"
+# Try HGV first, then car (some API keys / tiers reject driving-hgv or return 4xx for matrix).
+ORS_MATRIX_PROFILES = ("driving-hgv", "driving-car")
+ORS_MATRIX_API = "https://api.openrouteservice.org/v2/matrix"
 # HGV profile for haulage; batch size kept conservative for free-tier limits
 ORS_MATRIX_MAX_DESTINATIONS = 50
 # Mapbox Matrix: max 25 coordinates per request (origin + destinations)
@@ -20,6 +22,39 @@ MAPBOX_MATRIX_BASE = "https://api.mapbox.com/directions-matrix/v1/mapbox/driving
 
 def _lonlat(lat: float, lon: float) -> List[float]:
     return [lon, lat]
+
+
+def _ors_strip_bearer_prefix(api_key: str) -> str:
+    k = api_key.strip()
+    if k.lower().startswith("bearer "):
+        k = k[7:].strip()
+    return k
+
+
+def _ors_meters_to_miles(meters: float) -> float:
+    return round(float(meters) / 1609.344, 1)
+
+
+def _ors_call_matrix(api_key: str, body: dict, timeout: float) -> Optional[dict]:
+    """
+    POST ORS matrix. Distances are in metres (omit units in body — avoids 4xx on some deployments).
+    Tries driving-hgv then driving-car; Authorization as raw key then Bearer <key>.
+    """
+    key = _ors_strip_bearer_prefix(api_key)
+    if not key:
+        return None
+    for profile in ORS_MATRIX_PROFILES:
+        url = f"{ORS_MATRIX_API}/{profile}"
+        for auth_val in (key, f"Bearer {key}"):
+            headers = {"Authorization": auth_val, "Content-Type": "application/json"}
+            try:
+                with httpx.Client(timeout=timeout) as client:
+                    r = client.post(url, json=body, headers=headers)
+                    if r.status_code == 200:
+                        return r.json()
+            except Exception:
+                continue
+    return None
 
 
 def ors_matrix_one_to_many_miles(
@@ -35,8 +70,6 @@ def ors_matrix_one_to_many_miles(
     """
     if not api_key or not api_key.strip() or not dest_latlons:
         return [None] * len(dest_latlons)
-    key = api_key.strip()
-    headers = {"Authorization": key, "Content-Type": "application/json"}
     out: List[Optional[float]] = []
     for start in range(0, len(dest_latlons), ORS_MATRIX_MAX_DESTINATIONS):
         chunk = dest_latlons[start : start + ORS_MATRIX_MAX_DESTINATIONS]
@@ -47,16 +80,9 @@ def ors_matrix_one_to_many_miles(
             "sources": [0],
             "destinations": list(range(1, n)),
             "metrics": ["distance"],
-            "units": "mi",
         }
-        try:
-            with httpx.Client(timeout=timeout) as client:
-                r = client.post(ORS_MATRIX_URL, json=body, headers=headers)
-                if r.status_code != 200:
-                    out.extend([None] * len(chunk))
-                    continue
-                data = r.json()
-        except Exception:
+        data = _ors_call_matrix(api_key, body, timeout)
+        if not data:
             out.extend([None] * len(chunk))
             continue
         rows = data.get("distances") or []
@@ -68,7 +94,7 @@ def ors_matrix_one_to_many_miles(
                 out.append(None)
             else:
                 try:
-                    out.append(round(float(v), 1))
+                    out.append(_ors_meters_to_miles(v))
                 except (TypeError, ValueError):
                     out.append(None)
     return out
@@ -376,8 +402,6 @@ def _ors_many_to_one_to_location_miles(
     """Road miles from each pickup to dest (same order as pickup_latlons)."""
     if not pickup_latlons:
         return []
-    key = api_key.strip()
-    headers = {"Authorization": key, "Content-Type": "application/json"}
     out: List[Optional[float]] = []
     for start in range(0, len(pickup_latlons), ORS_MATRIX_MAX_DESTINATIONS):
         chunk = pickup_latlons[start : start + ORS_MATRIX_MAX_DESTINATIONS]
@@ -388,23 +412,16 @@ def _ors_many_to_one_to_location_miles(
             "sources": list(range(1, n)),
             "destinations": [0],
             "metrics": ["distance"],
-            "units": "mi",
         }
-        try:
-            with httpx.Client(timeout=timeout) as client:
-                r = client.post(ORS_MATRIX_URL, json=body, headers=headers)
-                if r.status_code != 200:
-                    out.extend([None] * len(chunk))
-                    continue
-                data = r.json()
-        except Exception:
+        data = _ors_call_matrix(api_key, body, timeout)
+        if not data:
             out.extend([None] * len(chunk))
             continue
         dists = data.get("distances") or []
         for row in dists:
             if row and row[0] is not None:
                 try:
-                    out.append(round(float(row[0]), 1))
+                    out.append(_ors_meters_to_miles(row[0]))
                 except (TypeError, ValueError):
                     out.append(None)
             else:

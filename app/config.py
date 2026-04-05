@@ -1,8 +1,14 @@
-from functools import lru_cache
 from typing import Optional
 
 from pydantic import AnyUrl, field_validator
 from pydantic_settings import BaseSettings
+
+
+def _strip_empty_optional_str(v: Optional[str]) -> Optional[str]:
+    if v is None or not isinstance(v, str):
+        return v
+    s = v.strip()
+    return s if s else None
 
 
 class Settings(BaseSettings):
@@ -63,6 +69,12 @@ class Settings(BaseSettings):
     # Google Distance Matrix (optional last resort if ORS and Mapbox unset or fail).
     google_maps_api_key: Optional[str] = None
 
+    @field_validator("openrouteservice_api_key", "mapbox_access_token", "google_maps_api_key", mode="before")
+    @classmethod
+    def strip_routing_api_keys(cls, v: Optional[str]) -> Optional[str]:
+        """Avoid blank / whitespace-only env values breaking auth (Railway copy-paste)."""
+        return _strip_empty_optional_str(v)
+
     # Public site URL for share links (WhatsApp, etc.). Override via PUBLIC_APP_BASE_URL in env.
     public_app_base_url: str = "https://web-production-7ca42.up.railway.app"
 
@@ -74,7 +86,7 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
 
 
-@lru_cache
 def get_settings() -> Settings:
+    """New Settings() each call so env changes apply after redeploy without stale @lru_cache."""
     return Settings()
 
