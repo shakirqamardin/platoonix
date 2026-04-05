@@ -400,6 +400,34 @@
         </a>
         {%- endif -%}
         {%- endmacro %}
+
+        {% macro haulier_earnings_breakdown(load, distance_miles, platform_fee_percent, layout) -%}
+        {%- if layout == 'card' -%}
+        <div class="rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2.5 space-y-1 text-sm text-slate-200">
+            <div><span class="text-slate-500">Load:</span> <span class="font-mono text-teal-300">{{ load.pickup_postcode }} → {{ load.delivery_postcode }}</span></div>
+            <div><span class="text-slate-500">Distance:</span> <span class="text-slate-100">{{ distance_miles }} miles</span></div>
+            {% if load.budget_gbp is not none %}
+            {% set _pct = platform_fee_percent|default(8)|float %}
+            {% set _b = load.budget_gbp|float %}
+            {% set _fee = _b * _pct / 100 %}
+            {% set _net = _b - _fee %}
+            <div><span class="text-slate-500">Budget:</span> <span class="font-semibold text-green-300">£{{ "%.2f"|format(_b) }}</span></div>
+            <div class="border-t border-dashed border-slate-500/60 my-2"></div>
+            <div>Service fee: <span class="text-amber-200/95">£{{ "%.2f"|format(_fee) }}</span> ({{ _pct|round(1) }}%)</div>
+            <div class="font-semibold text-emerald-300">You receive: £{{ "%.2f"|format(_net) }} ✅</div>
+            {% endif %}
+        </div>
+        {%- elif layout == 'table_cell' and load.budget_gbp is not none -%}
+        {% set _pct = platform_fee_percent|default(8)|float %}
+        {% set _b = load.budget_gbp|float %}
+        {% set _fee = _b * _pct / 100 %}
+        {% set _net = _b - _fee %}
+        <div class="font-semibold text-green-300">Budget: £{{ "%.2f"|format(_b) }}</div>
+        <div class="border-t border-dashed border-slate-600/70 my-2 max-w-[15rem]"></div>
+        <div class="text-slate-300">Service fee: <span class="text-amber-200/95">£{{ "%.2f"|format(_fee) }}</span> ({{ _pct|round(1) }}%)</div>
+        <div class="font-semibold text-emerald-300 mt-1">You receive: £{{ "%.2f"|format(_net) }} ✅</div>
+        {%- endif -%}
+        {%- endmacro %}
         
         <!-- Navigation Tabs -->
         <nav id="main-section-nav" class="glass-card rounded-2xl p-2 mb-6 animate-fade-in relative z-30" style="animation-delay: 0.1s">
@@ -829,11 +857,8 @@
                             </div>
                             <div>
                                 <div class="font-semibold text-slate-100">{{ m.load.shipper_name }}</div>
-                                <div class="text-teal-300 font-mono text-sm mt-1">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</div>
                             </div>
-                            {% if m.load.budget_gbp %}
-                            <div class="text-sm text-green-300 font-semibold">£{{ "%.2f"|format(m.load.budget_gbp) }}</div>
-                            {% endif %}
+                            {{ haulier_earnings_breakdown(m.load, m.distance_miles, platform_fee_percent, 'card') }}
                             <div class="flex flex-wrap items-center gap-2 pt-1">
                                 {{ wa_share_btn(m.load) }}
                                 <form method="post" action="/interest" class="inline flex-1 min-w-[10rem]">
@@ -914,11 +939,10 @@
                                     </td>
                                     <td class="py-3 px-3">
                                         {% if m.load.budget_gbp %}
-                                        <div class="font-semibold text-green-300">£{{ "%.2f"|format(m.load.budget_gbp) }}</div>
+                                        {{ haulier_earnings_breakdown(m.load, m.distance_miles, platform_fee_percent, 'table_cell') }}
                                         {% if m.market_rate and m.market_rate.suggested_gbp is not none %}
                                         <div class="text-xs text-cyan-300/90 mt-1">{{ m.market_rate.detail_line }}</div>
                                         {% endif %}
-                                        <div class="text-xs text-slate-500">Haulier net: £{{ "%.2f"|format(m.load.budget_gbp * (1 - platform_fee_percent/100)) }} (after {{ platform_fee_percent|round(1) }}%)</div>
                                         {% if m.loader_platform_fee %}
                                         <div class="text-xs text-amber-200/90 mt-1">Platform fee: {{ m.loader_platform_fee.loader_platform_fee_detail }}</div>
                                         <div class="text-xs text-slate-500">Charged at collection: £{{ "%.2f"|format(m.loader_platform_fee.loader_total_at_collection_gbp) }} (load + platform fee)</div>
@@ -1948,6 +1972,29 @@
                 {% endif %}
                 {% if request.query_params.get('job_error') %}
                 <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-2.5 mb-4 text-sm text-amber-100">{{ request.query_params.get('job_error') }}</div>
+                {% endif %}
+                {% if request.query_params.get('interest_ok') and current_user and current_user.role in ['haulier', 'driver'] %}
+                <div class="rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-4 mb-4 text-sm text-emerald-100">
+                    <div class="font-semibold text-emerald-300 text-base mb-2">✅ Load accepted!</div>
+                    {% set _ip = request.query_params.get('ipickup') %}
+                    {% set _id = request.query_params.get('idelivery') %}
+                    {% if _ip or _id %}
+                    <p class="text-slate-400 text-xs mb-3 font-mono">{{ _ip or '—' }} → {{ _id or '—' }}</p>
+                    {% endif %}
+                    {% set _ib = request.query_params.get('ibudget') %}
+                    {% set _ifee = request.query_params.get('ifee') %}
+                    {% set _inet = request.query_params.get('inet') %}
+                    {% set _pct_disp = platform_fee_percent|default(8)|round(1) %}
+                    {% if _ib and _ifee and _inet %}
+                    <p class="text-slate-200">Budget: £{{ _ib }}</p>
+                    <p class="text-slate-200">Service fee: £{{ _ifee }} ({{ _pct_disp }}%)</p>
+                    <div class="border-t border-dashed border-emerald-500/35 my-2"></div>
+                    <p class="font-semibold text-white">You'll receive: £{{ _inet }}</p>
+                    <p class="text-slate-400 text-xs mt-3">Payment released after delivery.</p>
+                    {% else %}
+                    <p class="text-slate-300 text-sm">Your interest is with the loader. If they accept and a job is created, you’ll see it under your active jobs.</p>
+                    {% endif %}
+                </div>
                 {% endif %}
 
                 {% if current_user and current_user.role == 'driver' %}

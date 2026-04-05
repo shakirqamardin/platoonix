@@ -2503,4 +2503,17 @@ async def express_interest(
     except Exception as e:
         print(f"[EMAIL] schedule_loader_interest_email failed: {e}")
 
-    return RedirectResponse(url="/?section=matches", status_code=303)
+    load_row = db.get(models.Load, lid)
+    pct = float(get_settings().platform_fee_percent or 8)
+    q_parts = ["section=matches", "interest_ok=1"]
+    if load_row:
+        q_parts.append("ipickup=" + quote_plus(load_row.pickup_postcode or ""))
+        q_parts.append("idelivery=" + quote_plus(load_row.delivery_postcode or ""))
+        if load_row.budget_gbp is not None:
+            b = float(load_row.budget_gbp)
+            fee = round(b * (pct / 100.0), 2)
+            net = round(b - fee, 2)
+            q_parts.append(f"ibudget={b:.2f}")
+            q_parts.append(f"ifee={fee:.2f}")
+            q_parts.append(f"inet={net:.2f}")
+    return RedirectResponse(url="/?" + "&".join(q_parts), status_code=303)

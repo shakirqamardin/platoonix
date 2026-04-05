@@ -205,6 +205,7 @@ def driver_page(
             "base_postcode_used": base_postcode_used,
             "is_driver_login": bool(actor_driver),
             "dashboard_url": ("/driver-login" if actor_driver else "/?section=matches"),
+            "platform_fee_percent": float(get_settings().platform_fee_percent or 8),
         },
     )
 
