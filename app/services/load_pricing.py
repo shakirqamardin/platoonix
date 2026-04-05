@@ -8,7 +8,12 @@ from app import models
 from app.config import get_settings
 from app.services.road_distance import resolve_distance_miles
 
-GBP_PER_MILE = 1.50
+# Per-mile base by vehicle (unknown / "any" uses van rate)
+GBP_PER_MILE_BY_VEHICLE = {
+    "van": 1.50,
+    "rigid": 2.00,
+    "artic": 2.75,
+}
 
 VEHICLE_SURCHARGE_GBP = {
     "artic": 50.0,
@@ -16,17 +21,31 @@ VEHICLE_SURCHARGE_GBP = {
     "van": 0.0,
 }
 
-# curtain_sider matches form value; refrigerated for temp loads
+# curtain_sider matches form value
 TRAILER_SURCHARGE_GBP = {
-    "curtain_sider": 25.0,
-    "refrigerated": 50.0,
-    "box": 20.0,
+    "curtain_sider": 0.0,
+    "refrigerated": 25.0,
+    "box": 10.0,
     "flatbed": 15.0,
-    "other": 0.0,
+    "other": 5.0,
 }
 
 URGENCY_WITHIN_HOURS = 24
 URGENCY_MULTIPLIER = 1.20
+
+
+def round_to_nearest_half_gbp(amount: float) -> float:
+    """Round to nearest £0.50 (e.g. £182.37 → £182.50, £245.23 → £245.00)."""
+    if amount <= 0:
+        return 0.0
+    return round(amount * 2.0) / 2.0
+
+
+def _per_mile_gbp(vehicle_type: Optional[str]) -> float:
+    vt = (vehicle_type or "").strip().lower()
+    if not vt:
+        return GBP_PER_MILE_BY_VEHICLE["van"]
+    return float(GBP_PER_MILE_BY_VEHICLE.get(vt, GBP_PER_MILE_BY_VEHICLE["van"]))
 
 
 def _vehicle_surcharge(vehicle_type: Optional[str]) -> float:
@@ -59,22 +78,27 @@ def compute_suggested_price_gbp(
     trailer_type: Optional[str],
     urgent: bool,
 ) -> tuple[float, dict[str, Any]]:
-    base = distance_miles * GBP_PER_MILE
+    rate = _per_mile_gbp(vehicle_type)
+    base = distance_miles * rate
     v_sur = _vehicle_surcharge(vehicle_type)
     t_sur = _trailer_surcharge(trailer_type)
     subtotal = base + v_sur + t_sur
     if urgent:
-        total = subtotal * URGENCY_MULTIPLIER
+        pre_round = subtotal * URGENCY_MULTIPLIER
     else:
-        total = subtotal
-    total = round(max(0.0, total), 2)
+        pre_round = subtotal
+    total = round_to_nearest_half_gbp(max(0.0, pre_round))
+    sub_rounded = round(subtotal, 2)
     breakdown = {
         "distance_miles": round(distance_miles, 1),
+        "rate_per_mile_gbp": rate,
         "base_gbp": round(base, 2),
         "vehicle_surcharge_gbp": v_sur,
         "trailer_surcharge_gbp": t_sur,
         "urgent": urgent,
-        "subtotal_gbp": round(subtotal, 2),
+        "subtotal_gbp": sub_rounded,
+        "subtotal_before_urgency_gbp": sub_rounded,
+        "pre_round_gbp": round(pre_round, 2),
         "suggested_gbp": total,
     }
     return total, breakdown
