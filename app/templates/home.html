@@ -554,6 +554,11 @@
                             <input name="contact_phone" value="{{ haulier_profile.contact_phone or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">WhatsApp mobile <span class="text-slate-500">(optional, UK +447…)</span></label>
+                            <input name="whatsapp_phone" value="{{ haulier_profile.whatsapp_phone or '' }}" placeholder="+447123456789" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                            <p class="text-xs text-slate-500 mt-1">Used for drivers’ optional “Send WhatsApp” reminder (click-to-chat; no API).</p>
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Default base postcode</label>
                             <input name="base_postcode" value="{{ haulier_profile.base_postcode or '' }}" placeholder="e.g. NN4 7EX" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm uppercase" />
                         </div>
@@ -672,6 +677,109 @@
                 <div class="rounded-xl border border-teal-500/30 bg-teal-950/30 px-4 py-3 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <span class="text-slate-200 text-sm"><strong class="text-teal-300">Pickup, delivery &amp; live location</strong> are on <strong>Run job</strong> — not on Matches. Tap <strong>Start</strong> there to share GPS, then update each milestone.</span>
                     <a href="/driver" class="shrink-0 rounded-lg bg-teal-600 hover:bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white text-center">Open Run job</a>
+                </div>
+                {% endif %}
+
+                {% if request.query_params.get('approval_ok') %}
+                <div class="rounded-xl border border-teal-500/40 bg-teal-950/25 px-4 py-3 mb-4 text-sm text-teal-100">Backhaul request approved. The loader has been notified by email and can accept your interest.</div>
+                {% endif %}
+                {% if request.query_params.get('approval_rejected') %}
+                <div class="rounded-xl border border-rose-500/40 bg-rose-950/20 px-4 py-3 mb-4 text-sm text-rose-100">Request rejected. The driver has been notified.</div>
+                {% endif %}
+                {% if request.query_params.get('approval_err') %}
+                <div class="rounded-xl border border-amber-500/40 bg-amber-950/25 px-4 py-3 mb-4 text-sm text-amber-100">Could not update that approval ({{ request.query_params.get('approval_err') }}).</div>
+                {% endif %}
+
+                {% if find_backhaul_msg %}
+                <div class="rounded-xl border border-amber-500/40 bg-amber-950/25 px-4 py-3 mb-4 text-sm text-amber-100">
+                    {% if find_backhaul_msg == 'driver_no_backhaul_permission' %}Your office has not enabled backhaul search for your driver login. Ask them to turn on “Can find backhauls” in My Drivers.
+                    {% elif find_backhaul_msg == 'use_request_approval' %}Use <strong class="text-white">Request approval</strong> (not Show interest) so your manager can approve this load first.
+                    {% elif find_backhaul_msg == 'drivers_only' %}Only driver logins can request backhaul approval that way.
+                    {% elif find_backhaul_msg == 'no_permission' %}You don’t have permission to request backhauls.
+                    {% elif find_backhaul_msg == 'not_your_vehicle' %}That vehicle isn’t assigned to you.
+                    {% elif find_backhaul_msg == 'vehicle_on_job' %}That vehicle is already on a job.
+                    {% elif find_backhaul_msg == 'load_not_available' %}That load is no longer available.
+                    {% elif find_backhaul_msg == 'already_pending' %}You already have a pending approval for this load.
+                    {% elif find_backhaul_msg == 'already_interested' %}Your company already has an interest on this load.
+                    {% elif find_backhaul_msg == 'invalid_request' %}Could not process that request. Try again.
+                    {% else %}{{ find_backhaul_msg }}{% endif %}
+                </div>
+                {% endif %}
+
+                {% if approval_confirmation %}
+                <div class="rounded-xl border border-teal-500/40 bg-teal-950/30 px-4 py-5 mb-6 space-y-4">
+                    <p class="text-xl font-semibold text-teal-300">✅ Approval request sent!</p>
+                    <p class="text-slate-300 text-sm">Your manager will be notified by email.</p>
+                    <div class="border-t border-slate-600/60 pt-4">
+                        <p class="text-slate-400 text-sm mb-2">Want a faster response?</p>
+                        {% if approval_confirmation.whatsapp_url %}
+                        <a href="{{ approval_confirmation.whatsapp_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center min-h-[48px] px-4 py-2.5 rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white text-sm font-semibold">📱 Send WhatsApp message</a>
+                        {% else %}
+                        <p class="text-slate-500 text-xs">Add a UK mobile for WhatsApp in <strong class="text-slate-400">Company</strong> (WhatsApp field) so we can open a pre-filled message.</p>
+                        {% endif %}
+                    </div>
+                    <p class="text-slate-400 text-sm">Status: <span class="text-amber-300">Waiting for approval ⏳</span></p>
+                    <p class="text-slate-500 text-xs">Request expires: <span id="approval-expires-label" data-expires="{{ approval_confirmation.expires_at.isoformat() if approval_confirmation.expires_at else '' }}">—</span></p>
+                    <a href="/" class="inline-block mt-2 px-4 py-2 text-sm font-semibold rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800">Back to dashboard</a>
+                </div>
+                <script>
+                (function(){
+                  var el = document.getElementById('approval-expires-label');
+                  if (!el || !el.dataset.expires) return;
+                  var exp = Date.parse(el.dataset.expires);
+                  function tick(){
+                    var s = Math.max(0, Math.floor((exp - Date.now()) / 1000));
+                    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+                    el.textContent = h + 'h ' + m + 'm';
+                  }
+                  tick();
+                  setInterval(tick, 60000);
+                })();
+                </script>
+                {% endif %}
+
+                {% if haulier_pending_backhaul_approvals and haulier_pending_backhaul_approvals|length > 0 %}
+                <div class="rounded-xl border border-cyan-500/30 bg-slate-900/50 p-4 mb-6">
+                    <h3 class="text-lg font-semibold text-cyan-200 mb-3">Backhaul approval requests</h3>
+                    <div class="space-y-4">
+                        {% for pa in haulier_pending_backhaul_approvals %}
+                        <div class="rounded-lg border border-slate-700/80 bg-slate-950/40 p-4">
+                            <div class="text-sm text-slate-300">Driver: <strong class="text-white">{{ pa.driver.name if pa.driver else '—' }}</strong></div>
+                            <div class="font-mono text-teal-300 text-sm mt-1">{{ pa.load.pickup_postcode }} → {{ pa.load.delivery_postcode }}</div>
+                            {% if pa.net_gbp is defined and pa.net_gbp is not none %}<div class="text-green-300 text-sm font-semibold mt-1">Payment: £{{ "%.2f"|format(pa.net_gbp) }} (after commission)</div>{% endif %}
+                            <div class="text-xs text-slate-500 mt-2">Requested {{ pa.interest.created_at.strftime('%d %b %H:%M') if pa.interest.created_at else '' }}</div>
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                <form method="post" action="/haulier/approve-backhaul-request" class="inline">
+                                    <input type="hidden" name="interest_id" value="{{ pa.interest.id }}" />
+                                    <button type="submit" class="min-h-[44px] px-4 py-2 text-sm font-semibold bg-teal-600 hover:bg-teal-500 text-white rounded-lg">Approve</button>
+                                </form>
+                                <form method="post" action="/haulier/reject-backhaul-request" class="inline" onsubmit="return confirm('Reject this backhaul request?');">
+                                    <input type="hidden" name="interest_id" value="{{ pa.interest.id }}" />
+                                    <button type="submit" class="min-h-[44px] px-4 py-2 text-sm font-semibold bg-rose-700 hover:bg-rose-600 text-white rounded-lg">Reject</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if driver_pending_approvals and driver_pending_approvals|length > 0 %}
+                <div class="rounded-xl border border-amber-500/25 bg-slate-900/50 p-4 mb-6">
+                    <h3 class="text-lg font-semibold text-amber-200 mb-3">Pending approval requests</h3>
+                    <div class="space-y-4">
+                        {% for pa in driver_pending_approvals %}
+                        <div class="rounded-lg border border-slate-700/80 bg-slate-950/40 p-4">
+                            <div class="font-mono text-teal-300 text-sm">{{ pa.load.pickup_postcode }} → {{ pa.load.delivery_postcode }}</div>
+                            {% if pa.net_gbp is defined and pa.net_gbp is not none %}<div class="text-green-300 text-sm font-semibold mt-1">Payment: £{{ "%.2f"|format(pa.net_gbp) }}</div>{% endif %}
+                            <div class="text-sm text-amber-200/90 mt-2">Status: Waiting for approval ⏳</div>
+                            <div class="text-xs text-slate-500 mt-1">Expires in <span class="tabular-nums">{{ (pa.seconds_left // 3600) }}h {{ ((pa.seconds_left % 3600) // 60) }}m</span></div>
+                            {% if pa.whatsapp_reminder_url %}
+                            <a href="{{ pa.whatsapp_reminder_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex mt-3 min-h-[44px] items-center px-3 py-2 rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white text-xs font-semibold">Send WhatsApp reminder</a>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
                 {% endif %}
                 
@@ -826,13 +934,29 @@
                             {% endif %}
                             <div class="flex flex-wrap items-center gap-2 pt-1">
                                 {{ wa_share_btn(m.load) }}
+                                {% if current_user and current_user.role == 'driver' %}
+                                    {% if driver_can_find_backhauls|default(false) %}
+                                    <form method="post" action="/request-backhaul-approval" class="inline flex-1 min-w-[10rem]">
+                                        <input type="hidden" name="load_id" value="{{ m.load.id }}">
+                                        <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
+                                        <input type="hidden" name="origin_postcode" value="{{ find_origin_postcode or '' }}">
+                                        <input type="hidden" name="destination_postcode" value="{{ find_destination_postcode or '' }}">
+                                        <button type="submit" class="w-full min-h-[44px] px-3 py-2 text-xs font-semibold {% if m.is_perfect_match %}bg-teal-600 hover:bg-teal-700{% else %}bg-amber-600 hover:bg-amber-700{% endif %} text-white rounded-md transition-colors">
+                                            Request approval
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <span class="text-xs text-slate-500 flex-1 min-w-[10rem]">Ask your office to enable <strong class="text-slate-400">Can find backhauls</strong> for your driver login.</span>
+                                    {% endif %}
+                                {% else %}
                                 <form method="post" action="/interest" class="inline flex-1 min-w-[10rem]">
                                     <input type="hidden" name="load_id" value="{{ m.load.id }}">
                                     <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
                                     <button type="submit" class="w-full min-h-[44px] px-3 py-2 text-xs font-semibold {% if m.is_perfect_match %}bg-teal-600 hover:bg-teal-700{% else %}bg-amber-600 hover:bg-amber-700{% endif %} text-white rounded-md transition-colors">
-                                        {% if m.is_perfect_match %}Show Interest{% else %}Interest (Explain){% endif %}
+                                        {% if m.is_perfect_match %}Accept job{% else %}Show interest{% endif %}
                                     </button>
                                 </form>
+                                {% endif %}
                             </div>
                         </article>
                         {% endfor %}
@@ -925,13 +1049,29 @@
                                     <td class="py-3 px-3 text-right">
                                         <div class="flex flex-wrap items-center justify-end gap-2">
                                             {{ wa_share_btn(m.load) }}
+                                            {% if current_user and current_user.role == 'driver' %}
+                                                {% if driver_can_find_backhauls|default(false) %}
+                                                <form method="post" action="/request-backhaul-approval" class="inline">
+                                                    <input type="hidden" name="load_id" value="{{ m.load.id }}">
+                                                    <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
+                                                    <input type="hidden" name="origin_postcode" value="{{ find_origin_postcode or '' }}">
+                                                    <input type="hidden" name="destination_postcode" value="{{ find_destination_postcode or '' }}">
+                                                    <button type="submit" class="min-h-[44px] px-3 py-2 text-xs font-semibold {% if m.is_perfect_match %}bg-teal-600 hover:bg-teal-700{% else %}bg-amber-600 hover:bg-amber-700{% endif %} text-white rounded-md transition-colors">
+                                                        Request approval
+                                                    </button>
+                                                </form>
+                                                {% else %}
+                                                <span class="text-xs text-slate-500 max-w-[12rem] text-right">Office must enable backhaul search for your login.</span>
+                                                {% endif %}
+                                            {% else %}
                                             <form method="post" action="/interest" class="inline">
                                                 <input type="hidden" name="load_id" value="{{ m.load.id }}">
                                                 <input type="hidden" name="vehicle_id" value="{{ find_vehicle_id }}">
                                                 <button type="submit" class="min-h-[44px] px-3 py-2 text-xs font-semibold {% if m.is_perfect_match %}bg-teal-600 hover:bg-teal-700{% else %}bg-amber-600 hover:bg-amber-700{% endif %} text-white rounded-md transition-colors">
-                                                    {% if m.is_perfect_match %}Show Interest{% else %}Interest (Explain){% endif %}
+                                                    {% if m.is_perfect_match %}Accept job{% else %}Show interest{% endif %}
                                                 </button>
                                             </form>
+                                            {% endif %}
                                         </div>
                                     </td>
                                 </tr>
@@ -1290,6 +1430,12 @@
                             <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
                             <input name="password" type="password" required placeholder="••••••••" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
                         </div>
+                        <div class="md:col-span-2 lg:col-span-3 flex items-end">
+                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                <input type="checkbox" name="can_find_backhauls" value="1" class="rounded border-slate-600" />
+                                <span>Can find backhauls <span class="text-slate-500 font-normal">(requests manager approval per load)</span></span>
+                            </label>
+                        </div>
                         <div class="md:col-span-2 lg:col-span-3 xl:col-span-6">
                             <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg">
                                 Create Driver
@@ -1315,6 +1461,7 @@
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Driver Name</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Email</th>
                                     <th class="py-3 px-4 text-left font-semibold text-slate-400">Phone</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-slate-400">Find backhauls</th>
                                     <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
                                 </tr>
                             </thead>
@@ -1324,6 +1471,15 @@
                                     <td class="py-3 px-4 text-slate-200">{{ d.name }}</td>
                                     <td class="py-3 px-4 text-slate-300">{{ d.email }}</td>
                                     <td class="py-3 px-4 text-slate-400">{{ d.phone or "-" }}</td>
+                                    <td class="py-3 px-4">
+                                        <form method="post" action="/my-drivers/update/{{ d.id }}" class="flex items-center gap-2">
+                                            <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                                                <input type="checkbox" name="can_find_backhauls" value="1" class="rounded border-slate-600" {% if d.can_find_backhauls|default(false) %}checked{% endif %} onchange="this.form.submit()" />
+                                                <span>Enabled</span>
+                                            </label>
+                                            <noscript><button type="submit" class="text-xs text-teal-400">Save</button></noscript>
+                                        </form>
+                                    </td>
                                     <td class="py-3 px-4 text-right">
                                         <form method="post" action="/my-drivers/delete/{{ d.id }}" class="inline" onsubmit="return confirm('Delete driver {{ d.name }} ({{ d.email }})?');">
                                             <button type="submit" class="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all">
@@ -1549,11 +1705,19 @@
                                 <p class="text-xs text-slate-500 mt-1">1 pallet = {{ "%.2f"|format(pallet_volume_m3|default(1.2)) }} m³ — editing one field updates the other.</p>
                             </div>
                         </div>
-                        <div id="load-price-suggestion" class="text-xs text-cyan-300/90 mb-2 rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2" style="display: none;" aria-live="polite"></div>
+                        <div id="load-pricing-guidance" class="text-xs text-slate-400 mb-3 rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-3 space-y-1.5" style="display: none;" aria-live="polite">
+                            <p class="text-slate-300 font-medium">💡 Industry guidance: £<span id="load-guidance-low">1.50</span>–£<span id="load-guidance-high">2.75</span>/mile</p>
+                            <p id="load-pricing-route" class="text-slate-500"></p>
+                            <p id="load-pricing-range" class="text-slate-500"></p>
+                            <p id="load-pricing-wait" class="text-slate-500 italic" style="display: none;">Working out route…</p>
+                        </div>
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-slate-300 mb-2">Budget (£)</label>
-                            <input id="load-budget-gbp" name="budget_gbp" type="number" step="0.01" placeholder="e.g. 150.00" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
-                            <p class="text-xs text-slate-500 mt-1">Industry rates based on current diesel prices (£1.90/litre): Van £1.50/mile, Rigid £2.00/mile, Artic £2.75/mile. Prices include vehicle type, trailer requirements, and urgency. You can adjust as needed. Suggested totals are rounded to the nearest £0.50. Distances use HGV-oriented road routing (OpenRouteService) where configured—not straight-line “as the crow flies.”</p>
+                            <label class="block text-sm font-medium text-slate-300 mb-2" for="load-budget-gbp">Your budget</label>
+                            <div class="flex items-center gap-2 flex-wrap max-w-md">
+                                <span class="text-slate-200 text-lg font-semibold tabular-nums" aria-hidden="true">£</span>
+                                <input id="load-budget-gbp" name="budget_gbp" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" class="flex-1 min-w-[10rem] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
+                            </div>
+                            <p class="text-xs text-slate-500 mt-2">Guidance above is optional. Enter what you are willing to pay; road miles use the same routing as Find Backhaul where configured.</p>
                             <div id="load-platform-fee-line" class="text-xs text-slate-200 mt-2 rounded-lg border border-slate-500/40 bg-slate-800/60 px-3 py-2" style="display: none;" aria-live="polite"></div>
                         </div>
                         <div class="w-full mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300 rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-3">
@@ -1627,13 +1791,18 @@
                     (function () {
                         var form = document.getElementById("add-load-form");
                         if (!form) return;
-                        var out = document.getElementById("load-price-suggestion");
+                        var guidance = document.getElementById("load-pricing-guidance");
+                        var routeEl = document.getElementById("load-pricing-route");
+                        var rangeEl = document.getElementById("load-pricing-range");
+                        var waitEl = document.getElementById("load-pricing-wait");
+                        var gLow = document.getElementById("load-guidance-low");
+                        var gHigh = document.getElementById("load-guidance-high");
                         var budget = document.getElementById("load-budget-gbp");
                         var feeLine = document.getElementById("load-platform-fee-line");
-                        if (!out || !budget) return;
+                        if (!guidance || !budget) return;
                         var t = null;
                         function fmtMoney(n) {
-                            return "£" + n.toFixed(2);
+                            return "£" + Number(n).toFixed(2);
                         }
                         function hideSuggestionBox(el) {
                             if (!el) return;
@@ -1642,6 +1811,15 @@
                         }
                         function showSuggestionBox(el) {
                             if (el) el.style.display = "block";
+                        }
+                        function showGuidancePanel() {
+                            guidance.style.display = "block";
+                        }
+                        function hideGuidancePanel() {
+                            guidance.style.display = "none";
+                            if (waitEl) waitEl.style.display = "none";
+                            if (routeEl) routeEl.textContent = "";
+                            if (rangeEl) rangeEl.textContent = "";
                         }
                         function updatePlatformFeeFromBudget() {
                             if (!feeLine) return;
@@ -1686,15 +1864,15 @@
                         }
                         function scheduleFetch() {
                             clearTimeout(t);
-                            t = setTimeout(fetchSuggestion, 450);
+                            t = setTimeout(fetchRouteGuidance, 450);
                         }
-                        function fetchSuggestion() {
+                        function fetchRouteGuidance() {
                             var pu = (form.querySelector('[name="pickup_postcode"]') || {}).value || "";
                             var del = (form.querySelector('[name="delivery_postcode"]') || {}).value || "";
                             pu = pu.trim();
                             del = del.trim();
                             if (pu.length < 5 || del.length < 5) {
-                                hideSuggestionBox(out);
+                                hideGuidancePanel();
                                 hideSuggestionBox(feeLine);
                                 return;
                             }
@@ -1707,13 +1885,20 @@
                             params.set("vehicle_type", vt);
                             params.set("trailer_type", tt);
                             if (pws) params.set("pickup_window_start", pws);
-                            out.textContent = "Calculating…";
-                            showSuggestionBox(out);
+                            var rawB = (budget.value || "").trim();
+                            if (rawB) {
+                                var bv = parseFloat(rawB);
+                                if (!isNaN(bv) && bv > 0) params.set("budget_gbp", String(bv));
+                            }
+                            showGuidancePanel();
+                            if (waitEl) waitEl.style.display = "block";
+                            if (routeEl) routeEl.textContent = "";
+                            if (rangeEl) rangeEl.textContent = "";
                             hideSuggestionBox(feeLine);
                             fetch("/api/suggest-load-price?" + params.toString(), { credentials: "same-origin" })
                                 .then(function (r) {
                                     if (r.status === 401) {
-                                        hideSuggestionBox(out);
+                                        hideGuidancePanel();
                                         hideSuggestionBox(feeLine);
                                         return null;
                                     }
@@ -1721,27 +1906,45 @@
                                 })
                                 .then(function (data) {
                                     if (!data) return;
-                                    if (data.suggested_gbp != null && data.detail_line) {
-                                        out.textContent = data.detail_line;
-                                        showSuggestionBox(out);
-                                        if (!budget.dataset.userEdited) {
-                                            budget.value = Number(data.suggested_gbp).toFixed(2);
+                                    if (waitEl) waitEl.style.display = "none";
+                                    if (data.guidance_per_mile_low != null && gLow) {
+                                        gLow.textContent = Number(data.guidance_per_mile_low).toFixed(2);
+                                    }
+                                    if (data.guidance_per_mile_high != null && gHigh) {
+                                        gHigh.textContent = Number(data.guidance_per_mile_high).toFixed(2);
+                                    }
+                                    if (data.distance_miles != null && data.guidance_typical_min_gbp != null && data.guidance_typical_max_gbp != null) {
+                                        showGuidancePanel();
+                                        if (routeEl) {
+                                            routeEl.textContent = "Your route: " + Number(data.distance_miles).toFixed(0) + " miles";
                                         }
-                                        applyFeeFromApi(data);
+                                        if (rangeEl) {
+                                            rangeEl.textContent =
+                                                "Typical range: " +
+                                                fmtMoney(data.guidance_typical_min_gbp) +
+                                                " – " +
+                                                fmtMoney(data.guidance_typical_max_gbp);
+                                        }
                                     } else {
-                                        out.textContent = data.detail_line || data.distance_note || "Enter postcodes to see a suggested price.";
-                                        showSuggestionBox(out);
-                                        applyFeeFromApi(data);
+                                        if (routeEl) {
+                                            routeEl.textContent = data.detail_line || data.distance_note || "Enter valid UK postcodes to see route miles and a typical range.";
+                                        }
+                                        if (rangeEl) rangeEl.textContent = "";
+                                        showGuidancePanel();
+                                    }
+                                    applyFeeFromApi(data);
+                                    if (!data.loader_platform_fee_detail) {
+                                        updatePlatformFeeFromBudget();
                                     }
                                 })
                                 .catch(function () {
-                                    hideSuggestionBox(out);
+                                    hideGuidancePanel();
                                     hideSuggestionBox(feeLine);
                                 });
                         }
                         budget.addEventListener("input", function () {
-                            budget.dataset.userEdited = "1";
                             updatePlatformFeeFromBudget();
+                            scheduleFetch();
                         });
                         ["pickup_postcode", "delivery_postcode", "vehicle_type_required", "trailer_type_required", "pickup_window_start"].forEach(function (name) {
                             var el = form.querySelector('[name="' + name + '"]');
@@ -2022,6 +2225,8 @@
                                     {{ wa_share_btn(row.load) }}
                                     {% if row.interest.status == 'suggested' %}
                                     <span class="badge badge-warning">Suggested</span>
+                                    {% elif row.interest.status == 'pending_haulier_approval' %}
+                                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded border border-amber-600/50 text-amber-200">Awaiting haulier office ⏳</span>
                                     {% elif row.interest.status == 'expressed' %}
                                     <span class="badge badge-success">Awaiting your acceptance</span>
                                     {% elif row.interest.status == 'declined' %}
@@ -2059,6 +2264,8 @@
                             <div class="mt-4 flex flex-wrap items-center gap-2 justify-end">
                                 {% if row.interest.status == 'suggested' %}
                                 <span class="text-sm text-slate-500">Waiting for haulier to express interest.</span>
+                                {% elif row.interest.status == 'pending_haulier_approval' %}
+                                <span class="text-sm text-slate-400">The haulier’s driver requested this load; their office must approve before you can accept.</span>
                                 {% elif row.interest.status == 'expressed' %}
                                 <form method="post" action="/accept-interest" class="inline">
                                     <input type="hidden" name="interest_id" value="{{ row.interest.id }}" />
@@ -2098,6 +2305,8 @@
                                     <td class="py-3 px-4">
                                         {% if row.interest.status == 'suggested' %}
                                         <span class="badge badge-warning">{{ row.interest.status }}</span>
+                                        {% elif row.interest.status == 'pending_haulier_approval' %}
+                                        <span class="text-amber-300 text-xs font-medium">office approval ⏳</span>
                                         {% elif row.interest.status == 'declined' %}
                                         <span class="text-slate-500 text-xs">declined</span>
                                         {% else %}
@@ -2117,6 +2326,8 @@
                                                     👋 Show Interest
                                                 </button>
                                             </form>
+                                            {% elif row.interest.status == 'pending_haulier_approval' %}
+                                            <span class="text-slate-400 text-xs max-w-[14rem] text-right">Awaiting haulier office approval</span>
                                             {% elif row.interest.status == 'expressed' %}
                                             {% if current_user and current_user.loader_id %}
                                             <form method="post" action="/accept-interest" class="inline">
@@ -2528,6 +2739,12 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
                             <input name="password" type="password" required placeholder="••••••••" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+                        </div>
+                        <div class="md:col-span-2 lg:col-span-3 flex items-end">
+                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                <input type="checkbox" name="can_find_backhauls" value="1" class="rounded border-slate-600" />
+                                <span>Can find backhauls</span>
+                            </label>
                         </div>
                         <div class="md:col-span-2 lg:col-span-3">
                             <button type="submit" class="btn-primary px-6 py-3 text-sm font-semibold text-white rounded-lg shadow-lg">

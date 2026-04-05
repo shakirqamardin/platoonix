@@ -152,9 +152,10 @@ def api_suggest_load_price(
     vehicle_type: str = Query(""),
     trailer_type: str = Query(""),
     pickup_window_start: str = Query(""),
+    budget_gbp: str = Query(""),
     db: Session = Depends(get_db),
 ):
-    """Suggested budget from distance × £1.50/mi + surcharges + optional 24h urgency. Requires login."""
+    """Route miles + optional pricing guidance for Add Load; platform fee uses loader-entered budget when provided."""
     user = get_current_user_optional(request, db)
     if not user:
         return JSONResponse({"error": "Login required"}, status_code=401)
@@ -165,10 +166,18 @@ def api_suggest_load_price(
         trailer_type.strip() or None,
         pickup_window_start.strip() or None,
     )
-    if isinstance(data, dict) and data.get("suggested_gbp") is not None:
+    fee_basis: Optional[float] = None
+    if budget_gbp and str(budget_gbp).strip():
+        try:
+            b = float(str(budget_gbp).strip())
+            if b > 0:
+                fee_basis = b
+        except (TypeError, ValueError):
+            pass
+    if fee_basis is not None:
         from app.services.payment_fees import loader_platform_fee_payload
 
-        extra = loader_platform_fee_payload(float(data["suggested_gbp"]), get_settings())
+        extra = loader_platform_fee_payload(fee_basis, get_settings())
         if extra:
             data = {**data, **extra}
     return JSONResponse(data)
@@ -586,6 +595,36 @@ def home(
     except ValueError:
         shared_load_id = None
     _pub_base = get_settings().public_app_base_url
+    from app.services import backhaul_approval as ba_svc
+
+    try:
+        ba_svc.expire_stale_pending_approvals(db)
+    except Exception as e:
+        print(f"[backhaul_approval] expire: {e}")
+    _fee_pct = float(get_settings().platform_fee_percent or 8)
+    driver_can_find_backhauls = bool(
+        driver_actor and getattr(driver_actor, "can_find_backhauls", False)
+    )
+    driver_pending_approvals: list = []
+    haulier_pending_backhaul_approvals: list = []
+    approval_confirmation = None
+    if driver_actor:
+        driver_pending_approvals = ba_svc.list_driver_pending_approvals(
+            db, driver_actor.id, _pub_base, _fee_pct
+        )
+        _asent = (request.query_params.get("approval_sent") or "").strip()
+        if _asent.isdigit():
+            approval_confirmation = ba_svc.approval_context_for_driver(
+                db, int(_asent), driver_actor.id, _pub_base, _fee_pct
+            )
+    if (
+        current_user
+        and (getattr(current_user, "role", None) or "").strip().lower() == "haulier"
+        and current_user.haulier_id
+    ):
+        haulier_pending_backhaul_approvals = ba_svc.list_haulier_pending_approvals(
+            db, current_user.haulier_id, _pub_base, _fee_pct
+        )
     return templates.TemplateResponse(
         "home.html",
         {
@@ -638,6 +677,11 @@ def home(
             "rating_error": rating_error,
             "public_app_base_url": _pub_base,
             "shared_load_id": shared_load_id,
+            "driver_can_find_backhauls": driver_can_find_backhauls,
+            "driver_pending_approvals": driver_pending_approvals,
+            "haulier_pending_backhaul_approvals": haulier_pending_backhaul_approvals,
+            "approval_confirmation": approval_confirmation,
+            "find_backhaul_msg": None,
             **rating_ctx,
         },
     )
@@ -1133,6 +1177,37 @@ def find_backhaul_page(
     except ValueError:
         shared_load_id = None
     _pub_base = get_settings().public_app_base_url
+    from app.services import backhaul_approval as ba_svc
+
+    try:
+        ba_svc.expire_stale_pending_approvals(db)
+    except Exception as e:
+        print(f"[backhaul_approval] expire: {e}")
+    _fee_pct = float(get_settings().platform_fee_percent or 8)
+    driver_can_find_backhauls = bool(
+        driver_actor and getattr(driver_actor, "can_find_backhauls", False)
+    )
+    driver_pending_approvals: list = []
+    haulier_pending_backhaul_approvals: list = []
+    approval_confirmation = None
+    if driver_actor:
+        driver_pending_approvals = ba_svc.list_driver_pending_approvals(
+            db, driver_actor.id, _pub_base, _fee_pct
+        )
+        _asent = (request.query_params.get("approval_sent") or "").strip()
+        if _asent.isdigit():
+            approval_confirmation = ba_svc.approval_context_for_driver(
+                db, int(_asent), driver_actor.id, _pub_base, _fee_pct
+            )
+    if (
+        current_user
+        and (getattr(current_user, "role", None) or "").strip().lower() == "haulier"
+        and current_user.haulier_id
+    ):
+        haulier_pending_backhaul_approvals = ba_svc.list_haulier_pending_approvals(
+            db, current_user.haulier_id, _pub_base, _fee_pct
+        )
+    find_backhaul_msg = (request.query_params.get("msg") or "").strip() or None
 
     return templates.TemplateResponse(
         "home.html",
@@ -1186,6 +1261,11 @@ def find_backhaul_page(
             "rating_error": rating_error,
             "public_app_base_url": _pub_base,
             "shared_load_id": shared_load_id,
+            "driver_can_find_backhauls": driver_can_find_backhauls,
+            "driver_pending_approvals": driver_pending_approvals,
+            "haulier_pending_backhaul_approvals": haulier_pending_backhaul_approvals,
+            "approval_confirmation": approval_confirmation,
+            "find_backhaul_msg": find_backhaul_msg,
             **rating_ctx,
         },
     )
@@ -1515,6 +1595,16 @@ def delete_haulier_form(
             )
     try:
         db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier_id).delete()
+        _li_ids = [
+            r[0]
+            for r in db.query(models.LoadInterest.id)
+            .filter(models.LoadInterest.haulier_id == haulier_id)
+            .all()
+        ]
+        if _li_ids:
+            db.query(models.BackhaulApprovalToken).filter(
+                models.BackhaulApprovalToken.load_interest_id.in_(_li_ids)
+            ).delete(synchronize_session=False)
         db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier_id).delete()
         db.query(models.Trailer).filter(models.Trailer.haulier_id == haulier_id).delete()
         db.query(models.Driver).filter(models.Driver.haulier_id == haulier_id).delete()
@@ -1556,6 +1646,16 @@ def delete_vehicle_form(
     if db.query(models.HaulierRoute).filter(models.HaulierRoute.vehicle_id == vehicle_id).first():
         return RedirectResponse(url="/?delete_error=Remove+from+planned+routes+first", status_code=303)
     try:
+        _v_li = [
+            r[0]
+            for r in db.query(models.LoadInterest.id)
+            .filter(models.LoadInterest.vehicle_id == vehicle_id)
+            .all()
+        ]
+        if _v_li:
+            db.query(models.BackhaulApprovalToken).filter(
+                models.BackhaulApprovalToken.load_interest_id.in_(_v_li)
+            ).delete(synchronize_session=False)
         db.execute(sa_delete(models.LoadInterest).where(models.LoadInterest.vehicle_id == vehicle_id))
         db.delete(vehicle)
         db.commit()
@@ -2175,6 +2275,7 @@ async def create_driver_account(
             return redirect_error("Vehicle must belong to the selected company")
         vehicle_id = vid
 
+    can_find = form.get("can_find_backhauls") == "1"
     driver = models.Driver(
         haulier_id=haulier_id,
         vehicle_id=vehicle_id,
@@ -2182,6 +2283,7 @@ async def create_driver_account(
         email=email,
         phone=phone,
         password_hash=hash_password(password),
+        can_find_backhauls=can_find,
     )
     db.add(driver)
     db.commit()
@@ -2234,6 +2336,7 @@ async def create_my_driver_account(
             return redirect_error("Invalid vehicle for your company")
         vehicle_id = vid
 
+    can_find = form.get("can_find_backhauls") == "1"
     driver = models.Driver(
         haulier_id=current_user.haulier_id,
         vehicle_id=vehicle_id,
@@ -2241,10 +2344,44 @@ async def create_my_driver_account(
         email=email,
         phone=phone,
         password_hash=hash_password(password),
+        can_find_backhauls=can_find,
     )
     db.add(driver)
     db.commit()
     return RedirectResponse(url=base + "&driver_ok=" + quote_plus("Driver account created"), status_code=303)
+
+
+@router.post("/my-drivers/update/{driver_id}", response_class=RedirectResponse)
+async def update_my_driver_permissions(
+    driver_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Haulier: toggle can_find_backhauls for a driver in their company."""
+    from urllib.parse import quote_plus
+
+    current_user = get_current_user_optional(request, db)
+    base = "/?section=my-drivers"
+
+    def redirect_error(msg: str) -> RedirectResponse:
+        return RedirectResponse(url=base + "&driver_error=" + quote_plus(msg), status_code=303)
+
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    if (getattr(current_user, "role", None) or "").strip().lower() != "haulier":
+        return redirect_error("Only haulier accounts can manage drivers")
+    if not current_user.haulier_id:
+        return redirect_error("Your account is not linked to a haulier company")
+
+    driver = db.get(models.Driver, driver_id)
+    if not driver or driver.haulier_id != current_user.haulier_id:
+        return redirect_error("Driver not found")
+
+    form = await request.form()
+    driver.can_find_backhauls = form.get("can_find_backhauls") == "1"
+    db.add(driver)
+    db.commit()
+    return RedirectResponse(url=base + "&driver_ok=" + quote_plus("Driver updated"), status_code=303)
 
 
 @router.post("/my-drivers/delete/{driver_id}", response_class=RedirectResponse)
@@ -2428,12 +2565,20 @@ async def express_interest(
     if haulier_id is None:
         return _redirect_matches("invalid_interest")
 
+    if driver_actor is not None:
+        if not getattr(driver_actor, "can_find_backhauls", False):
+            return RedirectResponse(
+                url="/find-backhaul?msg=driver_no_backhaul_permission",
+                status_code=303,
+            )
+        return RedirectResponse(
+            url="/find-backhaul?msg=use_request_approval",
+            status_code=303,
+        )
+
     vehicle = db.get(models.Vehicle, vid)
     if not vehicle or vehicle.haulier_id != haulier_id:
         return _redirect_matches("not_your_vehicle")
-    if driver_actor is not None:
-        if driver_actor.vehicle_id and driver_actor.vehicle_id != vid:
-            return _redirect_matches("not_your_vehicle")
 
     if vehicle_availability_svc.vehicle_has_active_job(db, vid):
         return _redirect_matches("vehicle_on_job")
@@ -2445,10 +2590,6 @@ async def express_interest(
     ).first()
 
     if existing:
-        if driver_actor:
-            existing.expressing_driver_id = driver_actor.id
-            db.add(existing)
-            db.commit()
         return RedirectResponse(url="/?section=matches&msg=already_interested", status_code=303)
 
     interest = models.LoadInterest(
@@ -2456,7 +2597,7 @@ async def express_interest(
         vehicle_id=vid,
         haulier_id=haulier_id,
         status="expressed",
-        expressing_driver_id=driver_actor.id if driver_actor else None,
+        expressing_driver_id=None,
     )
     db.add(interest)
     db.commit()
@@ -2484,3 +2625,303 @@ async def express_interest(
         print(f"[EMAIL] schedule_loader_interest_email failed: {e}")
 
     return RedirectResponse(url="/?section=matches", status_code=303)
+
+
+def _backhaul_public_base() -> str:
+    return (get_settings().public_app_base_url or "").strip()
+
+
+def _backhaul_result_html(
+    *,
+    ok: bool,
+    title: str,
+    subtitle: str,
+    detail_lines: Optional[list[str]] = None,
+    dashboard_href: str = "/?section=find",
+) -> HTMLResponse:
+    detail_lines = detail_lines or []
+    accent = "#14b8a6" if ok else "#f43f5e"
+    icon = "✅" if ok else "❌"
+    lines_html = "".join(f'<p class="detail">{_html_escape(line)}</p>' for line in detail_lines)
+    body = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>{_html_escape(title)} — Platoonix</title>
+<style>
+body{{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#020617;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.25rem;}}
+.card{{max-width:24rem;width:100%;background:rgba(15,23,42,.85);border:1px solid rgba(148,163,184,.2);border-radius:1rem;padding:1.5rem;box-shadow:0 12px 40px rgba(0,0,0,.35);}}
+h1{{font-size:1.25rem;margin:0 0 .5rem;color:{accent};}}
+.sub{{color:#94a3b8;font-size:.95rem;margin:0 0 1rem;line-height:1.45;}}
+.detail{{font-size:.9rem;color:#cbd5e1;margin:.35rem 0;}}
+a.btn{{display:inline-block;margin-top:1rem;background:{accent};color:#0f172a;font-weight:600;text-decoration:none;padding:.65rem 1.1rem;border-radius:.5rem;}}
+a.btn:hover{{filter:brightness(1.08);}}
+</style></head><body><div class="card"><div style="font-size:2rem;margin-bottom:.5rem">{icon}</div>
+<h1>{_html_escape(title)}</h1>
+<p class="sub">{_html_escape(subtitle)}</p>
+{lines_html}
+<a class="btn" href="{_html_escape(dashboard_href)}">View in Dashboard</a>
+</div></body></html>"""
+    return HTMLResponse(content=body, status_code=200)
+
+
+def _html_escape(s: str) -> str:
+    return (
+        (s or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+@router.post("/request-backhaul-approval", response_class=RedirectResponse)
+async def request_backhaul_approval(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Employed driver with can_find_backhauls: pending office approval + email token."""
+    from urllib.parse import quote_plus
+
+    current_user = get_current_user_optional(request, db)
+    if current_user is not None:
+        return RedirectResponse(url="/find-backhaul?msg=drivers_only", status_code=303)
+    driver_actor = get_current_driver_optional(request, db)
+    if not driver_actor:
+        return RedirectResponse(url="/driver-login", status_code=302)
+
+    form = await request.form()
+    lid_raw = form.get("load_id")
+    vid_raw = form.get("vehicle_id")
+    origin = (form.get("origin_postcode") or "").strip()
+    dest = (form.get("destination_postcode") or "").strip()
+
+    def _back_url(extra: str = "") -> str:
+        q = []
+        if vid_raw:
+            q.append(f"vehicle_id={quote_plus(str(vid_raw).strip())}")
+        if origin:
+            q.append(f"origin_postcode={quote_plus(origin)}")
+        if dest:
+            q.append(f"destination_postcode={quote_plus(dest)}")
+        base_q = "&".join(q)
+        ex = extra.lstrip("&") if extra else ""
+        if base_q and ex:
+            return f"/find-backhaul?{base_q}&{ex}"
+        if base_q:
+            return f"/find-backhaul?{base_q}"
+        if ex:
+            return f"/find-backhaul?{ex}"
+        return "/find-backhaul"
+
+    try:
+        lid = int(str(lid_raw).strip()) if lid_raw is not None and str(lid_raw).strip() else None
+        vid = int(str(vid_raw).strip()) if vid_raw is not None and str(vid_raw).strip() else None
+    except (TypeError, ValueError):
+        return RedirectResponse(url=_back_url("msg=invalid_request"), status_code=303)
+    if lid is None or vid is None:
+        return RedirectResponse(url=_back_url("msg=invalid_request"), status_code=303)
+
+    from app.services import backhaul_approval as ba_svc
+
+    interest, err = ba_svc.create_backhaul_approval_request(
+        db,
+        driver_actor,
+        lid,
+        vid,
+        background_tasks,
+        _backhaul_public_base(),
+    )
+    if err:
+        return RedirectResponse(url=_back_url(f"msg={quote_plus(err)}"), status_code=303)
+    assert interest is not None
+    return RedirectResponse(
+        url=_back_url(f"approval_sent={interest.id}"),
+        status_code=303,
+    )
+
+
+@router.get("/backhaul/approve/{token}", response_class=HTMLResponse, response_model=None)
+def backhaul_approve_via_token(
+    token: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    from app.services import backhaul_approval as ba_svc
+
+    outcome, interest, haulier = ba_svc.process_token_approve(db, token, background_tasks)
+    if outcome == "invalid":
+        return _backhaul_result_html(
+            ok=False,
+            title="Invalid link",
+            subtitle="This approval link is not valid.",
+        )
+    if outcome in ("used",):
+        return _backhaul_result_html(
+            ok=False,
+            title="Already used",
+            subtitle="This link has already been used.",
+        )
+    if outcome == "expired":
+        return _backhaul_result_html(
+            ok=False,
+            title="Link expired",
+            subtitle="This approval link has expired. Ask your driver to send a new request if needed.",
+        )
+    if outcome == "wrong_state":
+        return _backhaul_result_html(
+            ok=False,
+            title="No longer pending",
+            subtitle="This request is no longer waiting for approval.",
+        )
+    load = db.get(models.Load, interest.load_id) if interest and interest.load_id else None
+    driver = (
+        db.get(models.Driver, interest.expressing_driver_id)
+        if interest and interest.expressing_driver_id
+        else None
+    )
+    route = (
+        f"{load.pickup_postcode} → {load.delivery_postcode}"
+        if load
+        else "—"
+    )
+    pay = ""
+    if load and load.budget_gbp is not None:
+        fee = float(get_settings().platform_fee_percent or 8)
+        net = float(load.budget_gbp) * (1 - fee / 100.0)
+        pay = f"£{net:.2f}"
+    sub = "The driver has been notified. The loader can now accept your company’s interest."
+    lines = [
+        route,
+        f"Driver: {(driver.name if driver else '—')}",
+        f"Payment: {pay}" if pay else "",
+    ]
+    lines = [x for x in lines if x]
+    return _backhaul_result_html(
+        ok=True,
+        title="Job approved",
+        subtitle=sub,
+        detail_lines=lines,
+    )
+
+
+@router.get("/api/backhaul/approve/{token}", response_class=HTMLResponse, response_model=None)
+def api_backhaul_approve_via_token(
+    token: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    return backhaul_approve_via_token(token, request, background_tasks, db)
+
+
+@router.get("/backhaul/reject/{token}", response_class=HTMLResponse, response_model=None)
+def backhaul_reject_via_token(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    from app.services import backhaul_approval as ba_svc
+
+    outcome, interest, haulier = ba_svc.process_token_reject(db, token)
+    if outcome == "invalid":
+        return _backhaul_result_html(
+            ok=False,
+            title="Invalid link",
+            subtitle="This rejection link is not valid.",
+        )
+    if outcome == "used":
+        return _backhaul_result_html(
+            ok=False,
+            title="Already used",
+            subtitle="This link has already been used.",
+        )
+    if outcome == "expired":
+        return _backhaul_result_html(
+            ok=False,
+            title="Link expired",
+            subtitle="This link has expired.",
+        )
+    if outcome == "wrong_state":
+        return _backhaul_result_html(
+            ok=False,
+            title="No longer pending",
+            subtitle="This request is no longer waiting for approval.",
+        )
+    return _backhaul_result_html(
+        ok=False,
+        title="Job rejected",
+        subtitle="The driver has been notified. The load is available for others.",
+        detail_lines=[],
+    )
+
+
+@router.get("/api/backhaul/reject/{token}", response_class=HTMLResponse, response_model=None)
+def api_backhaul_reject_via_token(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    return backhaul_reject_via_token(token, request, db)
+
+
+@router.post("/haulier/approve-backhaul-request", response_class=RedirectResponse)
+async def haulier_approve_backhaul_request(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    from urllib.parse import quote_plus
+
+    user = get_current_user_optional(request, db)
+    if not user or (getattr(user, "role", None) or "").strip().lower() != "haulier" or not user.haulier_id:
+        return RedirectResponse(url="/login", status_code=302)
+    form = await request.form()
+    from app.services import backhaul_approval as ba_svc
+
+    try:
+        iid = int(str(form.get("interest_id") or "").strip())
+    except (TypeError, ValueError):
+        return RedirectResponse(url="/?section=find&approval_err=" + quote_plus("invalid"), status_code=303)
+    interest = db.get(models.LoadInterest, iid)
+    if (
+        not interest
+        or interest.haulier_id != user.haulier_id
+        or interest.status != ba_svc.PENDING_STATUS
+    ):
+        return RedirectResponse(url="/?section=find&approval_err=" + quote_plus("not_found"), status_code=303)
+
+    haulier = db.get(models.Haulier, user.haulier_id)
+    company = haulier.name if haulier else "Your company"
+    ba_svc.approve_pending_interest(db, interest, background_tasks, company_name=company)
+    return RedirectResponse(url="/?section=find&approval_ok=1", status_code=303)
+
+
+@router.post("/haulier/reject-backhaul-request", response_class=RedirectResponse)
+async def haulier_reject_backhaul_request(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    from urllib.parse import quote_plus
+
+    user = get_current_user_optional(request, db)
+    if not user or (getattr(user, "role", None) or "").strip().lower() != "haulier" or not user.haulier_id:
+        return RedirectResponse(url="/login", status_code=302)
+    form = await request.form()
+    from app.services import backhaul_approval as ba_svc
+
+    try:
+        iid = int(str(form.get("interest_id") or "").strip())
+    except (TypeError, ValueError):
+        return RedirectResponse(url="/?section=find&approval_err=" + quote_plus("invalid"), status_code=303)
+    interest = db.get(models.LoadInterest, iid)
+    if (
+        not interest
+        or interest.haulier_id != user.haulier_id
+        or interest.status != ba_svc.PENDING_STATUS
+    ):
+        return RedirectResponse(url="/?section=find&approval_err=" + quote_plus("not_found"), status_code=303)
+    haulier = db.get(models.Haulier, user.haulier_id)
+    company = haulier.name if haulier else "Your company"
+    ba_svc.reject_pending_interest(db, interest, company_name=company, reason="declined")
+    return RedirectResponse(url="/?section=find&approval_rejected=1", status_code=303)

@@ -188,6 +188,8 @@ def suggest_from_form_params(
             urgent = pickup_is_urgent(ps_dt)
         except (ValueError, TypeError):
             pass
+    guidance_low = GBP_PER_MILE_BY_VEHICLE["van"]
+    guidance_high = GBP_PER_MILE_BY_VEHICLE["artic"]
     if dist is None:
         return {
             "suggested_gbp": None,
@@ -195,21 +197,27 @@ def suggest_from_form_params(
             "breakdown": None,
             "distance_miles": None,
             "distance_source": None,
+            "guidance_per_mile_low": guidance_low,
+            "guidance_per_mile_high": guidance_high,
+            "guidance_typical_min_gbp": None,
+            "guidance_typical_max_gbp": None,
         }
     vt = (vehicle_type or "").strip() or None
     tt = (trailer_type or "").strip() or None
     total, breakdown = compute_suggested_price_gbp(dist, vt, tt, urgent)
-    src_label = "road" if src in ("google", "openrouteservice", "mapbox") else "unavailable"
-    summary = human_summary_line(vt, tt, dist, src_label, urgent)
-    display = (
-        f"Suggested price: £{total:.2f} (based on {summary})"
-    )
+    dm = round(float(dist), 1)
+    typical_min = round(dm * guidance_low, 2)
+    typical_max = round(dm * guidance_high, 2)
     return {
         "suggested_gbp": total,
-        "detail_line": display,
+        "detail_line": None,
         "breakdown": breakdown,
-        "distance_miles": dist,
+        "distance_miles": dm,
         "distance_source": src,
         "distance_note": note,
         "urgent": urgent,
+        "guidance_per_mile_low": guidance_low,
+        "guidance_per_mile_high": guidance_high,
+        "guidance_typical_min_gbp": typical_min,
+        "guidance_typical_max_gbp": typical_max,
     }
