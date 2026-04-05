@@ -2,6 +2,7 @@
 Haulier-facing dashboard: my company, my vehicles, find backhaul, planned routes.
 Only for users with role=haulier; data filtered by haulier_id.
 """
+import re
 import uuid
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -22,6 +23,23 @@ from app.services.insurance_status import calculate_insurance_status, finalize_v
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _normalize_uk_mobile_whatsapp(raw: Optional[str]) -> Optional[str]:
+    """Normalise to +447XXXXXXXXX (10 digits after 44) or None."""
+    if not raw or not str(raw).strip():
+        return None
+    digits = re.sub(r"\D", "", str(raw).strip())
+    if digits.startswith("44") and len(digits) >= 12:
+        rest = digits[2:]
+        if rest.startswith("7") and len(rest) == 10:
+            return "+44" + rest
+        return None
+    if digits.startswith("0") and len(digits) == 11 and digits[1] == "7":
+        return "+44" + digits[2:]
+    if len(digits) == 10 and digits[0] == "7":
+        return "+44" + digits
+    return None
 
 
 def _haulier_or_redirect(request: Request, db: Session) -> Union[Tuple[models.User, models.Haulier], RedirectResponse]:
@@ -385,6 +403,8 @@ async def haulier_update_profile(
     haulier.name = (form.get("name") or haulier.name or "").strip()
     haulier.contact_email = (form.get("contact_email") or haulier.contact_email or "").strip()
     haulier.contact_phone = (form.get("contact_phone") or "").strip() or None
+    wa_raw = (form.get("whatsapp_phone") or "").strip() or None
+    haulier.whatsapp_phone = _normalize_uk_mobile_whatsapp(wa_raw) if wa_raw else None
     haulier.payment_account_id = (form.get("payment_account_id") or "").strip() or None
     haulier.base_postcode = (form.get("base_postcode") or "").strip().upper() or None
     haulier.bank_account_name = (form.get("bank_account_name") or "").strip() or None
