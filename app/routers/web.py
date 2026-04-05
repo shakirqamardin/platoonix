@@ -1,3 +1,5 @@
+import math
+import sys
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -144,6 +146,17 @@ def confidentiality_page(request: Request) -> HTMLResponse:
     )
 
 
+def _json_safe_for_response(obj: object) -> object:
+    """Replace NaN/inf floats so JSON responses are valid and clients do not break."""
+    if isinstance(obj, dict):
+        return {k: _json_safe_for_response(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe_for_response(v) for v in obj]
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    return obj
+
+
 @router.get("/api/suggest-load-price")
 def api_suggest_load_price(
     request: Request,
@@ -180,7 +193,7 @@ def api_suggest_load_price(
         extra = loader_platform_fee_payload(fee_basis, get_settings())
         if extra:
             data = {**data, **extra}
-    return JSONResponse(data)
+    return JSONResponse(_json_safe_for_response(data))
 
 
 @router.get("/api/dvla-lookup")
@@ -609,22 +622,31 @@ def home(
     haulier_pending_backhaul_approvals: list = []
     approval_confirmation = None
     if driver_actor:
-        driver_pending_approvals = ba_svc.list_driver_pending_approvals(
-            db, driver_actor.id, _pub_base, _fee_pct
-        )
-        _asent = (request.query_params.get("approval_sent") or "").strip()
-        if _asent.isdigit():
-            approval_confirmation = ba_svc.approval_context_for_driver(
-                db, int(_asent), driver_actor.id, _pub_base, _fee_pct
+        try:
+            driver_pending_approvals = ba_svc.list_driver_pending_approvals(
+                db, driver_actor.id, _pub_base, _fee_pct
             )
+            _asent = (request.query_params.get("approval_sent") or "").strip()
+            if _asent.isdigit():
+                approval_confirmation = ba_svc.approval_context_for_driver(
+                    db, int(_asent), driver_actor.id, _pub_base, _fee_pct
+                )
+        except Exception as e:
+            print(f"[backhaul_approval] driver pending / confirmation: {e!r}", file=sys.stderr)
+            driver_pending_approvals = []
+            approval_confirmation = None
     if (
         current_user
         and (getattr(current_user, "role", None) or "").strip().lower() == "haulier"
         and current_user.haulier_id
     ):
-        haulier_pending_backhaul_approvals = ba_svc.list_haulier_pending_approvals(
-            db, current_user.haulier_id, _pub_base, _fee_pct
-        )
+        try:
+            haulier_pending_backhaul_approvals = ba_svc.list_haulier_pending_approvals(
+                db, current_user.haulier_id, _pub_base, _fee_pct
+            )
+        except Exception as e:
+            print(f"[backhaul_approval] haulier pending: {e!r}", file=sys.stderr)
+            haulier_pending_backhaul_approvals = []
     return templates.TemplateResponse(
         "home.html",
         {
@@ -1191,22 +1213,31 @@ def find_backhaul_page(
     haulier_pending_backhaul_approvals: list = []
     approval_confirmation = None
     if driver_actor:
-        driver_pending_approvals = ba_svc.list_driver_pending_approvals(
-            db, driver_actor.id, _pub_base, _fee_pct
-        )
-        _asent = (request.query_params.get("approval_sent") or "").strip()
-        if _asent.isdigit():
-            approval_confirmation = ba_svc.approval_context_for_driver(
-                db, int(_asent), driver_actor.id, _pub_base, _fee_pct
+        try:
+            driver_pending_approvals = ba_svc.list_driver_pending_approvals(
+                db, driver_actor.id, _pub_base, _fee_pct
             )
+            _asent = (request.query_params.get("approval_sent") or "").strip()
+            if _asent.isdigit():
+                approval_confirmation = ba_svc.approval_context_for_driver(
+                    db, int(_asent), driver_actor.id, _pub_base, _fee_pct
+                )
+        except Exception as e:
+            print(f"[backhaul_approval] driver pending / confirmation: {e!r}", file=sys.stderr)
+            driver_pending_approvals = []
+            approval_confirmation = None
     if (
         current_user
         and (getattr(current_user, "role", None) or "").strip().lower() == "haulier"
         and current_user.haulier_id
     ):
-        haulier_pending_backhaul_approvals = ba_svc.list_haulier_pending_approvals(
-            db, current_user.haulier_id, _pub_base, _fee_pct
-        )
+        try:
+            haulier_pending_backhaul_approvals = ba_svc.list_haulier_pending_approvals(
+                db, current_user.haulier_id, _pub_base, _fee_pct
+            )
+        except Exception as e:
+            print(f"[backhaul_approval] haulier pending: {e!r}", file=sys.stderr)
+            haulier_pending_backhaul_approvals = []
     find_backhaul_msg = (request.query_params.get("msg") or "").strip() or None
 
     return templates.TemplateResponse(

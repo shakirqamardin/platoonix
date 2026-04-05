@@ -1,6 +1,7 @@
 """Suggested load budgets from distance, vehicle/trailer surcharges, and urgency."""
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -177,6 +178,8 @@ def suggest_from_form_params(
         settings.mapbox_access_token,
         settings.google_maps_api_key,
     )
+    if dist is not None and not math.isfinite(float(dist)):
+        dist = None
     urgent = False
     ps_dt: Optional[datetime] = None
     if pickup_window_start_iso and str(pickup_window_start_iso).strip():
