@@ -26,6 +26,7 @@ from app.services.matching import find_matching_loads
 from app.services import ratings as ratings_svc
 from app.services import load_pricing as load_pricing_svc
 from app.services import vehicle_availability as vehicle_availability_svc
+from app.services.payment_fees import compute_loader_platform_fee_gbp
 from app.services.insurance_status import (
     apply_insurance_status_to_vehicles,
     calculate_insurance_status,
@@ -140,20 +141,49 @@ def privacy_page(request: Request) -> HTMLResponse:
 def pricing_page(request: Request) -> HTMLResponse:
     """Public pricing and fees explanation. No login required."""
     settings = get_settings()
-    booking = float(settings.loader_flat_fee_gbp or 5)
-    pct = float(settings.platform_fee_percent or 8)
-    example_load = 300.0
-    example_service = round(example_load * (pct / 100.0), 2)
-    example_net = round(example_load - example_service, 2)
+    loader_min = float(settings.loader_flat_fee_gbp or 5)
+    loader_pct = float(settings.loader_fee_percent_of_load or 2)
+    haulier_pct = float(settings.platform_fee_percent or 8)
+
+    ex1_load = 100.0
+    ex1_pct_part = round(ex1_load * loader_pct / 100.0, 2)
+    ex1_fee, _ = compute_loader_platform_fee_gbp(ex1_load, settings)
+    ex1_total = round(ex1_load + ex1_fee, 2)
+
+    ex2_load = 300.0
+    ex2_pct_part = round(ex2_load * loader_pct / 100.0, 2)
+    ex2_fee, _ = compute_loader_platform_fee_gbp(ex2_load, settings)
+    ex2_total = round(ex2_load + ex2_fee, 2)
+
+    example_service_fee_gbp = round(ex2_load * (haulier_pct / 100.0), 2)
+    example_haulier_net_gbp = round(ex2_load - example_service_fee_gbp, 2)
+
+    plat_loader_fee, _ = compute_loader_platform_fee_gbp(ex2_load, settings)
+    plat_haulier_fee = example_service_fee_gbp
+    plat_total_revenue = round(plat_loader_fee + plat_haulier_fee, 2)
+
     return templates.TemplateResponse(
         "pricing.html",
         {
             "request": request,
-            "loader_booking_fee_gbp": booking,
-            "platform_fee_percent": pct,
-            "example_load_gbp": example_load,
-            "example_service_fee_gbp": example_service,
-            "example_haulier_net_gbp": example_net,
+            "loader_min_fee_gbp": loader_min,
+            "loader_fee_percent_of_load": loader_pct,
+            "platform_fee_percent": haulier_pct,
+            "ex1_load_gbp": ex1_load,
+            "ex1_percent_of_load_gbp": ex1_pct_part,
+            "ex1_booking_fee_gbp": ex1_fee,
+            "ex1_total_gbp": ex1_total,
+            "ex2_load_gbp": ex2_load,
+            "ex2_percent_of_load_gbp": ex2_pct_part,
+            "ex2_booking_fee_gbp": ex2_fee,
+            "ex2_total_gbp": ex2_total,
+            "example_haulier_load_gbp": ex2_load,
+            "example_service_fee_gbp": example_service_fee_gbp,
+            "example_haulier_net_gbp": example_haulier_net_gbp,
+            "plat_example_load_gbp": ex2_load,
+            "plat_loader_fee_gbp": plat_loader_fee,
+            "plat_haulier_fee_gbp": plat_haulier_fee,
+            "plat_total_revenue_gbp": plat_total_revenue,
         },
     )
 
@@ -450,7 +480,6 @@ def _haulier_scoped_lists(
     payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
     loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
     load_interests = db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier.id).all()
-    haulier_routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
     users = db.query(models.User).filter(models.User.haulier_id == haulier.id).order_by(models.User.email).all()
     drivers = db.query(models.Driver).filter(models.Driver.haulier_id == haulier.id).order_by(models.Driver.name).all()
     return {
@@ -459,7 +488,6 @@ def _haulier_scoped_lists(
         "payments": payments,
         "loads": loads,
         "load_interests": load_interests,
-        "haulier_routes": haulier_routes,
         "users": users,
         "drivers": drivers,
         "hauliers": [haulier],
@@ -491,7 +519,6 @@ def home(
         payments = d["payments"]
         loads = d["loads"]
         load_interests = d["load_interests"]
-        haulier_routes = d["haulier_routes"]
         users = d["users"]
         drivers = d["drivers"]
         hauliers = d["hauliers"]
@@ -516,18 +543,16 @@ def home(
         jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.load_id.in_(load_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if load_ids else []
         payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
         
-        # No vehicles, hauliers, or routes for loaders
+        # No vehicles or hauliers for loaders
         hauliers = []
         vehicles = []
-        haulier_routes = []
         users = db.query(models.User).filter(models.User.loader_id == loader.id).order_by(models.User.email).all()
         drivers = []
     elif current_user and current_user.haulier_id:
         # HAULIER VIEW - only their vehicles and jobs
         haulier = db.get(models.Haulier, current_user.haulier_id)
         vehicles = db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier.id).order_by(models.Vehicle.registration).all()
-        haulier_routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
-        
+
         vehicle_ids = [v.id for v in vehicles]
         jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id.in_(vehicle_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if vehicle_ids else []
         payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
@@ -547,7 +572,6 @@ def home(
         # Haulier login but no company linked (company deleted, or account not linked yet).
         # Do not use the admin branch here — it loads all data while the UI hides admin-only forms.
         vehicles = []
-        haulier_routes = []
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
         load_interests = []
         jobs = []
@@ -563,8 +587,6 @@ def home(
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
         jobs = db.query(models.BackhaulJob).order_by(models.BackhaulJob.matched_at.desc()).all()
         payments = db.query(models.Payment).order_by(models.Payment.created_at.desc()).all()
-        planned_loads = db.query(models.PlannedLoad).order_by(models.PlannedLoad.created_at.desc()).all()
-        haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
         load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
         
         users = db.query(models.User).order_by(models.User.email).all()
@@ -572,7 +594,6 @@ def home(
     else:
         # Fallback (e.g. loader without loader_id): minimal lists
         vehicles = []
-        haulier_routes = []
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
         load_interests = []
         jobs = []
@@ -645,8 +666,6 @@ def home(
             "loads": loads,
             "jobs": jobs,
             "payments": payments,
-            "planned_loads": planned_loads,
-            "haulier_routes": haulier_routes,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,
             "uploaded": int(uploaded) if uploaded and uploaded.isdigit() else None,
@@ -1080,7 +1099,6 @@ def find_backhaul_page(
         payments = d["payments"]
         loads = d["loads"]
         load_interests = d["load_interests"]
-        haulier_routes = d["haulier_routes"]
         users = d["users"]
         drivers = d["drivers"]
         hauliers = d["hauliers"]
@@ -1101,13 +1119,11 @@ def find_backhaul_page(
         payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
         hauliers = []
         vehicles = []
-        haulier_routes = []
         users = db.query(models.User).filter(models.User.loader_id == loader.id).order_by(models.User.email).all()
         drivers = []
     elif current_user and current_user.haulier_id:
         haulier = db.get(models.Haulier, current_user.haulier_id)
         vehicles = db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier.id).order_by(models.Vehicle.registration).all()
-        haulier_routes = db.query(models.HaulierRoute).filter(models.HaulierRoute.haulier_id == haulier.id).all()
         vehicle_ids = [v.id for v in vehicles]
         jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id.in_(vehicle_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if vehicle_ids else []
         payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
@@ -1119,7 +1135,6 @@ def find_backhaul_page(
         drivers = db.query(models.Driver).filter(models.Driver.haulier_id == haulier.id).order_by(models.Driver.name).all()
     elif current_user and (getattr(current_user, "role", None) or "").strip().lower() == "haulier":
         vehicles = []
-        haulier_routes = []
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
         load_interests = []
         jobs = []
@@ -1134,14 +1149,12 @@ def find_backhaul_page(
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
         jobs = db.query(models.BackhaulJob).order_by(models.BackhaulJob.matched_at.desc()).all()
         payments = db.query(models.Payment).order_by(models.Payment.created_at.desc()).all()
-        planned_loads = db.query(models.PlannedLoad).order_by(models.PlannedLoad.created_at.desc()).all()
-        haulier_routes = db.query(models.HaulierRoute).order_by(models.HaulierRoute.created_at.desc()).all()
         load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
+        planned_loads = []
         users = db.query(models.User).order_by(models.User.email).all()
         drivers = db.query(models.Driver).order_by(models.Driver.name).all()
     else:
         vehicles = []
-        haulier_routes = []
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
         load_interests = []
         jobs = []
@@ -1194,8 +1207,6 @@ def find_backhaul_page(
             "loads": loads,
             "jobs": jobs,
             "payments": payments,
-            "planned_loads": planned_loads,
-            "haulier_routes": haulier_routes,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,
             "haulier_profile": haulier_profile,
@@ -1483,72 +1494,6 @@ async def upload_file_form(
     )
 
 
-@router.post("/planned-loads", response_class=RedirectResponse)
-async def create_planned_load_form(
-    request: Request,
-    db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
-) -> RedirectResponse:
-    """Loader: add a weekly/monthly planned load. Matching runs automatically."""
-    form = dict(await request.form())
-    try:
-        day = int(form.get("day_of_week", 0))
-    except (TypeError, ValueError):
-        day = 0
-    pl = models.PlannedLoad(
-        shipper_name=(form.get("shipper_name") or "").strip(),
-        pickup_postcode=(form.get("pickup_postcode") or "").strip().upper(),
-        delivery_postcode=(form.get("delivery_postcode") or "").strip().upper(),
-        day_of_week=day,
-        recurrence=(form.get("recurrence") or "weekly").strip(),
-    )
-    db.add(pl)
-    db.commit()
-    db.refresh(pl)
-    from app.services.alert_stream import notify_route_match
-    from app.services.matching import planned_load_matches_route
-    for route in db.query(models.HaulierRoute).all():
-        if planned_load_matches_route(pl, route, db):
-            notify_route_match(pl, route, db)
-    return RedirectResponse(url="/", status_code=303)
-
-
-@router.post("/haulier-routes", response_class=RedirectResponse)
-async def create_haulier_route_form(
-    request: Request,
-    db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
-) -> RedirectResponse:
-    """Haulier: add a weekly/monthly empty leg. Matching runs automatically."""
-    form = dict(await request.form())
-    haulier_id = int(form.get("haulier_id"))
-    vehicle_id = int(form.get("vehicle_id"))
-    try:
-        day = int(form.get("day_of_week", 0))
-    except (TypeError, ValueError):
-        day = 0
-    route = models.HaulierRoute(
-        haulier_id=haulier_id,
-        vehicle_id=vehicle_id,
-        empty_at_postcode=(form.get("empty_at_postcode") or "").strip().upper(),
-        day_of_week=day,
-        recurrence=(form.get("recurrence") or "weekly").strip(),
-    )
-    db.add(route)
-    db.commit()
-    db.refresh(route)
-    from app.services.alert_stream import notify_route_match, notify_matching_loads_for_vehicle
-    from app.services.matching import planned_load_matches_route
-    for pl in db.query(models.PlannedLoad).all():
-        if planned_load_matches_route(pl, route, db):
-            notify_route_match(pl, route, db)
-    notify_matching_loads_for_vehicle(
-        route.vehicle_id, route.empty_at_postcode or "", route.haulier_id, db,
-        origin_label="planned route",
-    )
-    return RedirectResponse(url="/", status_code=303)
-
-
 @router.post("/delete-haulier/{haulier_id}", response_class=RedirectResponse)
 def delete_haulier_form(
     haulier_id: int,
@@ -1600,7 +1545,7 @@ def delete_vehicle_form(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    """Delete a vehicle (only if not used in jobs or planned routes). Admin or owning haulier."""
+    """Delete a vehicle (only if not used in jobs). Admin or owning haulier."""
     from app.auth import get_current_user_optional
 
     current_user = get_current_user_optional(request, db)
@@ -1617,9 +1562,10 @@ def delete_vehicle_form(
         return RedirectResponse(url="/?section=vehicles&delete_error=Not+authorized", status_code=303)
     if db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id == vehicle_id).first():
         return RedirectResponse(url="/?delete_error=Vehicle+has+jobs", status_code=303)
-    if db.query(models.HaulierRoute).filter(models.HaulierRoute.vehicle_id == vehicle_id).first():
-        return RedirectResponse(url="/?delete_error=Remove+from+planned+routes+first", status_code=303)
     try:
+        db.query(models.HaulierRoute).filter(models.HaulierRoute.vehicle_id == vehicle_id).delete(
+            synchronize_session=False
+        )
         _v_li = [
             r[0]
             for r in db.query(models.LoadInterest.id)

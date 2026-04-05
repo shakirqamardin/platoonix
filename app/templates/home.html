@@ -389,6 +389,7 @@
         {% set _sec = 'find' if (current_user and current_user.role not in ['haulier', 'loader'] and _sec == 'my-team') else _sec %}
         {# Drivers: Find Backhaul + Matches only (office login handles the rest) #}
         {% set _sec = 'find' if (current_user and current_user.role == 'driver' and _sec not in ['find', 'matches']) else _sec %}
+        {% set _sec = 'find' if _sec == 'routes' else _sec %}
         {% set initial_section = 'find' if (_sec == 'company' and not haulier_profile and not loader_profile) else _sec %}
         {% set _pub = public_app_base_url|default('https://web-production-7ca42.up.railway.app') %}
 
@@ -468,14 +469,6 @@
                     <div class="flex items-center justify-center gap-2">
                         <span>📦</span>
                         <span>Loads</span>
-                    </div>
-                </label>
-                
-                <label class="section-tab flex flex-1 min-w-[120px] min-h-[44px] px-4 py-3 text-sm font-semibold rounded-xl items-center justify-center cursor-pointer transition-all {{ 'active' if initial_section == 'routes' else 'text-slate-300 hover:bg-slate-800/50' }}">
-                    <input type="radio" name="section" class="hidden" value="routes" {{ 'checked' if initial_section == 'routes' else '' }} />
-                    <div class="flex items-center justify-center gap-2">
-                        <span>🗺️</span>
-                        <span>Routes</span>
                     </div>
                 </label>
                 {% endif %}
@@ -1466,7 +1459,7 @@
                     Load Management
                 </h2>
                 
-                <p class="text-slate-300 text-sm mb-6">Add loads with routes and capacity. Matching runs automatically and only <strong>suitable vehicles</strong> appear in Matches.</p>
+                <p class="text-slate-300 text-sm mb-6">Add loads with pickup, delivery and capacity. Matching runs automatically and only <strong>suitable vehicles</strong> appear in Matches.</p>
                 
                 <!-- Add Load Form -->
                 <div class="glass-card rounded-xl p-5 mb-6 border border-teal-500/10">
@@ -1583,7 +1576,7 @@
                                 <input id="load-budget-gbp" name="budget_gbp" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" class="flex-1 min-w-[10rem] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                             </div>
                             <p class="text-xs text-slate-500 mt-2">
-                                <span class="text-slate-400">Note: £{{ "%.2f"|format(loader_flat_fee_gbp|default(5)) }} booking fee applies.</span>
+                                <span class="text-slate-400">Note: Booking fee is £{{ "%.0f"|format(loader_flat_fee_gbp|default(5)) }} minimum or {{ "%.0f"|format(loader_fee_percent_of_load|default(2)) }}% of your budget, whichever is greater.</span>
                                 <a href="/pricing" class="text-teal-400 hover:text-teal-300 ml-1 underline-offset-2 hover:underline">View full pricing</a>
                             </p>
                             <p class="text-xs text-slate-500 mt-1">Guidance above is optional. Enter what you are willing to pay; road miles use the same routing as Find Backhaul where configured.</p>
@@ -1936,110 +1929,6 @@
                     <p class="text-slate-500 text-sm">Add a load above or bulk upload to get started</p>
                 </div>
                 {% endif %}
-            </div>
-        </section>
-
-        <!-- Routes Section -->
-        <section class="section-panel {{ 'active' if initial_section == 'routes' else '' }}" data-section="routes">
-            <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s">
-                <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
-                    Recurring Routes
-                </h2>
-                
-                <p class="text-slate-300 text-sm mb-6">
-                    <strong class="text-teal-400">Haulier:</strong> Where I'm empty • 
-                    <strong class="text-teal-400">Loader:</strong> Recurring loads
-                </p>
-                
-                <div class="grid md:grid-cols-2 gap-6">
-                    <!-- Haulier Routes -->
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-200 mb-4">🚛 Haulier Routes</h3>
-                        <form method="post" action="/haulier-routes" class="glass-card rounded-xl p-4 mb-4 border border-teal-500/10">
-                            <div class="space-y-3">
-                                <select name="haulier_id" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
-                                    {% for h in hauliers %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}
-                                    <option value="" disabled>Select company...</option>
-                                </select>
-                                <select name="vehicle_id" required class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
-                                    {% for v in vehicles %}<option value="{{ v.id }}">{{ v.registration }}</option>{% endfor %}
-                                    <option value="" disabled>Select vehicle...</option>
-                                </select>
-                                <input name="empty_at_postcode" required placeholder="Empty at postcode" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm uppercase" />
-                                <select name="day_of_week" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
-                                    {% for d in range(7) %}<option value="{{ d }}">{{ ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][d] }}</option>{% endfor %}
-                                </select>
-                                <button type="submit" class="btn-primary w-full px-4 py-2 text-sm font-semibold text-white rounded-lg">Add Route</button>
-                            </div>
-                        </form>
-                        
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="border-b border-slate-700">
-                                        <th class="py-2 px-3 text-left text-slate-400 font-semibold">Vehicle</th>
-                                        <th class="py-2 px-3 text-left text-slate-400 font-semibold">Postcode</th>
-                                        <th class="py-2 px-3 text-left text-slate-400 font-semibold">Day</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for r in haulier_routes %}
-                                    <tr class="border-b border-slate-800/50">
-                                        <td class="py-2 px-3">{{ r.vehicle_id }}</td>
-                                        <td class="py-2 px-3 font-mono text-teal-300">{{ r.empty_at_postcode }}</td>
-                                        <td class="py-2 px-3">
-                                            <span class="badge badge-success">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][r.day_of_week] }}</span>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    
-                    <!-- Planned Loads -->
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-200 mb-4">📦 Planned Loads</h3>
-                        <form method="post" action="/planned-loads" class="glass-card rounded-xl p-4 mb-4 border border-teal-500/10">
-                            <div class="space-y-3">
-                                <input name="shipper_name" required placeholder="Shipper name" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
-                                <input name="pickup_postcode" required placeholder="Pickup postcode" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm uppercase" />
-                                <input name="delivery_postcode" required placeholder="Delivery postcode" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm uppercase" />
-                                <select name="day_of_week" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
-                                    {% for d in range(7) %}<option value="{{ d }}">{{ ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][d] }}</option>{% endfor %}
-                                </select>
-                                <button type="submit" class="btn-primary w-full px-4 py-2 text-sm font-semibold text-white rounded-lg">Add Planned Load</button>
-                            </div>
-                        </form>
-                        
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="border-b border-slate-700">
-                                        <th class="py-2 px-3 text-left text-slate-400 font-semibold">Shipper</th>
-                                        <th class="py-2 px-3 text-left text-slate-400 font-semibold">Route</th>
-                                        <th class="py-2 px-3 text-left text-slate-400 font-semibold">Day</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for pl in planned_loads %}
-                                    <tr class="border-b border-slate-800/50">
-                                        <td class="py-2 px-3">{{ pl.shipper_name }}</td>
-                                        <td class="py-2 px-3">
-                                            <span class="font-mono text-teal-300">{{ pl.pickup_postcode }}</span>
-                                            <span class="text-slate-500 mx-1">→</span>
-                                            <span class="font-mono text-slate-300">{{ pl.delivery_postcode }}</span>
-                                        </td>
-                                        <td class="py-2 px-3">
-                                            <span class="badge badge-success">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][pl.day_of_week] }}</span>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
             </div>
         </section>
         {% endif %}

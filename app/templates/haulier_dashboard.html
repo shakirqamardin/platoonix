@@ -100,27 +100,6 @@
     {% endif %}
   </section>
 
-      <!-- Planned routes -->
-      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 mb-4">
-        <h2 class="text-lg font-semibold mb-1">Planned routes (empty legs)</h2>
-        <p class="text-slate-500 text-sm mb-3">Where you’re empty each week — we’ll match you to loads nearby.</p>
-        <form method="post" action="/haulier/routes" class="flex flex-wrap gap-2 mb-3">
-          <select name="vehicle_id" required class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">{% for v in vehicles %}<option value="{{ v.id }}">{{ v.registration }}</option>{% endfor %}<option value="" disabled>Vehicle</option></select>
-          <input name="empty_at_postcode" required placeholder="Postcode" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white w-28 min-h-[2.5rem] placeholder-slate-500" />
-          <select name="day_of_week" class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white min-h-[2.5rem]">{% for d in range(7) %}<option value="{{ d }}">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d] }}</option>{% endfor %}</select>
-          <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium min-h-[2.5rem]">Add route</button>
-        </form>
-        <div class="overflow-x-auto -mx-1">
-          <table class="w-full text-sm border-collapse min-w-[14rem]">
-            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Vehicle</th><th class="py-2 pr-2">Postcode</th><th class="py-2 pr-2">Day</th><th class="py-2 w-14"></th></tr></thead>
-            <tbody>
-              {% for r in routes %}<tr class="border-b border-slate-800"><td class="py-2 pr-2">{{ r.vehicle_id }}</td><td class="py-2 pr-2">{{ r.empty_at_postcode }}</td><td class="py-2 pr-2">{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][r.day_of_week] }}</td><td class="py-2"><form method="post" action="/haulier/delete-route/{{ r.id }}" class="inline" onsubmit="return confirm('Remove this route?');"><button type="submit" class="text-red-400 hover:text-red-300 text-sm py-1 min-h-[2rem]">Remove</button></form></td></tr>{% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% if not routes %}<p class="text-slate-500 text-sm py-2">No planned routes yet.</p>{% endif %}
-      </section>
-
       <!-- Jobs / payouts -->
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
         <h2 class="text-lg font-semibold mb-1">Backhaul jobs</h2>

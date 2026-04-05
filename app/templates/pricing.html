@@ -24,15 +24,50 @@
           <h2 class="text-xs font-semibold uppercase tracking-wider text-teal-400 mb-4 pb-3 border-b border-slate-700">For loaders</h2>
           <ol class="list-decimal pl-5 space-y-2 text-slate-300">
             <li>You set your budget for the load</li>
-            <li>We charge a £{{ "%.2f"|format(loader_booking_fee_gbp) }} booking fee</li>
+            <li>
+              We charge a <strong class="text-slate-200">booking fee</strong>:
+              <ul class="list-disc pl-5 mt-2 space-y-1 text-slate-400">
+                <li>£{{ "%.2f"|format(loader_min_fee_gbp) }} minimum, <span class="text-slate-500">or</span></li>
+                <li>{{ "%.0f"|format(loader_fee_percent_of_load) }}% of load budget <span class="text-slate-500">(whichever is greater)</span></li>
+              </ul>
+            </li>
             <li>Payment held securely until delivery</li>
           </ol>
-          <div class="mt-5 rounded-lg border border-slate-600/60 bg-slate-950/60 px-4 py-4 font-mono text-xs sm:text-sm text-slate-300 space-y-1">
-            <p>Example:</p>
-            <p>Load budget: £{{ "%.0f"|format(example_load_gbp) }}</p>
-            <p>Booking fee: £{{ "%.2f"|format(loader_booking_fee_gbp) }}</p>
-            <hr class="border-slate-700 my-3" />
-            <p class="text-white font-semibold">Total you pay: £{{ "%.2f"|format(example_load_gbp + loader_booking_fee_gbp) }}</p>
+
+          <div class="mt-5 space-y-4">
+            <div class="rounded-lg border border-slate-600/60 bg-slate-950/60 px-4 py-4 font-mono text-xs sm:text-sm text-slate-300 space-y-1">
+              <p class="text-slate-400 font-sans text-xs font-semibold uppercase tracking-wide">Example 1 (small load)</p>
+              <p>Load budget: £{{ "%.0f"|format(ex1_load_gbp) }}</p>
+              <p>
+                Booking fee: £{{ "%.0f"|format(ex1_booking_fee_gbp) }}
+                <span class="text-slate-500 font-sans">({{ "%.0f"|format(loader_fee_percent_of_load) }}% = £{{ "%.2f"|format(ex1_percent_of_load_gbp) }}, minimum £{{ "%.2f"|format(loader_min_fee_gbp) }} applies)</span>
+              </p>
+              <hr class="border-slate-700 my-3" />
+              <p class="text-white font-semibold">Total you pay: £{{ "%.2f"|format(ex1_total_gbp) }}</p>
+            </div>
+            <div class="rounded-lg border border-slate-600/60 bg-slate-950/60 px-4 py-4 font-mono text-xs sm:text-sm text-slate-300 space-y-1">
+              <p class="text-slate-400 font-sans text-xs font-semibold uppercase tracking-wide">Example 2 (large load)</p>
+              <p>Load budget: £{{ "%.0f"|format(ex2_load_gbp) }}</p>
+              <p>
+                Booking fee: £{{ "%.0f"|format(ex2_booking_fee_gbp) }}
+                <span class="text-slate-500 font-sans">({{ "%.0f"|format(loader_fee_percent_of_load) }}% of £{{ "%.0f"|format(ex2_load_gbp) }})</span>
+              </p>
+              <hr class="border-slate-700 my-3" />
+              <p class="text-white font-semibold">Total you pay: £{{ "%.2f"|format(ex2_total_gbp) }}</p>
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-lg border border-slate-600/50 bg-slate-950/40 px-4 py-4">
+            <h3 class="text-sm font-semibold text-teal-300 mb-2">Why hybrid pricing?</h3>
+            <p class="text-slate-400 text-sm mb-3">Our booking fee covers:</p>
+            <ul class="list-disc pl-5 space-y-1.5 text-slate-400 text-sm">
+              <li>Payment processing (Stripe fees ~{{ "%.0f"|format(loader_fee_percent_of_load) }}%)</li>
+              <li>Platform listing</li>
+              <li>Match notifications</li>
+            </ul>
+            <p class="text-slate-500 text-sm mt-3">
+              The minimum £{{ "%.2f"|format(loader_min_fee_gbp) }} keeps smaller loads viable for us to run. On larger loads, {{ "%.0f"|format(loader_fee_percent_of_load) }}% scales fairly.
+            </p>
           </div>
         </section>
 
@@ -45,11 +80,26 @@
           </ol>
           <div class="mt-5 rounded-lg border border-slate-600/60 bg-slate-950/60 px-4 py-4 font-mono text-xs sm:text-sm text-slate-300 space-y-1">
             <p>Example:</p>
-            <p>Load budget: £{{ "%.0f"|format(example_load_gbp) }}</p>
+            <p>Load budget: £{{ "%.0f"|format(example_haulier_load_gbp) }}</p>
             <p>Service fee: £{{ "%.2f"|format(example_service_fee_gbp) }} ({{ "%.0f"|format(platform_fee_percent) }}%)</p>
             <hr class="border-slate-700 my-3" />
             <p class="text-white font-semibold">You receive: £{{ "%.2f"|format(example_haulier_net_gbp) }}</p>
           </div>
+        </section>
+
+        <section class="rounded-xl border border-slate-700/80 bg-slate-900/50 p-5 sm:p-6">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-teal-400 mb-4 pb-3 border-b border-slate-700">Per load — platform revenue (illustrative)</h2>
+          <p class="text-slate-400 text-sm mb-3">On a £{{ "%.0f"|format(plat_example_load_gbp) }} load, collected fees might look like this:</p>
+          <div class="rounded-lg border border-slate-600/60 bg-slate-950/60 px-4 py-4 font-mono text-xs sm:text-sm text-slate-300 space-y-2">
+            <p>Loader pays (booking fee): £{{ "%.2f"|format(plat_loader_fee_gbp) }}</p>
+            <p>Haulier pays ({{ "%.0f"|format(platform_fee_percent) }}%): £{{ "%.2f"|format(plat_haulier_fee_gbp) }}</p>
+            <hr class="border-slate-700 my-2" />
+            <p class="text-white font-semibold">Platform total: £{{ "%.2f"|format(plat_total_revenue_gbp) }}</p>
+          </div>
+          <ul class="list-disc pl-5 space-y-1.5 text-slate-500 text-sm mt-4">
+            <li>Stripe and payment costs are largely covered by the loader-side fee.</li>
+            <li>The haulier service fee supports matching, verification, support, and running the platform.</li>
+          </ul>
         </section>
 
         <section class="rounded-xl border border-slate-700/80 bg-slate-900/50 p-5 sm:p-6">
