@@ -25,24 +25,76 @@ templates = Jinja2Templates(directory="app/templates")
 RESET_TOKEN_EXPIRY_HOURS = 1
 
 
+def _redirect_after_user_login(user: models.User) -> RedirectResponse:
+    if user.role == "admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=302)
+    if user.role == "haulier":
+        return RedirectResponse(url="/?section=find", status_code=302)
+    if user.role == "loader":
+        return RedirectResponse(url="/?section=find", status_code=302)
+    return RedirectResponse(url="/", status_code=302)
+
+
+def _login_error_response(
+    request: Request,
+    form_page: str,
+    message: str,
+    email: str,
+) -> HTMLResponse:
+    form_page = (form_page or "").strip().lower()
+    if form_page == "driver":
+        return templates.TemplateResponse(
+            "driver_login.html",
+            {"request": request, "error": message, "email": email, "csrf_token": ""},
+            status_code=200,
+        )
+    if form_page == "admin":
+        return templates.TemplateResponse(
+            "admin_login.html",
+            {"request": request, "error": message, "email": email, "csrf_token": ""},
+            status_code=200,
+        )
+    return templates.TemplateResponse(
+        "login.html",
+        {
+            "request": request,
+            "error": message,
+            "email": email,
+            "password_reset": None,
+            "logout": None,
+            "csrf_token": "",
+        },
+        status_code=200,
+    )
+
+
+@router.get("/admin/dashboard", response_class=RedirectResponse)
+def admin_dashboard_redirect() -> RedirectResponse:
+    """Canonical admin entry URL; main UI lives on home with admin section."""
+    return RedirectResponse(url="/?section=admin", status_code=302)
+
+
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     """Show login form. If already logged in, redirect to role dashboard."""
     driver = get_current_driver_optional(request, db)
     if driver:
-        return RedirectResponse(url="/?section=find", status_code=302)
+        return RedirectResponse(url="/driver", status_code=302)
     user = get_current_user_optional(request, db)
     if user:
-        if user.role == "haulier":
-            return RedirectResponse(url="/?section=find", status_code=302)
-        if user.role == "loader":
-            return RedirectResponse(url="/?section=find", status_code=302)
-        return RedirectResponse(url="/", status_code=302)
+        return _redirect_after_user_login(user)
     password_reset = request.query_params.get("password_reset")
     logout = request.query_params.get("logout")
     return templates.TemplateResponse(
         "login.html",
-        {"request": request, "error": None, "email": "", "password_reset": password_reset, "logout": logout},
+        {
+            "request": request,
+            "error": None,
+            "email": "",
+            "password_reset": password_reset,
+            "logout": logout,
+            "csrf_token": "",
+        },
     )
 
 
@@ -51,39 +103,31 @@ def driver_login_page(request: Request, db: Session = Depends(get_db)) -> HTMLRe
     """Show driver login form."""
     driver = get_current_driver_optional(request, db)
     if driver:
-        return RedirectResponse(url="/?section=find", status_code=302)
+        return RedirectResponse(url="/driver", status_code=302)
+    user = get_current_user_optional(request, db)
+    if user:
+        return _redirect_after_user_login(user)
     return templates.TemplateResponse(
         "driver_login.html",
-        {"request": request, "error": None, "email": ""},
+        {"request": request, "error": None, "email": "", "csrf_token": ""},
     )
 
 
-@router.post("/driver-login")
-async def driver_login_submit(
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    form = await request.form()
-    email = (form.get("email") or "").strip().lower()
-    password = form.get("password") or ""
-    if not email or not password:
-        return templates.TemplateResponse(
-            "driver_login.html",
-            {"request": request, "error": "Email and password required.", "email": email},
-            status_code=200,
-        )
-    driver = db.query(models.Driver).filter(models.Driver.email == email).first()
-    if not driver or not verify_password(password, driver.password_hash):
-        return templates.TemplateResponse(
-            "driver_login.html",
-            {"request": request, "error": "Invalid email or password.", "email": email},
-            status_code=200,
-        )
-    request.session.clear()
-    request.session["driver_id"] = driver.id
-    request.session["haulier_id"] = driver.haulier_id
-    request.session["role"] = "driver"
-    return RedirectResponse(url="/?section=find", status_code=302)
+@router.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    """Minimal admin login page."""
+    driver = get_current_driver_optional(request, db)
+    if driver:
+        return RedirectResponse(url="/driver", status_code=302)
+    user = get_current_user_optional(request, db)
+    if user and user.role == "admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=302)
+    if user:
+        return _redirect_after_user_login(user)
+    return templates.TemplateResponse(
+        "admin_login.html",
+        {"request": request, "error": None, "email": "", "csrf_token": ""},
+    )
 
 
 @router.post("/login")
@@ -91,31 +135,37 @@ async def login_submit(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """Unified login: User (loader/haulier/admin) or Driver; same endpoint for all login pages."""
     form = await request.form()
     email = (form.get("email") or "").strip().lower()
     password = form.get("password") or ""
+    form_page = (form.get("form_page") or "").strip().lower()
+
     if not email or not password:
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Email and password required.", "email": email},
-            status_code=200,
-        )
+        return _login_error_response(request, form_page, "Email and password required.", email)
+
     user = db.query(models.User).filter(models.User.email == email).first()
-    if not user or not verify_password(password, user.password_hash):
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Invalid email or password.", "email": email},
-            status_code=200,
-        )
-    request.session["user_id"] = user.id
-    request.session["role"] = user.role
-    # Go straight to the dashboard. Do not redirect via /haulier or /loader — those URLs
-    # only bounce to / and can cause ERR_TOO_MANY_REDIRECTS if session/caching misbehaves.
-    if user.role == "haulier":
-        return RedirectResponse(url="/?section=find", status_code=302)
-    if user.role == "loader":
-        return RedirectResponse(url="/?section=find", status_code=302)
-    return RedirectResponse(url="/", status_code=302)
+    if user:
+        if not verify_password(password, user.password_hash):
+            return _login_error_response(request, form_page, "Invalid email or password.", email)
+        if form_page == "admin" and user.role != "admin":
+            return _login_error_response(request, form_page, "Invalid email or password.", email)
+        request.session.clear()
+        request.session["user_id"] = user.id
+        request.session["role"] = user.role
+        return _redirect_after_user_login(user)
+
+    driver = db.query(models.Driver).filter(models.Driver.email == email).first()
+    if driver and verify_password(password, driver.password_hash):
+        if form_page == "admin":
+            return _login_error_response(request, form_page, "Invalid email or password.", email)
+        request.session.clear()
+        request.session["driver_id"] = driver.id
+        request.session["haulier_id"] = driver.haulier_id
+        request.session["role"] = "driver"
+        return RedirectResponse(url="/driver", status_code=302)
+
+    return _login_error_response(request, form_page, "Invalid email or password.", email)
 
 
 @router.post("/logout", response_class=RedirectResponse)
@@ -249,11 +299,10 @@ def register_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
     """Show registration form (haulier or loader). If logged in, redirect to dashboard."""
     user = get_current_user_optional(request, db)
     if user:
-        if user.role == "haulier":
-            return RedirectResponse(url="/?section=find", status_code=302)
-        if user.role == "loader":
-            return RedirectResponse(url="/?section=find", status_code=302)
-        return RedirectResponse(url="/", status_code=302)
+        return _redirect_after_user_login(user)
+    driver = get_current_driver_optional(request, db)
+    if driver:
+        return RedirectResponse(url="/driver", status_code=302)
     error = request.query_params.get("error")
     return templates.TemplateResponse(
         "register.html",
@@ -292,7 +341,6 @@ async def register_haulier_submit(
     )
     db.add(user)
     db.flush()
-    # Read id/role before commit(): after commit, instances expire; lazy refresh in async routes can raise MissingGreenlet.
     user_id, user_role = user.id, user.role
     db.commit()
     request.session["user_id"] = user_id

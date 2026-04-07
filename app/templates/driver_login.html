@@ -1,10 +1,10 @@
-{% extends "base_auth.html" %}
-{% block title %}Driver Log in – Platoonix{% endblock %}
+{% extends "base_driver_auth.html" %}
+{% block title %}Driver Login – Platoonix{% endblock %}
 {% block content %}
-    <h1 class="text-2xl font-display font-bold text-center mb-2 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
-        Driver Sign In
+    <h1 class="text-2xl font-display font-bold text-center mb-2 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+        Driver Login
     </h1>
-    <p class="text-slate-400 text-sm text-center mb-6">Use your driver account to access jobs and ePOD</p>
+    <p class="text-slate-400 text-sm text-center mb-6">For employed drivers working for haulier companies</p>
 
     {% if error %}
     <div class="glass-card rounded-xl px-4 py-3 mb-4 border-l-4 border-amber-500">
@@ -15,30 +15,38 @@
     </div>
     {% endif %}
 
-    <form method="post" action="/driver-login" class="space-y-5">
+    <form method="post" action="/login" class="space-y-5">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token or '' }}" />
+        <input type="hidden" name="form_page" value="driver" />
+
         <div>
             <label for="email" class="block text-sm font-medium text-slate-300 mb-2">Email</label>
             <input id="email" name="email" type="email" required autocomplete="email"
-                   class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+                   class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                    value="{{ email or '' }}" placeholder="driver@company.com" />
         </div>
 
         <div>
             <label for="password" class="block text-sm font-medium text-slate-300 mb-2">Password</label>
             <input id="password" name="password" type="password" required autocomplete="current-password"
-                   class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+                   class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                    placeholder="••••••••" />
         </div>
 
-        <button type="submit" class="btn-primary w-full px-4 py-3.5 text-white font-semibold rounded-lg shadow-lg">
-            Sign In as Driver
+        <div class="flex items-center gap-2">
+            <input id="remember" name="remember" type="checkbox" value="1" class="rounded border-slate-600 bg-slate-900 text-blue-500 focus:ring-blue-500/30" />
+            <label for="remember" class="text-sm text-slate-400">Remember me</label>
+        </div>
+
+        <button type="submit" class="btn-driver-primary w-full px-4 py-3.5 text-white font-semibold rounded-lg shadow-lg">
+            Login
         </button>
     </form>
 
-    <div class="mt-6 text-center">
-        <p class="text-slate-500 text-sm">
-            Company account?
-            <a href="/login" class="text-teal-400 hover:text-teal-300 font-medium transition-colors">Use standard login</a>
-        </p>
+    <p class="text-slate-500 text-xs text-center mt-4">Haulier companies log in at <a href="/login" class="text-blue-400 hover:text-blue-300 font-medium">/login</a></p>
+
+    <div class="mt-8 text-center border-t border-slate-700/80 pt-6">
+        <p class="text-slate-400 text-sm">New driver? Your employer must add you first.</p>
+        <p class="text-slate-500 text-sm mt-1">Contact your haulier company for access.</p>
     </div>
 {% endblock %}

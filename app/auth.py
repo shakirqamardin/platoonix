@@ -110,7 +110,7 @@ def require_admin(request: Request, db: Session) -> Optional[RedirectResponse]:
     """If not admin, redirect to role dashboard or login. Returns None if admin."""
     user = get_current_user_optional(request, db)
     if user is None:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/admin/login", status_code=302)
     if user.role != "admin":
         if user.role == "haulier":
             return RedirectResponse(url="/?section=find", status_code=302)
@@ -155,5 +155,5 @@ def get_current_admin(
     user_id = get_session_user_id(request)
     user = db.get(models.User, user_id)
     if not user:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/admin/login", status_code=302)
     return user

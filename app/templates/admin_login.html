@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Login – Platoonix</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <style>body { font-family: 'DM Sans', sans-serif; }</style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-8 shadow-xl">
+            <h1 class="text-xl font-semibold text-white text-center mb-6">Platform Admin</h1>
+
+            {% if error %}
+            <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 mb-4 text-sm text-amber-200">{{ error }}</div>
+            {% endif %}
+
+            <form method="post" action="/login" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token or '' }}" />
+                <input type="hidden" name="form_page" value="admin" />
+
+                <div>
+                    <label for="email" class="block text-sm font-medium text-slate-400 mb-1.5">Email</label>
+                    <input id="email" name="email" type="email" required autocomplete="username"
+                           class="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2.5 text-white placeholder-slate-500 focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+                           value="{{ email or '' }}" />
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-slate-400 mb-1.5">Password</label>
+                    <input id="password" name="password" type="password" required autocomplete="current-password"
+                           class="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2.5 text-white placeholder-slate-500 focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+                           placeholder="••••••••" />
+                </div>
+                <button type="submit" class="w-full rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
+                    Login
+                </button>
+            </form>
+        </div>
+        <p class="text-center text-xs text-slate-600 mt-8">Platoonix Admin Portal</p>
+        <div class="mt-6 flex flex-wrap justify-center gap-x-2 gap-y-1 text-xs text-slate-500">
+            <a href="/login" class="hover:text-slate-400">Loader/Haulier Login</a>
+            <span class="text-slate-700">|</span>
+            <a href="/driver-login" class="hover:text-slate-400">Driver Login</a>
+            <span class="text-slate-700">|</span>
+            <a href="/admin/login" class="text-slate-600">Admin</a>
+        </div>
+    </div>
+</body>
+</html>
