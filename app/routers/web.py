@@ -509,9 +509,8 @@ def home(
     request: Request,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
-    login_redir = _require_user_or_driver_or_login(request, db)
-    if login_redir is not None:
-        return login_redir
+    if get_current_user_optional(request, db) is None and get_current_driver_optional(request, db) is None:
+        return templates.TemplateResponse("index.html", {"request": request})
     current_user = get_current_user_optional(request, db)
     driver_actor: Optional[models.Driver] = None
     if current_user is None:
