@@ -137,6 +137,15 @@ def privacy_page(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/api-docs", response_class=HTMLResponse)
+def api_docs_page(request: Request) -> HTMLResponse:
+    """Public API documentation. No login required."""
+    return templates.TemplateResponse(
+        "api_docs.html",
+        {"request": request},
+    )
+
+
 @router.get("/pricing", response_class=HTMLResponse)
 def pricing_page(request: Request) -> HTMLResponse:
     """Public pricing and fees explanation. No login required."""

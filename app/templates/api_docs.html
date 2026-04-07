@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>API Documentation – Platoonix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css" />
+    <style>
+      .hljs { background: rgb(15 23 42 / 0.95) !important; border-radius: 0.5rem; }
+      pre code.hljs { padding: 1rem; font-size: 0.8125rem; }
+      @media (min-width: 640px) { pre code.hljs { font-size: 0.875rem; } }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-100 bg-slate-950">
+    <div class="max-w-3xl mx-auto px-4 py-8">
+      <header class="mb-6">
+        <a href="/" class="inline-flex items-center gap-2 text-slate-400 hover:text-white no-underline mb-4">
+          <img src="/static/logo.png" alt="Platoonix" class="h-8 w-auto" />
+          <span class="font-semibold">Platoonix</span>
+        </a>
+        <nav class="text-sm text-slate-500 mb-4" aria-label="Breadcrumb">
+          <a href="/" class="text-teal-400 hover:underline">Home</a>
+          <span class="text-slate-600 mx-1.5" aria-hidden="true">/</span>
+          <span class="text-slate-300">API Documentation</span>
+        </nav>
+        <h1 class="text-2xl font-semibold text-white">API Documentation</h1>
+      </header>
+
+      <div class="prose prose-invert prose-slate max-w-none text-slate-300 space-y-6">
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+        <p class="text-slate-200 text-base font-medium not-prose">API DOCUMENTATION</p>
+        <p>Platoonix API allows you to post and manage loads programmatically. Perfect for integrating with your Transport Management System (TMS) or automating bulk operations.</p>
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2 not-prose">GETTING STARTED</h2>
+          <p class="font-semibold text-white not-prose">Step 1: Generate API Key</p>
+          <ul class="list-disc pl-6 space-y-1 mt-2">
+            <li>Log in to your dashboard</li>
+            <li>Navigate to Settings → API Keys</li>
+            <li>Click "Generate New Key"</li>
+            <li>Copy and save your key securely (you won't see it again!)</li>
+          </ul>
+          <p class="font-semibold text-white mt-4 not-prose">Step 2: Authentication</p>
+          <p>Include your API key in all requests:</p>
+          <p class="text-slate-400 font-mono text-sm not-prose">Header: Authorization: Bearer YOUR_API_KEY</p>
+          <p class="text-slate-400 font-mono text-sm not-prose">Content-Type: application/json</p>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2 not-prose">API ENDPOINTS</h2>
+          <p class="font-mono text-teal-300/95 text-sm not-prose">Base URL: https://platoonix.co.uk/api/v1</p>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">POST /api/v1/loads</h2>
+          <p>Create a new load</p>
+          <p class="font-semibold text-slate-200 mt-3 not-prose">Request body:</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "pickup_postcode": "M1 1AD",
+  "delivery_postcode": "LS1 1UR",
+  "budget_gbp": 300,
+  "vehicle_type": "artic",
+  "trailer_type": "curtain",
+  "pallets": 10,
+  "cubic_metres": 12,
+  "pickup_window_start": "2026-04-08T09:00:00Z",
+  "pickup_window_end": "2026-04-08T17:00:00Z",
+  "delivery_window_start": "2026-04-09T09:00:00Z",
+  "delivery_window_end": "2026-04-09T17:00:00Z",
+  "notes": "Fragile items, handle with care"
+}</code></pre>
+          <p><strong>Required fields:</strong> pickup_postcode, delivery_postcode, budget_gbp, vehicle_type</p>
+          <p><strong>Optional fields:</strong> All others</p>
+          <p class="font-semibold text-slate-200 mt-3 not-prose">Response (201 Created):</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "id": 123,
+  "status": "active",
+  "pickup_postcode": "M1 1AD",
+  "delivery_postcode": "LS1 1UR",
+  "budget_gbp": 300,
+  "platform_fee_gbp": 6.00,
+  "created_at": "2026-04-07T14:30:00Z"
+}</code></pre>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">GET /api/v1/loads</h2>
+          <p>List your loads</p>
+          <p class="font-semibold text-slate-200 mt-3 not-prose">Query parameters (all optional):</p>
+          <ul class="list-disc pl-6 space-y-1">
+            <li>status: active, matched, completed, cancelled</li>
+            <li>limit: Number of results (default: 50, max: 100)</li>
+            <li>offset: For pagination</li>
+          </ul>
+          <p class="font-mono text-sm text-teal-300/90 mt-2 not-prose">Example: GET /api/v1/loads?status=active&amp;limit=20</p>
+          <p class="font-semibold text-slate-200 mt-3 not-prose">Response (200 OK):</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "loads": [
+    {
+      "id": 123,
+      "pickup_postcode": "M1 1AD",
+      "delivery_postcode": "LS1 1UR",
+      "budget_gbp": 300,
+      "status": "active",
+      "created_at": "2026-04-07T14:30:00Z"
+    }
+  ],
+  "total": 45,
+  "limit": 20,
+  "offset": 0
+}</code></pre>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">GET /api/v1/loads/{id}</h2>
+          <p>Get single load details</p>
+          <p class="font-semibold text-slate-200 mt-3 not-prose">Response (200 OK):</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "id": 123,
+  "pickup_postcode": "M1 1AD",
+  "delivery_postcode": "LS1 1UR",
+  "budget_gbp": 300,
+  "platform_fee_gbp": 6.00,
+  "vehicle_type": "artic",
+  "trailer_type": "curtain",
+  "status": "active",
+  "created_at": "2026-04-07T14:30:00Z",
+  "matched_at": null,
+  "completed_at": null
+}</code></pre>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">PUT /api/v1/loads/{id}</h2>
+          <p>Update load details (only for active loads)</p>
+          <p class="font-semibold text-slate-200 mt-3 not-prose">Request body: Same as POST (all fields optional)</p>
+          <p class="font-semibold text-slate-200 mt-3 not-prose">Response (200 OK):</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "id": 123,
+  "status": "active",
+  "updated_at": "2026-04-07T15:30:00Z"
+}</code></pre>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">DELETE /api/v1/loads/{id}</h2>
+          <p>Cancel load (only for active or matched loads)</p>
+          <p class="font-semibold text-slate-200 mt-3 not-prose">Response (200 OK):</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "id": 123,
+  "status": "cancelled",
+  "cancelled_at": "2026-04-07T16:00:00Z"
+}</code></pre>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">ERROR RESPONSES</h2>
+          <p class="font-semibold text-slate-200 not-prose">400 Bad Request - Invalid parameters</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "error": "validation_error",
+  "message": "Invalid postcode format",
+  "field": "pickup_postcode"
+}</code></pre>
+          <p class="font-semibold text-slate-200 mt-4 not-prose">401 Unauthorized - Invalid or missing API key</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "error": "unauthorized",
+  "message": "Invalid API key"
+}</code></pre>
+          <p class="font-semibold text-slate-200 mt-4 not-prose">404 Not Found - Load doesn't exist</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "error": "not_found",
+  "message": "Load not found"
+}</code></pre>
+          <p class="font-semibold text-slate-200 mt-4 not-prose">429 Too Many Requests - Rate limit exceeded</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-json">{
+  "error": "rate_limit_exceeded",
+  "message": "Rate limit exceeded. Try again in 60 seconds."
+}</code></pre>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">RATE LIMITS</h2>
+          <p>Standard rate limit: 100 requests per hour per API key</p>
+          <p>Need higher limits? Contact us about our Enterprise API plan.</p>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">PRICING</h2>
+          <p>API access is included at no additional cost!</p>
+          <p>Standard platform fees apply:</p>
+          <ul class="list-disc pl-6 space-y-1">
+            <li>Loader: £5 minimum OR 2% of budget (whichever greater)</li>
+            <li>Haulier: 8% platform fee</li>
+          </ul>
+          <p>Same pricing whether you use web, CSV, or API.</p>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">CODE EXAMPLES</h2>
+          <p class="font-semibold text-slate-200 not-prose">Python:</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-python">import requests
+
+headers = {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+}
+
+# Create load
+data = {
+    'pickup_postcode': 'M1 1AD',
+    'delivery_postcode': 'LS1 1UR',
+    'budget_gbp': 300,
+    'vehicle_type': 'artic'
+}
+
+response = requests.post(
+    'https://platoonix.co.uk/api/v1/loads',
+    headers=headers,
+    json=data
+)
+
+print(response.json())</code></pre>
+          <p class="font-semibold text-slate-200 mt-4 not-prose">JavaScript/Node.js:</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-javascript">const axios = require('axios');
+
+const headers = {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+};
+
+// Create load
+const data = {
+    pickup_postcode: 'M1 1AD',
+    delivery_postcode: 'LS1 1UR',
+    budget_gbp: 300,
+    vehicle_type: 'artic'
+};
+
+axios.post('https://platoonix.co.uk/api/v1/loads', data, { headers })
+    .then(response => console.log(response.data))
+    .catch(error => console.error(error));</code></pre>
+          <p class="font-semibold text-slate-200 mt-4 not-prose">cURL:</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-bash">curl -X POST https://platoonix.co.uk/api/v1/loads \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pickup_postcode": "M1 1AD",
+    "delivery_postcode": "LS1 1UR",
+    "budget_gbp": 300,
+    "vehicle_type": "artic"
+  }'</code></pre>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
+        <section>
+          <h2 class="text-lg font-semibold text-white mt-2 mb-2 not-prose">SUPPORT</h2>
+          <p class="font-semibold text-slate-200 not-prose">Standard Support (Included):</p>
+          <ul class="list-disc pl-6 space-y-1">
+            <li>Email: api@platoonix.co.uk</li>
+            <li>Response time: 24-48 hours</li>
+            <li>Community forum access</li>
+          </ul>
+          <p class="mt-4">Need faster support, custom features, or higher rate limits?</p>
+          <p>Ask about our Enterprise API plan:</p>
+          <ul class="list-disc pl-6 space-y-1">
+            <li>Priority support (4-hour response)</li>
+            <li>Custom integration assistance</li>
+            <li>Webhooks and real-time notifications</li>
+            <li>Bulk operations (1000+ loads)</li>
+            <li>Dedicated account manager</li>
+          </ul>
+          <p class="mt-3">Contact: <a href="mailto:enterprise@platoonix.co.uk" class="text-teal-400 hover:underline">enterprise@platoonix.co.uk</a></p>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+      </div>
+
+      <p class="mt-10 flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm border-t border-slate-800 pt-8">
+        <a href="/terms" class="text-teal-400 hover:text-teal-300">Terms</a>
+        <span class="text-slate-600">•</span>
+        <a href="/privacy" class="text-teal-400 hover:text-teal-300">Privacy</a>
+        <span class="text-slate-600">•</span>
+        <a href="/pricing" class="text-teal-400 hover:text-teal-300">Pricing</a>
+        <span class="text-slate-600">•</span>
+        <a href="/api-docs" class="text-teal-400 hover:text-teal-300">API Docs</a>
+        <span class="text-slate-600">•</span>
+        <a href="/login" class="text-teal-400 hover:text-teal-300">Login</a>
+      </p>
+      <footer class="text-center text-sm text-slate-500 py-6">
+        <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mb-4 text-xs sm:text-sm">
+          <a href="/terms" class="hover:text-teal-400 transition-colors">Terms</a>
+          <span class="hidden sm:inline text-slate-600">•</span>
+          <a href="/privacy" class="hover:text-teal-400 transition-colors">Privacy</a>
+          <span class="hidden sm:inline text-slate-600">•</span>
+          <a href="/pricing" class="hover:text-teal-400 transition-colors">Pricing</a>
+          <span class="hidden sm:inline text-slate-600">•</span>
+          <a href="/api-docs" class="hover:text-teal-400 transition-colors">API Docs</a>
+          <span class="hidden sm:inline text-slate-600">•</span>
+          <a href="mailto:support@platoonix.co.uk" class="hover:text-teal-400 transition-colors">Contact</a>
+          <span class="hidden sm:inline text-slate-600">•</span>
+          <a href="/confidentiality" class="hover:text-teal-400 transition-colors">Confidentiality &amp; NDA</a>
+        </div>
+        <p>© 2026 Platoonix Ltd · Company No: 17133701</p>
+        <p class="mt-2">Email: support@platoonix.co.uk</p>
+      </footer>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        if (typeof hljs !== "undefined" && hljs.highlightAll) hljs.highlightAll();
+      });
+    </script>
+  </body>
+</html>
