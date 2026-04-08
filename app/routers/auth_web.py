@@ -4,7 +4,7 @@ Login, logout, forgot password, and post-login redirects.
 import secrets
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from app.auth import (
     _hash_reset_token,
 )
 from app.database import get_db
+from app.services.email_sender import schedule_registration_emails
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -313,6 +314,7 @@ def register_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
 @router.post("/register-haulier", response_class=RedirectResponse)
 async def register_haulier_submit(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Create Haulier + User (self-service)."""
@@ -345,12 +347,26 @@ async def register_haulier_submit(
     db.commit()
     request.session["user_id"] = user_id
     request.session["role"] = user_role
+    base_url = str(request.base_url).rstrip("/")
+    schedule_registration_emails(
+        background_tasks,
+        user_email=email,
+        user_name=name,
+        user_type="haulier",
+        company_name=name,
+        dashboard_link=f"{base_url}/?section=find",
+        tutorial_link=f"{base_url}/?section=find",
+        vehicle_setup_link=f"{base_url}/?section=vehicles",
+        admin_panel_link=f"{base_url}/admin/dashboard",
+        registered_at_iso=datetime.now(timezone.utc).isoformat(),
+    )
     return RedirectResponse(url="/?section=find", status_code=303)
 
 
 @router.post("/register-loader", response_class=RedirectResponse)
 async def register_loader_submit(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Create Loader + User (self-service)."""
@@ -383,6 +399,19 @@ async def register_loader_submit(
     db.commit()
     request.session["user_id"] = user_id
     request.session["role"] = user_role
+    base_url = str(request.base_url).rstrip("/")
+    schedule_registration_emails(
+        background_tasks,
+        user_email=email,
+        user_name=name,
+        user_type="loader",
+        company_name=name,
+        dashboard_link=f"{base_url}/?section=find",
+        tutorial_link=f"{base_url}/?section=loads",
+        vehicle_setup_link=f"{base_url}/?section=vehicles",
+        admin_panel_link=f"{base_url}/admin/dashboard",
+        registered_at_iso=datetime.now(timezone.utc).isoformat(),
+    )
     return RedirectResponse(url="/?section=find", status_code=303)
 
 

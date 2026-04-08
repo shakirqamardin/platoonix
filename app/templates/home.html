@@ -690,6 +690,31 @@
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
                     Find Available Loads
                 </h2>
+                {% if onboarding_checklist and onboarding_checklist.show and current_user and current_user.role in ['haulier', 'loader'] %}
+                <div class="rounded-xl border border-teal-500/25 bg-teal-950/20 px-4 py-4 mb-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                        <p class="text-sm text-slate-200 font-semibold">Onboarding checklist</p>
+                        <p class="text-xs text-slate-400">{{ onboarding_checklist.completed }}/{{ onboarding_checklist.total }} complete</p>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden mb-3">
+                        <div class="h-full bg-gradient-to-r from-teal-500 to-cyan-500" style="width: {{ onboarding_checklist.progress_percent }}%;"></div>
+                    </div>
+                    <ul class="space-y-2 mb-3">
+                        {% for step in onboarding_checklist.steps %}
+                        <li class="flex items-center justify-between gap-3 text-sm">
+                            <div class="flex items-center gap-2">
+                                <span class="{% if step.done %}text-emerald-400{% else %}text-slate-500{% endif %}">{% if step.done %}☑{% else %}☐{% endif %}</span>
+                                <span class="{% if step.done %}text-slate-300{% else %}text-slate-400{% endif %}">{{ step.label }}</span>
+                            </div>
+                            <a href="{{ step.href }}" class="text-xs text-teal-400 hover:text-teal-300 hover:underline">Open</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <a href="{{ onboarding_checklist.help_href }}" class="inline-flex items-center rounded-lg border border-teal-500/40 px-3 py-2 text-xs font-semibold text-teal-300 hover:bg-teal-900/30">
+                        Get Help
+                    </a>
+                </div>
+                {% endif %}
                 {% if shared_load_id is defined and shared_load_id %}
                 <div class="rounded-xl border border-teal-500/30 bg-teal-950/25 px-4 py-3 mb-4 text-sm text-teal-100/95">
                     <strong class="text-teal-300">Shared load link:</strong> load #{{ shared_load_id }}. Select your vehicle and postcodes, then <strong class="text-white">Find Loads</strong> — if this load is still open and matches, it will appear in the results below.

@@ -203,3 +203,92 @@ def email_haulier_job_created(job: "models.BackhaulJob", db: Session) -> bool:
         f"Log in to Platoonix to view job details and start tracking.\n"
     )
     return send_email(user.email, subject, body)
+
+
+def _run_registration_emails(
+    user_email: str,
+    user_name: str,
+    user_type: str,
+    company_name: str,
+    dashboard_link: str,
+    tutorial_link: str,
+    vehicle_setup_link: str,
+    admin_panel_link: str,
+    registered_at_iso: str,
+) -> None:
+    """Background task: send user welcome + admin registration notification."""
+    role = (user_type or "").strip().lower()
+    safe_name = (user_name or "there").strip() or "there"
+    safe_company = (company_name or "").strip() or "N/A"
+    safe_dashboard = (dashboard_link or "").strip()
+    safe_tutorial = (tutorial_link or "").strip()
+    safe_vehicle_setup = (vehicle_setup_link or "").strip()
+    safe_admin_panel = (admin_panel_link or "").strip()
+    safe_timestamp = (registered_at_iso or "").strip() or "N/A"
+
+    if role == "loader":
+        subject = "Welcome to Platoonix! Let's post your first load"
+        body = (
+            f"Hi {safe_name},\n\n"
+            "Welcome to Platoonix.\n\n"
+            "Get started:\n"
+            f"- Dashboard: {safe_dashboard}\n"
+            f"- First-load tutorial: {safe_tutorial}\n"
+            "- Support: support@platoonix.co.uk\n\n"
+            "Need help posting your first load? Reply to this email and our team will help.\n"
+        )
+        send_email(user_email, subject, body)
+    elif role == "haulier":
+        subject = "Welcome to Platoonix! Find your first backhaul"
+        body = (
+            f"Hi {safe_name},\n\n"
+            "Welcome to Platoonix.\n\n"
+            "Get started:\n"
+            f"- Dashboard: {safe_dashboard}\n"
+            f"- Vehicle setup: {safe_vehicle_setup}\n"
+            "- Support: support@platoonix.co.uk\n\n"
+            "Once your vehicle is set up, head to Find Backhaul to start matching loads.\n"
+        )
+        send_email(user_email, subject, body)
+
+    admin_subject = f"New User Registration - {role.title() if role else 'Unknown'}"
+    admin_body = (
+        "A new user has registered on Platoonix.\n\n"
+        f"Name: {safe_name}\n"
+        f"Email: {user_email}\n"
+        f"Type: {role or 'unknown'}\n"
+        f"Company: {safe_company}\n"
+        f"Timestamp (UTC): {safe_timestamp}\n\n"
+        f"Admin panel: {safe_admin_panel}\n"
+    )
+    send_email("platoonixltd@gmail.com", admin_subject, admin_body)
+
+
+def schedule_registration_emails(
+    background_tasks: BackgroundTasks,
+    *,
+    user_email: str,
+    user_name: str,
+    user_type: str,
+    company_name: str,
+    dashboard_link: str,
+    tutorial_link: str,
+    vehicle_setup_link: str,
+    admin_panel_link: str,
+    registered_at_iso: str,
+) -> None:
+    """Queue welcome + admin registration emails (non-blocking)."""
+    if not (user_email or "").strip():
+        return
+    background_tasks.add_task(
+        _run_registration_emails,
+        user_email,
+        user_name,
+        user_type,
+        company_name,
+        dashboard_link,
+        tutorial_link,
+        vehicle_setup_link,
+        admin_panel_link,
+        registered_at_iso,
+    )

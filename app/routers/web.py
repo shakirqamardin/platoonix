@@ -469,6 +469,53 @@ def _vehicle_availability_map(vehicles: list) -> dict:
     return {v.id: vehicle_availability_svc.availability_ui(v, t) for v in vehicles}
 
 
+def _build_onboarding_checklist(
+    current_user,
+    haulier_profile,
+    loader_profile,
+    vehicles: list,
+    loads: list,
+) -> Optional[dict]:
+    """Return onboarding progress for new hauliers/loaders."""
+    if not current_user:
+        return None
+    role = (getattr(current_user, "role", None) or "").strip().lower()
+    if role not in {"haulier", "loader"}:
+        return None
+
+    if role == "haulier":
+        company_done = bool(haulier_profile and (haulier_profile.name or "").strip() and (haulier_profile.contact_email or "").strip())
+        vehicle_done = bool(vehicles)
+        search_done = bool(getattr(current_user, "haulier_id", None) and any(getattr(l, "status", "") == models.LoadStatusEnum.OPEN.value for l in loads))
+        steps = [
+            {"label": "Complete company profile", "done": company_done, "href": "/?section=company"},
+            {"label": "Add your first vehicle", "done": vehicle_done, "href": "/?section=vehicles"},
+            {"label": "Find your first backhaul", "done": search_done, "href": "/?section=find"},
+        ]
+    else:
+        company_done = bool(loader_profile and (loader_profile.name or "").strip() and (loader_profile.contact_email or "").strip())
+        posted_done = bool(loads)
+        payments_done = bool(loader_profile and (loader_profile.stripe_customer_id or "").strip())
+        steps = [
+            {"label": "Complete company profile", "done": company_done, "href": "/?section=company"},
+            {"label": "Post your first load", "done": posted_done, "href": "/?section=loads"},
+            {"label": "Add payment setup", "done": payments_done, "href": "/?section=company"},
+        ]
+
+    completed = sum(1 for s in steps if s["done"])
+    total = len(steps)
+    progress_percent = int(round((completed / total) * 100)) if total else 0
+    return {
+        "role": role,
+        "steps": steps,
+        "completed": completed,
+        "total": total,
+        "progress_percent": progress_percent,
+        "show": completed < total,
+        "help_href": "mailto:support@platoonix.co.uk",
+    }
+
+
 def _haulier_scoped_lists(
     db: Session, haulier: models.Haulier, driver_actor: Optional[models.Driver] = None
 ) -> dict:
@@ -658,6 +705,7 @@ def home(
     except ValueError:
         shared_load_id = None
     _pub_base = get_settings().public_app_base_url
+    onboarding_checklist = _build_onboarding_checklist(current_user, haulier_profile, loader_profile, vehicles, loads)
     return templates.TemplateResponse(
         "home.html",
         {
@@ -713,6 +761,7 @@ def home(
             "haulier_pending_backhaul_approvals": [],
             "approval_confirmation": None,
             "find_backhaul_msg": None,
+            "onboarding_checklist": onboarding_checklist,
             **rating_ctx,
         },
     )
@@ -1203,6 +1252,7 @@ def find_backhaul_page(
         shared_load_id = None
     _pub_base = get_settings().public_app_base_url
     find_backhaul_msg = (request.query_params.get("msg") or "").strip() or None
+    onboarding_checklist = _build_onboarding_checklist(current_user, haulier_profile, loader_profile, vehicles, loads)
 
     return templates.TemplateResponse(
         "home.html",
@@ -1259,6 +1309,7 @@ def find_backhaul_page(
             "haulier_pending_backhaul_approvals": [],
             "approval_confirmation": None,
             "find_backhaul_msg": find_backhaul_msg,
+            "onboarding_checklist": onboarding_checklist,
             **rating_ctx,
         },
     )
