@@ -69,12 +69,6 @@ def _login_error_response(
     )
 
 
-@router.get("/admin/dashboard", response_class=RedirectResponse)
-def admin_dashboard_redirect() -> RedirectResponse:
-    """Canonical admin entry URL; main UI lives on home with admin section."""
-    return RedirectResponse(url="/?section=admin", status_code=302)
-
-
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     """Show login form. If already logged in, redirect to role dashboard."""
@@ -359,6 +353,8 @@ async def register_haulier_submit(
         vehicle_setup_link=f"{base_url}/?section=vehicles",
         admin_panel_link=f"{base_url}/admin/dashboard",
         registered_at_iso=datetime.now(timezone.utc).isoformat(),
+        user_id=user_id,
+        contact_phone=phone,
     )
     return RedirectResponse(url="/?section=find", status_code=303)
 
@@ -411,6 +407,8 @@ async def register_loader_submit(
         vehicle_setup_link=f"{base_url}/?section=vehicles",
         admin_panel_link=f"{base_url}/admin/dashboard",
         registered_at_iso=datetime.now(timezone.utc).isoformat(),
+        user_id=user_id,
+        contact_phone=phone,
     )
     return RedirectResponse(url="/?section=find", status_code=303)
 

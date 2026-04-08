@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All users - Admin - Platoonix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <div class="mb-6 flex flex-wrap justify-between items-center gap-4">
+            <h1 class="text-3xl font-bold text-gray-900">Office users</h1>
+            <div class="flex flex-wrap gap-2">
+                <a href="/admin/dashboard" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm font-medium">Monitoring dashboard</a>
+                <a href="/?section=admin" class="px-4 py-2 border border-gray-400 text-gray-800 rounded-lg hover:bg-gray-200 text-sm font-medium">Platform admin</a>
+            </div>
+        </div>
+
+        <p class="text-sm text-gray-600 mb-4">Showing up to 200 most recent office accounts (loader / haulier / admin). Driver app accounts are listed separately on the monitoring dashboard.</p>
+
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b-2 border-gray-200 bg-gray-50">
+                            <th class="text-left p-3 font-medium text-gray-700">ID</th>
+                            <th class="text-left p-3 font-medium text-gray-700">Name</th>
+                            <th class="text-left p-3 font-medium text-gray-700">Email</th>
+                            <th class="text-left p-3 font-medium text-gray-700">Type</th>
+                            <th class="text-left p-3 font-medium text-gray-700">Company</th>
+                            <th class="text-left p-3 font-medium text-gray-700">Phone</th>
+                            <th class="text-left p-3 font-medium text-gray-700">Registered</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr class="border-b border-gray-100 hover:bg-gray-50">
+                            <td class="p-3 text-gray-600">{{ user.id }}</td>
+                            <td class="p-3">{{ user.full_name or '—' }}</td>
+                            <td class="p-3 font-mono text-xs">{{ user.email }}</td>
+                            <td class="p-3">
+                                {% if user.role == 'admin' %}
+                                <span class="px-2 py-1 bg-amber-100 text-amber-900 rounded text-xs font-medium">Admin</span>
+                                {% elif user.loader_id %}
+                                <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Loader</span>
+                                {% elif user.haulier_id %}
+                                <span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">Haulier</span>
+                                {% else %}
+                                <span class="text-gray-400">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3 text-gray-600">
+                                {% if user.loader_id and user.loader %}
+                                    {{ user.loader.name }}
+                                {% elif user.haulier_id and user.haulier %}
+                                    {{ user.haulier.name }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="p-3 text-gray-600">
+                                {% if user.phone and user.phone.strip() %}
+                                    {{ user.phone }}
+                                {% elif user.loader_id and user.loader and user.loader.contact_phone %}
+                                    {{ user.loader.contact_phone }}
+                                {% elif user.haulier_id and user.haulier and user.haulier.contact_phone %}
+                                    {{ user.haulier.contact_phone }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="p-3 text-gray-600 whitespace-nowrap">
+                                {% if user.created_at %}{{ user.created_at.strftime('%d %b %Y') }}{% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

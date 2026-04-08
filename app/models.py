@@ -43,6 +43,9 @@ class User(Base):
         DateTime(timezone=True), default=datetime.utcnow
     )
 
+    loader: Mapped[Optional["Loader"]] = relationship("Loader", foreign_keys=[loader_id])
+    haulier: Mapped[Optional["Haulier"]] = relationship("Haulier", foreign_keys=[haulier_id])
+
 
 class PasswordResetToken(Base):
     """One-time token for forgot-password flow. Token stored as SHA-256 hash."""

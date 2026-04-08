@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete as sa_delete, update as sa_update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app import models
 from app.auth import (
@@ -28,6 +28,7 @@ from app.services import ratings as ratings_svc
 from app.services import load_pricing as load_pricing_svc
 from app.services import vehicle_availability as vehicle_availability_svc
 from app.services.payment_fees import compute_loader_platform_fee_gbp
+from app.services.email_sender import schedule_registration_emails
 logger = logging.getLogger(__name__)
 
 from app.services.insurance_status import (
@@ -773,6 +774,27 @@ def home(
         prev = job_by_load_id.get(j.load_id)
         if prev is None or j.id > prev.id:
             job_by_load_id[j.load_id] = j
+
+    total_users = 0
+    loader_user_count = 0
+    haulier_user_count = 0
+    driver_count = 0
+    recent_registrations: list = []
+    if current_user and (getattr(current_user, "role", None) or "").strip().lower() == "admin":
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        total_users = db.query(models.User).count()
+        loader_user_count = db.query(models.User).filter(models.User.loader_id.isnot(None)).count()
+        haulier_user_count = db.query(models.User).filter(models.User.haulier_id.isnot(None)).count()
+        driver_count = db.query(models.Driver).count()
+        recent_registrations = (
+            db.query(models.User)
+            .options(joinedload(models.User.loader), joinedload(models.User.haulier))
+            .filter(models.User.created_at >= seven_days_ago)
+            .order_by(models.User.created_at.desc())
+            .limit(20)
+            .all()
+        )
+
     return templates.TemplateResponse(
         "home.html",
         {
@@ -833,6 +855,11 @@ def home(
             "approval_confirmation": None,
             "find_backhaul_msg": None,
             "onboarding_checklist": onboarding_checklist,
+            "total_users": total_users,
+            "loader_user_count": loader_user_count,
+            "haulier_user_count": haulier_user_count,
+            "driver_count": driver_count,
+            "recent_registrations": recent_registrations,
             **rating_ctx,
         },
     )
@@ -2368,6 +2395,7 @@ async def decline_interest(
 @router.post("/create-haulier-account", response_class=RedirectResponse)
 async def create_haulier_account(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
@@ -2405,12 +2433,28 @@ async def create_haulier_account(
     except IntegrityError:
         db.rollback()
         return redirect_error("Company or email already exists — use Link login to existing company")
+    base_url = str(request.base_url).rstrip("/")
+    schedule_registration_emails(
+        background_tasks,
+        user_email=email,
+        user_name=name,
+        user_type="haulier",
+        company_name=name,
+        dashboard_link=f"{base_url}/?section=find",
+        tutorial_link=f"{base_url}/?section=find",
+        vehicle_setup_link=f"{base_url}/?section=vehicles",
+        admin_panel_link=f"{base_url}/admin/dashboard",
+        registered_at_iso=datetime.now(timezone.utc).isoformat(),
+        user_id=user.id,
+        contact_phone=contact_phone,
+    )
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Company + login created. They can log in and add vehicles."), status_code=303)
 
 
 @router.post("/create-haulier-login", response_class=RedirectResponse)
 async def create_haulier_login(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
@@ -2441,12 +2485,30 @@ async def create_haulier_login(
     )
     db.add(user)
     db.commit()
+    haulier = db.get(models.Haulier, haulier_id)
+    haulier_name = (haulier.name if haulier else "Haulier") or "Haulier"
+    base_url = str(request.base_url).rstrip("/")
+    schedule_registration_emails(
+        background_tasks,
+        user_email=email,
+        user_name=haulier_name,
+        user_type="haulier",
+        company_name=haulier_name,
+        dashboard_link=f"{base_url}/?section=find",
+        tutorial_link=f"{base_url}/?section=find",
+        vehicle_setup_link=f"{base_url}/?section=vehicles",
+        admin_panel_link=f"{base_url}/admin/dashboard",
+        registered_at_iso=datetime.now(timezone.utc).isoformat(),
+        user_id=user.id,
+        contact_phone=(haulier.contact_phone if haulier else None),
+    )
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Haulier login created"), status_code=303)
 
 
 @router.post("/create-loader-account", response_class=RedirectResponse)
 async def create_loader_account(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
@@ -2475,12 +2537,28 @@ async def create_loader_account(
     )
     db.add(user)
     db.commit()
+    base_url = str(request.base_url).rstrip("/")
+    schedule_registration_emails(
+        background_tasks,
+        user_email=email,
+        user_name=name,
+        user_type="loader",
+        company_name=name,
+        dashboard_link=f"{base_url}/?section=find",
+        tutorial_link=f"{base_url}/?section=loads",
+        vehicle_setup_link=f"{base_url}/?section=vehicles",
+        admin_panel_link=f"{base_url}/admin/dashboard",
+        registered_at_iso=datetime.now(timezone.utc).isoformat(),
+        user_id=user.id,
+        contact_phone=None,
+    )
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Loader account created"), status_code=303)
 
 
 @router.post("/create-driver", response_class=RedirectResponse)
 async def create_driver_account(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> RedirectResponse:
@@ -2534,12 +2612,30 @@ async def create_driver_account(
     )
     db.add(driver)
     db.commit()
+    db.refresh(driver)
+    base_url = str(request.base_url).rstrip("/")
+    schedule_registration_emails(
+        background_tasks,
+        user_email=email,
+        user_name=name,
+        user_type="driver",
+        company_name=haulier.name,
+        dashboard_link=f"{base_url}/?section=find",
+        tutorial_link=f"{base_url}/driver",
+        vehicle_setup_link=f"{base_url}/?section=vehicles",
+        admin_panel_link=f"{base_url}/admin/dashboard",
+        registered_at_iso=datetime.now(timezone.utc).isoformat(),
+        user_id=None,
+        contact_phone=phone,
+        driver_id=driver.id,
+    )
     return RedirectResponse(url=base + "&create_login_ok=" + quote_plus("Driver account created"), status_code=303)
 
 
 @router.post("/my-drivers", response_class=RedirectResponse)
 async def create_my_driver_account(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Haulier: create a driver for their own company only."""
@@ -2583,6 +2679,7 @@ async def create_my_driver_account(
             return redirect_error("Invalid vehicle for your company")
         vehicle_id = vid
 
+    haulier = db.get(models.Haulier, current_user.haulier_id)
     driver = models.Driver(
         haulier_id=current_user.haulier_id,
         vehicle_id=vehicle_id,
@@ -2593,6 +2690,23 @@ async def create_my_driver_account(
     )
     db.add(driver)
     db.commit()
+    db.refresh(driver)
+    base_url = str(request.base_url).rstrip("/")
+    schedule_registration_emails(
+        background_tasks,
+        user_email=email,
+        user_name=name,
+        user_type="driver",
+        company_name=haulier.name if haulier else "Haulier",
+        dashboard_link=f"{base_url}/?section=find",
+        tutorial_link=f"{base_url}/driver",
+        vehicle_setup_link=f"{base_url}/?section=vehicles",
+        admin_panel_link=f"{base_url}/admin/dashboard",
+        registered_at_iso=datetime.now(timezone.utc).isoformat(),
+        user_id=None,
+        contact_phone=phone,
+        driver_id=driver.id,
+    )
     return RedirectResponse(url=base + "&driver_ok=" + quote_plus("Driver account created"), status_code=303)
 
 

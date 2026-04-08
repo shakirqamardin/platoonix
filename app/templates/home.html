@@ -2738,6 +2738,80 @@
 <!-- Admin Section (only full user list + create-login forms for role=admin) -->
 {% if current_user and current_user.role == 'admin' %}
 <section class="section-panel {{ 'active' if initial_section == 'admin' else '' }}" data-section="admin">
+    <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in border border-slate-700/50" style="animation-delay: 0.05s">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h2 class="text-xl font-display font-bold text-slate-100">User monitoring</h2>
+            <div class="flex flex-wrap gap-2 text-sm">
+                <a href="/admin/dashboard" class="inline-flex items-center px-3 py-2 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white font-medium">Full monitoring dashboard</a>
+                <a href="/admin/users" class="inline-flex items-center px-3 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800/80 font-medium">All users</a>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
+            <div class="stat-card glass-card rounded-xl p-4 border border-slate-700/50">
+                <h3 class="text-slate-400 text-xs font-medium uppercase tracking-wide">Total users</h3>
+                <p class="text-3xl font-display font-bold text-slate-100 mt-1">{{ total_users|default(0) }}</p>
+            </div>
+            <div class="stat-card glass-card rounded-xl p-4 border border-slate-700/50">
+                <h3 class="text-slate-400 text-xs font-medium uppercase tracking-wide">Loaders</h3>
+                <p class="text-3xl font-display font-bold text-sky-400 mt-1">{{ loader_user_count|default(0) }}</p>
+            </div>
+            <div class="stat-card glass-card rounded-xl p-4 border border-slate-700/50">
+                <h3 class="text-slate-400 text-xs font-medium uppercase tracking-wide">Hauliers</h3>
+                <p class="text-3xl font-display font-bold text-emerald-400 mt-1">{{ haulier_user_count|default(0) }}</p>
+            </div>
+            <div class="stat-card glass-card rounded-xl p-4 border border-slate-700/50">
+                <h3 class="text-slate-400 text-xs font-medium uppercase tracking-wide">Drivers</h3>
+                <p class="text-3xl font-display font-bold text-violet-400 mt-1">{{ driver_count|default(0) }}</p>
+                <p class="text-[10px] text-slate-500 mt-1">Driver app accounts (separate from office logins)</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in border border-slate-700/50" style="animation-delay: 0.08s">
+        <h2 class="text-xl font-display font-bold mb-4 text-slate-100">Recent registrations (last 7 days)</h2>
+        <p class="text-slate-500 text-xs mb-4">Office accounts only (loader / haulier / admin). Driver signups appear under Drivers count.</p>
+        {% if recent_registrations and recent_registrations|length > 0 %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-700">
+                        <th class="text-left py-3 px-3 text-xs font-semibold text-slate-400">Name</th>
+                        <th class="text-left py-3 px-3 text-xs font-semibold text-slate-400">Email</th>
+                        <th class="text-left py-3 px-3 text-xs font-semibold text-slate-400">Type</th>
+                        <th class="text-left py-3 px-3 text-xs font-semibold text-slate-400">Registered</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ru in recent_registrations %}
+                    <tr class="border-b border-slate-800/80 hover:bg-slate-800/40">
+                        <td class="py-2.5 px-3 text-slate-200">
+                            {{ ru.full_name or (ru.loader.name if ru.loader else (ru.haulier.name if ru.haulier else '—')) }}
+                        </td>
+                        <td class="py-2.5 px-3 text-slate-300 font-mono text-xs">{{ ru.email }}</td>
+                        <td class="py-2.5 px-3">
+                            {% if ru.role == 'admin' %}
+                            <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-200 border border-amber-500/30">Admin</span>
+                            {% elif ru.loader_id %}
+                            <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-sky-500/20 text-sky-200 border border-sky-500/30">Loader</span>
+                            {% elif ru.haulier_id %}
+                            <span class="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-200 border border-emerald-500/30">Haulier</span>
+                            {% else %}
+                            <span class="text-slate-500">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 px-3 text-slate-400 text-xs whitespace-nowrap">
+                            {% if ru.created_at %}{{ ru.created_at.strftime('%d %b %Y, %H:%M') }}{% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-slate-500 text-sm py-4">No office registrations in the last 7 days.</p>
+        {% endif %}
+    </div>
+
     <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.1s">
         <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-rose-400 to-orange-400 bg-clip-text text-transparent">
             Admin - Manage Users
