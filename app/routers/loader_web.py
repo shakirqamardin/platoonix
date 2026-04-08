@@ -2,6 +2,7 @@
 Loader-facing dashboard: my loads, planned loads, who's interested.
 Only for users with role=loader; data filtered by loader_id.
 """
+import logging
 from typing import Tuple, Union
 
 from fastapi import APIRouter, Depends, Request
@@ -92,16 +93,18 @@ def loader_setup_payment_method(
             loader.stripe_customer_id = customer.id
             db.commit()
 
-        base_url = str(request.base_url).rstrip("/")
+        base_url = _checkout_public_base_url(request, settings)
         session = stripe.checkout.Session.create(
             mode="setup",
-            customer=loader.stripe_customer_id,
+            payment_method_types=["card"],
+            customer=loader.stripe_customer_id.strip(),
+            currency="gbp",
             success_url=f"{base_url}/?section=company&payment_setup=1",
             cancel_url=f"{base_url}/?section=company&payment_setup_cancelled=1",
         )
         return RedirectResponse(url=session.url, status_code=303)
-    except Exception as e:
-        print(f"[STRIPE] loader_setup_payment_method failed: {e}")
+    except Exception:
+        logger.exception("[STRIPE] loader_setup_payment_method failed")
         return RedirectResponse(url="/?section=company&payment_error=setup_failed", status_code=303)
 
 
