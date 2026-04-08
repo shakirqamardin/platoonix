@@ -34,6 +34,7 @@ def refresh_vehicle_availability(db: Session, vehicle_id: int) -> None:
         .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
         .filter(models.BackhaulJob.vehicle_id == vehicle_id)
         .filter(models.BackhaulJob.completed_at.is_(None))
+        .filter(models.BackhaulJob.haulier_cancelled_at.is_(None))
         .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
         .all()
     )
@@ -67,6 +68,7 @@ def vehicle_has_active_job(db: Session, vehicle_id: int) -> bool:
         .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
         .filter(models.BackhaulJob.vehicle_id == vehicle_id)
         .filter(models.BackhaulJob.completed_at.is_(None))
+        .filter(models.BackhaulJob.haulier_cancelled_at.is_(None))
         .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
         .first()
         is not None

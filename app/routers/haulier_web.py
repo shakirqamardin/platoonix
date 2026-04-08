@@ -2,12 +2,14 @@
 Haulier-facing dashboard: my company, my vehicles, find backhaul, planned routes.
 Only for users with role=haulier; data filtered by haulier_id.
 """
+import logging
 import re
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
-from fastapi import APIRouter, Depends, Query, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete as sa_delete
@@ -20,6 +22,8 @@ from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
 from app.services.insurance_status import calculate_insurance_status, finalize_vehicle_insurance_upload
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -68,6 +72,7 @@ def _driver_visible_group_jobs(
         .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
         .filter(models.Vehicle.haulier_id == haulier.id)
         .filter(models.BackhaulJob.completed_at.is_(None))
+        .filter(models.BackhaulJob.haulier_cancelled_at.is_(None))
         .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
     )
     if active_job.job_group_uuid:
@@ -116,6 +121,7 @@ def driver_page(
         .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
         .filter(models.Vehicle.haulier_id == haulier.id)
         .filter(models.BackhaulJob.completed_at.is_(None))
+        .filter(models.BackhaulJob.haulier_cancelled_at.is_(None))
         .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
     )
     if actor_driver is not None:
@@ -177,6 +183,7 @@ def driver_page(
             .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
             .filter(models.Vehicle.haulier_id == haulier.id)
             .filter(models.BackhaulJob.completed_at.is_(None))
+            .filter(models.BackhaulJob.haulier_cancelled_at.is_(None))
             .filter(models.BackhaulJob.driver_id.is_(None))
             .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
             .order_by(models.BackhaulJob.matched_at.desc())
@@ -272,6 +279,8 @@ def _driver_job_for_haulier(
     """Return job for this haulier; for driver actor, enforce assigned driver."""
     job = db.get(models.BackhaulJob, job_id)
     if not job:
+        return None
+    if getattr(job, "haulier_cancelled_at", None):
         return None
     vehicle = db.get(models.Vehicle, job.vehicle_id)
     if not vehicle or vehicle.haulier_id != haulier.id:
@@ -607,3 +616,67 @@ def haulier_delete_route(
     db.delete(route)
     db.commit()
     return RedirectResponse(url="/?section=routes", status_code=303)
+
+
+@router.post("/haulier/emergency/{job_id}/submit-evidence", response_class=RedirectResponse)
+async def haulier_submit_emergency_evidence(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    evidence_file: UploadFile = File(...),
+    additional_notes: str = Form(""),
+) -> RedirectResponse:
+    """Upload evidence for an emergency haulier cancellation (soft-cancelled job row)."""
+    from app.services.cancellation_emails import notify_support_evidence_submitted
+
+    result = _haulier_or_redirect(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    _user, haulier = result
+    job = db.get(models.BackhaulJob, job_id)
+    if not job:
+        return RedirectResponse(url="/?section=matches&evidence_error=not_found", status_code=303)
+    vehicle = db.get(models.Vehicle, job.vehicle_id)
+    if not vehicle or vehicle.haulier_id != haulier.id:
+        return RedirectResponse(url="/?section=matches&evidence_error=not_found", status_code=303)
+    if not job.haulier_cancelled_at or not job.emergency_evidence_required:
+        return RedirectResponse(url="/?section=matches&evidence_error=invalid", status_code=303)
+    if job.emergency_evidence_submitted_at:
+        return RedirectResponse(url="/?section=matches&evidence_error=already", status_code=303)
+
+    raw = (evidence_file.filename or "upload").strip()
+    safe = Path(raw).name.replace("..", "_") or "evidence.bin"
+    data_root = Path(__file__).resolve().parent.parent.parent / "data" / "evidence" / str(haulier.id)
+    data_root.mkdir(parents=True, exist_ok=True)
+    dest = data_root / f"{job_id}_{safe}"
+
+    try:
+        content = await evidence_file.read()
+    except Exception:
+        logger.exception("read evidence upload")
+        return RedirectResponse(url="/?section=matches&evidence_error=upload", status_code=303)
+
+    max_bytes = 10 * 1024 * 1024
+    if len(content) > max_bytes:
+        return RedirectResponse(url="/?section=matches&evidence_error=too_large", status_code=303)
+
+    try:
+        dest.write_bytes(content)
+    except Exception:
+        logger.exception("write evidence file")
+        return RedirectResponse(url="/?section=matches&evidence_error=upload", status_code=303)
+
+    now = datetime.now(timezone.utc)
+    job.emergency_evidence_path = str(dest)
+    job.emergency_evidence_notes = (additional_notes or "").strip()[:1000] or None
+    job.emergency_evidence_submitted_at = now
+    db.add(job)
+    if int(haulier.pending_emergency_reviews or 0) > 0:
+        haulier.pending_emergency_reviews = int(haulier.pending_emergency_reviews) - 1
+    db.add(haulier)
+    db.commit()
+    try:
+        notify_support_evidence_submitted(job.id, haulier.id, str(dest), job.emergency_evidence_notes)
+    except Exception:
+        logger.exception("notify_support_evidence_submitted")
+    return RedirectResponse(url="/?section=matches&evidence_submitted=1", status_code=303)

@@ -29,4 +29,6 @@ static/uploads/
 
 # Vehicle insurance certificates (default: data/insurance/)
 data/insurance/
+# Emergency cancellation uploads
+data/evidence/
 node_modules

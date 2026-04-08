@@ -1534,7 +1534,10 @@
                 <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Load updated successfully.</div>
                 {% endif %}
                 {% if request.query_params.get('load_cancelled') %}
-                <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Load cancelled.{% if request.query_params.get('refund_warning') %} If a card payment could not be refunded automatically, contact support with your load reference.{% endif %}</div>
+                <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Load cancelled.{% if request.query_params.get('cancel_fee') %} Policy fee retained: £{{ request.query_params.get('cancel_fee') }}.{% endif %}{% if request.query_params.get('refund_warning') %} If a card payment could not be refunded automatically, contact support with your load reference.{% endif %}</div>
+                {% endif %}
+                {% if request.query_params.get('cancel_blocked') %}
+                <div class="rounded-lg border border-rose-500/40 bg-rose-950/30 px-4 py-2.5 mb-4 text-sm text-rose-100">Cancellation is not available this close to pickup. Contact <a href="mailto:support@platoonix.co.uk" class="underline">support@platoonix.co.uk</a> for emergencies.</div>
                 {% endif %}
                 {% set le = request.query_params.get('load_error') %}
                 {% if le %}
@@ -1941,17 +1944,54 @@
                 <!-- Loads Table -->
                 {% if current_user and current_user.loader_id %}
                 <h3 class="text-lg font-semibold text-slate-200 mb-3">My loads</h3>
+                {% set cu = cancellation_ui_settings|default({'free_h': 24, 'warn_h': 12, 'pen_h': 2, 'fee_warn': 25, 'fee_pen': 50}) %}
                 <div class="md:hidden space-y-3 mb-4">
                     {% for l in loads %}
                     {% set lj = job_by_load_id.get(l.id) if job_by_load_id is defined else none %}
                     {% set st = (l.status or '')|lower %}
+                    {% set ns = namespace(hu=9999.0, blocked=false, fee=0) %}
+                    {% if l.pickup_window_start %}
+                    {% set ns.hu = ((l.pickup_window_start - utcnow()).total_seconds() / 3600) %}
+                    {% endif %}
+                    {% if lj %}
+                    {% if ns.hu < cu.pen_h %}{% set ns.blocked = true %}{% endif %}
+                    {% if ns.hu >= cu.free_h %}{% set ns.fee = 0 %}
+                    {% elif ns.hu >= cu.warn_h %}{% set ns.fee = cu.fee_warn %}
+                    {% else %}{% set ns.fee = cu.fee_pen %}
+                    {% endif %}
+                    {% else %}
+                    {% if ns.hu < cu.pen_h %}{% set ns.blocked = true %}{% endif %}
+                    {% endif %}
                     {% set can_edit = (st == 'open' and not lj) %}
-                    {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at))) %}
+                    {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at)) and not ns.blocked) %}
                     <article class="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-2" data-whatsapp-load-id="{{ l.id }}">
                         <div class="font-medium text-slate-100">{{ l.shipper_name }}</div>
                         <div class="font-mono text-teal-300 text-sm">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</div>
                         <div class="text-xs text-slate-400">Budget: {% if l.budget_gbp is not none %}£{{ "%.2f"|format(l.budget_gbp) }}{% else %}—{% endif %} · Posted {{ l.created_at.strftime('%d %b %Y') }}</div>
                         <div class="text-xs text-slate-500"><span class="badge badge-success">{{ l.status }}</span></div>
+                        {% if st == 'matched' and lj %}
+                        <div class="rounded border border-emerald-500/30 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200/90">✓ Job confirmed — haulier assigned</div>
+                        {% endif %}
+                        {% if l.pickup_window_start and st != 'cancelled' and ns.hu < 9990 %}
+                        {% if ns.hu > 0 and ns.hu <= 6 %}
+                        <div class="rounded border border-orange-500/30 bg-orange-950/30 px-2 py-1 text-xs text-orange-200/90">⚠ Pickup in {{ ns.hu|int }}h</div>
+                        {% elif ns.hu > 6 and ns.hu <= 24 %}
+                        <div class="rounded border border-amber-500/30 bg-amber-950/30 px-2 py-1 text-xs text-amber-200/90">⏰ Pickup in {{ ns.hu|int }}h</div>
+                        {% endif %}
+                        {% endif %}
+                        {% if st == 'cancelled' and l.cancellation_fee_gbp and l.cancellation_fee_gbp > 0 %}
+                        <div class="rounded border border-cyan-500/30 bg-cyan-950/30 px-2 py-1 text-xs text-cyan-200/90">Cancellation fee applied: £{{ "%.0f"|format(l.cancellation_fee_gbp) }}</div>
+                        {% endif %}
+                        {% if l.pickup_window_start and can_cancel %}
+                        <div class="text-xs leading-relaxed">
+                            {% if ns.hu >= cu.free_h %}<span class="text-emerald-400/90">Free cancellation until {{ (l.pickup_window_start - timedelta(hours=cu.free_h)).strftime('%d %b, %H:%M') }}</span>
+                            {% elif ns.hu >= cu.warn_h %}<span class="text-amber-300/90">£{{ cu.fee_warn|int }} fee if cancelled now (pickup in {{ ns.hu|int }}h)</span>
+                            {% elif ns.hu >= cu.pen_h %}<span class="text-orange-300/90">£{{ cu.fee_pen|int }} fee if cancelled now (pickup in {{ ns.hu|int }}h)</span>
+                            {% endif %}
+                        </div>
+                        {% elif l.pickup_window_start and ns.blocked %}
+                        <div class="text-xs text-rose-300/90">Too close to pickup to cancel here — contact support.</div>
+                        {% endif %}
                         <div class="flex flex-wrap items-center gap-2 pt-2">
                             {{ wa_share_btn(l) }}
                             {% if can_edit %}
@@ -1960,12 +2000,19 @@
                             {% if can_cancel %}
                             <button type="button" class="min-h-[44px] px-3 py-2 text-rose-300 border border-rose-500/40 rounded-lg text-sm font-medium" onclick="document.getElementById('cancel-load-{{ l.id }}').showModal()">Cancel</button>
                             <dialog id="cancel-load-{{ l.id }}" class="rounded-xl border border-slate-600 bg-slate-900 p-6 text-slate-100 max-w-md shadow-xl backdrop:bg-black/50">
-                                <p class="text-slate-200 font-medium mb-2">Are you sure you want to cancel this load?</p>
-                                {% if lj %}<p class="text-amber-200/90 text-sm mb-4">A haulier is matched to this job. They will be notified.</p>{% else %}<p class="text-slate-400 text-sm mb-4">This removes the load from active listings.</p>{% endif %}
+                                <h3 class="text-lg font-semibold text-white mb-2">Cancel load?</h3>
+                                {% if ns.fee <= 0 %}
+                                <p class="text-emerald-200/90 text-sm mb-3">Free cancellation under current policy. Refund follows your payment method.</p>
+                                {% elif ns.fee == cu.fee_warn %}
+                                <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-3 py-2 mb-3 text-sm text-amber-100">£{{ cu.fee_warn|int }} cancellation fee applies; refund is load payment minus this fee per policy.</div>
+                                {% else %}
+                                <div class="rounded-lg border border-orange-500/40 bg-orange-950/30 px-3 py-2 mb-3 text-sm text-orange-100">£{{ cu.fee_pen|int }} late cancellation fee applies; refund is load payment minus this fee per policy.</div>
+                                {% endif %}
+                                {% if lj %}<p class="text-amber-200/90 text-sm mb-4">A haulier is matched — they will be notified.</p>{% else %}<p class="text-slate-400 text-sm mb-4">This removes the load from active listings.</p>{% endif %}
                                 <div class="flex flex-col sm:flex-row gap-2 justify-end">
                                     <button type="button" class="rounded-lg border border-slate-600 px-4 py-2.5 text-sm text-slate-300" onclick="document.getElementById('cancel-load-{{ l.id }}').close()">Keep load</button>
                                     <form method="post" action="/loader/loads/{{ l.id }}/cancel" class="inline">
-                                        <button type="submit" class="w-full sm:w-auto rounded-lg bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white">Cancel load</button>
+                                        <button type="submit" class="w-full sm:w-auto rounded-lg bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white">{% if ns.fee > 0 %}Pay £{{ ns.fee|int }} fee &amp; cancel{% else %}Cancel load{% endif %}</button>
                                     </form>
                                 </div>
                             </dialog>
@@ -1989,13 +2036,49 @@
                             {% for l in loads %}
                             {% set lj = job_by_load_id.get(l.id) if job_by_load_id is defined else none %}
                             {% set st = (l.status or '')|lower %}
+                            {% set ns = namespace(hu=9999.0, blocked=false, fee=0) %}
+                            {% if l.pickup_window_start %}
+                            {% set ns.hu = ((l.pickup_window_start - utcnow()).total_seconds() / 3600) %}
+                            {% endif %}
+                            {% if lj %}
+                            {% if ns.hu < cu.pen_h %}{% set ns.blocked = true %}{% endif %}
+                            {% if ns.hu >= cu.free_h %}{% set ns.fee = 0 %}
+                            {% elif ns.hu >= cu.warn_h %}{% set ns.fee = cu.fee_warn %}
+                            {% else %}{% set ns.fee = cu.fee_pen %}
+                            {% endif %}
+                            {% else %}
+                            {% if ns.hu < cu.pen_h %}{% set ns.blocked = true %}{% endif %}
+                            {% endif %}
                             {% set can_edit = (st == 'open' and not lj) %}
-                            {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at))) %}
+                            {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at)) and not ns.blocked) %}
                             <tr class="border-b border-slate-800/50" data-whatsapp-load-id="{{ l.id }}">
                                 <td class="py-3 px-4">
                                     <div class="font-medium text-slate-100">{{ l.shipper_name }}</div>
                                     <div class="font-mono text-teal-300 text-sm mt-0.5">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</div>
                                     {% if l.booking_ref or l.booking_name %}<div class="text-xs text-slate-500 mt-1">{% if l.booking_ref %}{{ l.booking_ref }}{% endif %}{% if l.booking_name %} · {{ l.booking_name }}{% endif %}</div>{% endif %}
+                                    {% if l.pickup_window_start and can_cancel %}
+                                    <div class="text-xs mt-1 max-w-xs">
+                                        {% if ns.hu >= cu.free_h %}<span class="text-emerald-400/90">Free cancel until {{ (l.pickup_window_start - timedelta(hours=cu.free_h)).strftime('%d %b %H:%M') }}</span>
+                                        {% elif ns.hu >= cu.warn_h %}<span class="text-amber-300/90">£{{ cu.fee_warn|int }} fee · pickup in {{ ns.hu|int }}h</span>
+                                        {% elif ns.hu >= cu.pen_h %}<span class="text-orange-300/90">£{{ cu.fee_pen|int }} fee · pickup in {{ ns.hu|int }}h</span>
+                                        {% endif %}
+                                    </div>
+                                    {% elif l.pickup_window_start and ns.blocked %}
+                                    <div class="text-xs text-rose-300/90 mt-1">Too close to cancel — support only.</div>
+                                    {% endif %}
+                                    {% if st == 'matched' and lj %}
+                                    <div class="mt-1 rounded border border-emerald-500/30 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200/90 max-w-md">✓ Job confirmed — haulier assigned</div>
+                                    {% endif %}
+                                    {% if l.pickup_window_start and st != 'cancelled' and ns.hu < 9990 %}
+                                    {% if ns.hu > 0 and ns.hu <= 6 %}
+                                    <div class="mt-1 rounded border border-orange-500/30 bg-orange-950/30 px-2 py-1 text-xs text-orange-200/90 max-w-md">⚠ Pickup in {{ ns.hu|int }}h</div>
+                                    {% elif ns.hu > 6 and ns.hu <= 24 %}
+                                    <div class="mt-1 rounded border border-amber-500/30 bg-amber-950/30 px-2 py-1 text-xs text-amber-200/90 max-w-md">⏰ Pickup in {{ ns.hu|int }}h</div>
+                                    {% endif %}
+                                    {% endif %}
+                                    {% if st == 'cancelled' and l.cancellation_fee_gbp and l.cancellation_fee_gbp > 0 %}
+                                    <div class="mt-1 rounded border border-cyan-500/30 bg-cyan-950/30 px-2 py-1 text-xs text-cyan-200/90 max-w-md">Cancellation fee applied: £{{ "%.0f"|format(l.cancellation_fee_gbp) }}</div>
+                                    {% endif %}
                                 </td>
                                 <td class="py-3 px-4"><span class="badge badge-success">{{ l.status }}</span></td>
                                 <td class="py-3 px-4 text-slate-300">{% if l.budget_gbp is not none %}£{{ "%.2f"|format(l.budget_gbp) }}{% else %}—{% endif %}</td>
@@ -2009,12 +2092,19 @@
                                         {% if can_cancel %}
                                         <button type="button" class="min-h-[40px] px-3 py-2 text-rose-300 text-sm font-medium rounded-lg border border-rose-500/40" onclick="document.getElementById('cancel-load-d-{{ l.id }}').showModal()">Cancel</button>
                                         <dialog id="cancel-load-d-{{ l.id }}" class="rounded-xl border border-slate-600 bg-slate-900 p-6 text-slate-100 max-w-md shadow-xl backdrop:bg-black/50">
-                                            <p class="text-slate-200 font-medium mb-2">Are you sure you want to cancel this load?</p>
-                                            {% if lj %}<p class="text-amber-200/90 text-sm mb-4">A haulier is matched to this job. They will be notified.</p>{% else %}<p class="text-slate-400 text-sm mb-4">This removes the load from active listings.</p>{% endif %}
+                                            <h3 class="text-lg font-semibold text-white mb-2">Cancel load?</h3>
+                                            {% if ns.fee <= 0 %}
+                                            <p class="text-emerald-200/90 text-sm mb-3">Free cancellation under current policy.</p>
+                                            {% elif ns.fee == cu.fee_warn %}
+                                            <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-3 py-2 mb-3 text-sm text-amber-100">£{{ cu.fee_warn|int }} cancellation fee applies per policy.</div>
+                                            {% else %}
+                                            <div class="rounded-lg border border-orange-500/40 bg-orange-950/30 px-3 py-2 mb-3 text-sm text-orange-100">£{{ cu.fee_pen|int }} late cancellation fee applies per policy.</div>
+                                            {% endif %}
+                                            {% if lj %}<p class="text-amber-200/90 text-sm mb-4">A haulier is matched — they will be notified.</p>{% else %}<p class="text-slate-400 text-sm mb-4">This removes the load from active listings.</p>{% endif %}
                                             <div class="flex flex-col sm:flex-row gap-2 justify-end">
                                                 <button type="button" class="rounded-lg border border-slate-600 px-4 py-2.5 text-sm text-slate-300" onclick="document.getElementById('cancel-load-d-{{ l.id }}').close()">Keep load</button>
                                                 <form method="post" action="/loader/loads/{{ l.id }}/cancel" class="inline">
-                                                    <button type="submit" class="w-full sm:w-auto rounded-lg bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white">Cancel load</button>
+                                                    <button type="submit" class="w-full sm:w-auto rounded-lg bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white">{% if ns.fee > 0 %}Pay £{{ ns.fee|int }} fee &amp; cancel{% else %}Cancel load{% endif %}</button>
                                                 </form>
                                             </div>
                                         </dialog>
@@ -2123,6 +2213,40 @@
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
                     Matches & Jobs
                 </h2>
+                {% if request.query_params.get('haulier_cancel_blocked') %}
+                <div class="rounded-lg border border-rose-500/40 bg-rose-950/30 px-4 py-2.5 mb-4 text-sm text-rose-100">Cancellation is blocked this close to pickup unless you use the emergency option in the cancel dialog (with a reason) or contact <a href="mailto:support@platoonix.co.uk" class="underline">support@platoonix.co.uk</a>.</div>
+                {% endif %}
+                {% if request.query_params.get('emergency') %}
+                <div class="rounded-lg border border-cyan-500/40 bg-cyan-950/30 px-4 py-2.5 mb-4 text-sm text-cyan-100">Emergency cancellation recorded. Submit evidence from the banner below if prompted.</div>
+                {% endif %}
+                {% if request.query_params.get('evidence_submitted') %}
+                <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Evidence uploaded. Our team will review.</div>
+                {% endif %}
+                {% if request.query_params.get('no_show_reported') %}
+                <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-2.5 mb-4 text-sm text-amber-100">No-show report submitted. The load is reopened as priority; refunds follow policy.</div>
+                {% endif %}
+
+                {% if current_user and current_user.role == 'haulier' and emergency_evidence_jobs is defined and emergency_evidence_jobs|length > 0 %}
+                <div class="rounded-xl border border-amber-500/50 bg-amber-950/20 p-4 mb-6">
+                    <h3 class="font-semibold text-amber-200 mb-2">Emergency evidence required</h3>
+                    <p class="text-sm text-amber-100/90 mb-4">Submit proof within 24 hours for emergency cancellations (invoice, photo, report).</p>
+                    {% for ej in emergency_evidence_jobs %}
+                    <div class="rounded-lg border border-slate-600 bg-slate-900/60 p-4 mb-3 text-sm text-slate-200">
+                        <p class="font-mono text-teal-300 mb-2">{{ ej.display_number }}{% for ll in loads %}{% if ll.id == ej.load_id %} · {{ ll.pickup_postcode }} → {{ ll.delivery_postcode }}{% endif %}{% endfor %}</p>
+                        {% if ej.haulier_cancelled_at %}<p class="text-slate-400 text-xs mb-2">Cancelled {{ ej.haulier_cancelled_at.strftime('%d %b %Y, %H:%M') }} UTC</p>{% endif %}
+                        <form method="post" action="/haulier/emergency/{{ ej.id }}/submit-evidence" enctype="multipart/form-data" class="space-y-2">
+                            <label class="block text-slate-300"><span class="text-xs">File (image or PDF)</span>
+                                <input type="file" name="evidence_file" required accept="image/*,.pdf,application/pdf" class="mt-1 block w-full text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-2 file:py-1" />
+                            </label>
+                            <label class="block text-slate-300"><span class="text-xs">Notes (optional)</span>
+                                <textarea name="additional_notes" rows="2" class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm"></textarea>
+                            </label>
+                            <button type="submit" class="rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 text-xs font-semibold text-white">Submit evidence</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
 
                 {% if request.query_params.get('status_updated') %}
                 <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Job status updated.</div>
@@ -2322,6 +2446,7 @@
                 
                 <!-- Confirmed Jobs -->
                 <div>
+                    {% set cu = cancellation_ui_settings|default({'free_h': 24, 'warn_h': 12, 'pen_h': 2, 'fee_warn': 25, 'fee_pen': 50}) %}
                     <h3 class="text-lg font-semibold text-slate-200 mb-2">✅ Backhaul Jobs (Confirmed)</h3>
                     {% if current_user and current_user.loader_id %}
                     <p class="text-xs text-slate-400 mb-4 max-w-2xl leading-relaxed">
@@ -2343,6 +2468,12 @@
                             </thead>
                             <tbody>
                                 {% for j in jobs %}
+                                {% set jns = namespace(hu=9999.0) %}
+                                {% for jl in loads %}
+                                {% if jl.id == j.load_id and jl.pickup_window_start %}
+                                {% set jns.hu = ((jl.pickup_window_start - utcnow()).total_seconds() / 3600) %}
+                                {% endif %}
+                                {% endfor %}
                                 <tr class="border-b border-slate-800/50">
                                     <td class="py-3 px-4 font-mono text-teal-400">{{ j.display_number }}
                                     </td>
@@ -2355,6 +2486,25 @@
                                             <span class="font-mono text-slate-300">{{ l.delivery_postcode }}</span>
                                             {% endif %}
                                         {% endfor %}
+                                        {% if jns.hu < 9990 %}
+                                        {% if jns.hu <= 2 %}
+                                        <div class="mt-1 rounded border border-rose-500/40 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-200/90 inline-block">Critical: pickup {% if jns.hu < 0 %}overdue{% else %}in {{ jns.hu|int }}h{% endif %}</div>
+                                        {% elif jns.hu <= 6 %}
+                                        <div class="mt-1 rounded border border-orange-500/35 bg-orange-950/30 px-2 py-0.5 text-[11px] text-orange-200/90 inline-block">Urgent: pickup in {{ jns.hu|int }}h</div>
+                                        {% elif jns.hu <= 12 %}
+                                        <div class="mt-1 rounded border border-amber-500/35 bg-amber-950/30 px-2 py-0.5 text-[11px] text-amber-200/90 inline-block">Pickup in {{ jns.hu|int }}h</div>
+                                        {% endif %}
+                                        {% endif %}
+                                        {% if j.collected_at and not j.completed_at %}
+                                        <div class="mt-1 rounded border border-sky-500/30 bg-sky-950/30 px-2 py-0.5 text-[11px] text-sky-200/90 inline-block">In transit</div>
+                                        {% endif %}
+                                        {% if current_user and current_user.role == 'haulier' and emergency_evidence_jobs is defined %}
+                                        {% for ej in emergency_evidence_jobs %}
+                                        {% if ej.id == j.id %}
+                                        <div class="mt-1 rounded border border-amber-500/40 bg-amber-950/30 px-2 py-0.5 text-[11px] text-amber-200/90 inline-block">Evidence required</div>
+                                        {% endif %}
+                                        {% endfor %}
+                                        {% endif %}
                                     </td>
                                     <td class="py-3 px-4">
                                         {% if current_user and current_user.role == 'haulier' %}
@@ -2439,8 +2589,88 @@
                                                 <a href="/driver?job_id={{ j.id }}" class="inline-block rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold px-2.5 py-1">Run job</a>
                                                 {% endif %}
                                                 <a href="/track/{{ j.id }}" class="text-teal-400 hover:text-teal-300 text-xs font-medium">Track</a>
-                                                {% if current_user and current_user.role in ['haulier', 'admin'] %}
-                                                <form method="post" action="/delete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Cancel this job? The load and vehicle can then be deleted if needed.');">
+                                                {% if current_user and current_user.loader_id %}
+                                                {% for jl in loads %}
+                                                {% if jl.id == j.load_id and jl.pickup_window_start and not j.collected_at %}
+                                                {% set min_late = ((utcnow() - jl.pickup_window_start).total_seconds() / 60) %}
+                                                {% if min_late >= 30 %}
+                                                <button type="button" class="text-rose-400 hover:text-rose-300 text-xs font-medium" onclick="document.getElementById('no-show-{{ j.id }}').showModal()">Report issue</button>
+                                                <dialog id="no-show-{{ j.id }}" class="rounded-xl border border-slate-600 bg-slate-900 p-6 text-slate-100 max-w-md shadow-xl backdrop:bg-black/50">
+                                                    <h3 class="text-lg font-semibold text-white mb-2">Haulier status</h3>
+                                                    <p class="text-xs text-slate-400 mb-3">Pickup was {{ jl.pickup_window_start.strftime('%H:%M') }} ({{ min_late|int }} min ago).</p>
+                                                    <form method="post" action="/loader/jobs/{{ j.id }}/report-no-show">
+                                                        <div class="space-y-2 mb-4 text-sm">
+                                                            <label class="flex gap-2 items-start p-2 rounded border border-slate-600 cursor-pointer hover:bg-slate-800/50">
+                                                                <input type="radio" name="reason" value="no_contact" required class="mt-1" />
+                                                                <span><span class="text-slate-200 font-medium">No contact / no-show</span><span class="block text-xs text-slate-500">Serious — job cancelled, load reopened, policy penalties may apply.</span></span>
+                                                            </label>
+                                                            <label class="flex gap-2 items-start p-2 rounded border border-slate-600 cursor-pointer hover:bg-slate-800/50">
+                                                                <input type="radio" name="reason" value="running_late" class="mt-1" />
+                                                                <span><span class="text-slate-200 font-medium">Running late, in touch</span><span class="block text-xs text-slate-500">Logged only — no automatic penalty.</span></span>
+                                                            </label>
+                                                            <label class="flex gap-2 items-start p-2 rounded border border-slate-600 cursor-pointer hover:bg-slate-800/50">
+                                                                <input type="radio" name="reason" value="vehicle_issue" class="mt-1" />
+                                                                <span><span class="text-slate-200 font-medium">Vehicle issue</span><span class="block text-xs text-slate-500">Reported to platform.</span></span>
+                                                            </label>
+                                                        </div>
+                                                        <div class="flex justify-end gap-2">
+                                                            <button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-xs" onclick="this.closest('dialog').close()">Close</button>
+                                                            <button type="submit" class="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white">Submit</button>
+                                                        </div>
+                                                    </form>
+                                                </dialog>
+                                                {% endif %}
+                                                {% endif %}
+                                                {% endfor %}
+                                                {% endif %}
+                                                {% if current_user and current_user.role == 'haulier' and not j.completed_at %}
+                                                <button type="button" class="text-red-400 hover:text-red-300 text-xs font-medium" onclick="document.getElementById('cancel-job-{{ j.id }}').showModal()">Cancel</button>
+                                                <dialog id="cancel-job-{{ j.id }}" class="rounded-xl border border-slate-600 bg-slate-900 p-6 text-slate-100 max-w-lg shadow-xl backdrop:bg-black/50">
+                                                    <h3 class="text-lg font-semibold text-white mb-2">Cancel job?</h3>
+                                                    <form method="post" action="/delete-job/{{ j.id }}" class="space-y-4">
+                                                        {% if jns.hu < 24 %}
+                                                        <p class="text-xs text-slate-400">Pickup in about {% if jns.hu < 0 %}0{% else %}{{ jns.hu|int }}{% endif %} hours.</p>
+                                                        <div class="space-y-2">
+                                                            <label class="flex items-start gap-2 p-3 border border-slate-600 rounded-lg cursor-pointer hover:bg-slate-800/40">
+                                                                <input type="radio" name="cancellation_type" value="normal" checked class="mt-1" onclick="document.getElementById('em-{{ j.id }}').style.display='none'" />
+                                                                <span><span class="font-medium text-slate-200">Normal cancellation</span>
+                                                                <span class="block text-xs text-slate-500">{% if jns.hu >= 12 %}Rating impact may apply per policy.{% else %}Strike + stronger penalties may apply.{% endif %}</span></span>
+                                                            </label>
+                                                            <label class="flex items-start gap-2 p-3 border border-slate-600 rounded-lg cursor-pointer hover:bg-slate-800/40">
+                                                                <input type="radio" name="cancellation_type" value="emergency" class="mt-1" onclick="document.getElementById('em-{{ j.id }}').style.display='block'" />
+                                                                <span><span class="font-medium text-slate-200">Emergency</span>
+                                                                <span class="block text-xs text-slate-500">No immediate strike if you submit evidence in time.</span></span>
+                                                            </label>
+                                                        </div>
+                                                        <div id="em-{{ j.id }}" style="display:none" class="rounded-lg border border-cyan-500/30 bg-slate-800/40 p-3 space-y-2 text-sm">
+                                                            <label class="block text-slate-300 text-xs">Reason
+                                                                <select name="emergency_reason" class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm">
+                                                                    <option value="">Select…</option>
+                                                                    <option value="breakdown">Vehicle breakdown</option>
+                                                                    <option value="accident">Traffic accident</option>
+                                                                    <option value="medical">Medical emergency</option>
+                                                                    <option value="weather">Severe weather</option>
+                                                                    <option value="family">Family emergency</option>
+                                                                    <option value="other">Other</option>
+                                                                </select>
+                                                            </label>
+                                                            <label class="block text-slate-300 text-xs">Details
+                                                                <textarea name="emergency_details" rows="3" class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm" placeholder="What happened…"></textarea>
+                                                            </label>
+                                                            <p class="text-xs text-cyan-200/90">Evidence required within 24h (upload below after submit, or email support).</p>
+                                                        </div>
+                                                        {% else %}
+                                                        <p class="text-sm text-slate-400">More than {{ cu.free_h }} hours before pickup — no strike under normal cancellation.</p>
+                                                        <input type="hidden" name="cancellation_type" value="normal" />
+                                                        {% endif %}
+                                                        <div class="flex flex-wrap justify-end gap-2 pt-2">
+                                                            <button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-xs" onclick="this.closest('dialog').close()">Keep job</button>
+                                                            <button type="submit" class="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-2 text-xs font-semibold text-white">Cancel job</button>
+                                                        </div>
+                                                    </form>
+                                                </dialog>
+                                                {% elif current_user and current_user.role == 'admin' and not j.completed_at %}
+                                                <form method="post" action="/delete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Cancel this job?');">
                                                     <button type="submit" class="text-red-400 hover:text-red-300 text-xs font-medium">Cancel</button>
                                                 </form>
                                                 {% endif %}
@@ -3005,9 +3235,11 @@
                 emptyEl.classList.add('hidden');
                 items.forEach(function (n) {
                     var li = document.createElement('li');
-                    li.className = 'px-3 py-2 hover:bg-slate-800/60 cursor-pointer text-left break-words min-w-0' + (n.read_at ? ' opacity-70' : '');
-                    li.innerHTML = '<div class="font-medium text-slate-200 text-xs break-words">' + escapeHtml(n.title) + '</div>' +
-                        '<div class="text-slate-400 text-xs mt-0.5 break-words">' + escapeHtml(n.body || '') + '</div>';
+                    var pri = (n.priority || 'normal');
+                    var icon = pri === 'critical' ? '🚨' : (pri === 'important' ? '⚠️' : 'ℹ️');
+                    li.className = 'px-3 py-2 hover:bg-slate-800/60 cursor-pointer text-left break-words min-w-0 flex gap-2 items-start' + (n.read_at ? ' opacity-70' : '');
+                    li.innerHTML = '<span class="text-base shrink-0 leading-none pt-0.5" aria-hidden="true">' + icon + '</span><div class="min-w-0 flex-1"><div class="font-medium text-slate-200 text-xs break-words">' + escapeHtml(n.title) + '</div>' +
+                        '<div class="text-slate-400 text-xs mt-0.5 break-words">' + escapeHtml(n.body || '') + '</div></div>';
                     li.addEventListener('click', function () {
                         if (!n.read_at) {
                             fetch('/api/notifications/' + n.id + '/read', { method: 'POST', credentials: 'same-origin' })

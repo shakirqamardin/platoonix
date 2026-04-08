@@ -86,6 +86,17 @@ class Settings(BaseSettings):
     # Vehicle insurance certificate files (PDF/images). Default: <project>/data/insurance
     insurance_upload_dir: Optional[str] = None
 
+    # Cancellation policy (hours / GBP) — see Terms §9 and cancellation_policy service
+    free_cancellation_hours: int = 24
+    warning_cancellation_hours: int = 12
+    penalty_cancellation_hours: int = 2
+    cancellation_fee_warning_gbp: float = 25.0
+    cancellation_fee_penalty_gbp: float = 50.0
+    no_show_penalty_gbp: float = 100.0
+    no_show_compensation_loader_gbp: float = 50.0
+    suspension_strike_threshold: int = 3
+    probation_strike_threshold: int = 2
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

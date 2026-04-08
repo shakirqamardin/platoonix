@@ -63,24 +63,6 @@ def _primary_job_for_load(db: Session, load_id: int) -> Optional[models.Backhaul
     )
 
 
-def _notify_hauliers_load_cancelled(db: Session, job: models.BackhaulJob, load: models.Load) -> None:
-    vehicle = db.get(models.Vehicle, job.vehicle_id)
-    if not vehicle:
-        return
-    from app.services.email_sender import send_email
-
-    users = db.query(models.User).filter(models.User.haulier_id == vehicle.haulier_id).all()
-    jref = job.display_number
-    for u in users:
-        if u.email:
-            send_email(
-                u.email,
-                "Platoonix: load cancelled by shipper",
-                f"The load \"{load.shipper_name}\" ({load.pickup_postcode} → {load.delivery_postcode}) has been cancelled by the loader.\n\n"
-                f"Job: {jref}.\n",
-            )
-
-
 def _loader_or_redirect(request: Request, db: Session) -> Union[Tuple[models.User, models.Loader], RedirectResponse]:
     redirect = require_loader(request, db)
     if redirect is not None:
@@ -456,6 +438,16 @@ def loader_cancel_load(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
+    from datetime import datetime, timezone
+
+    from app.services.cancellation_emails import notify_hauliers_loader_cancelled
+    from app.services.cancellation_policy import (
+        hours_until_pickup,
+        loader_matched_cancellation_tier,
+        open_load_cancel_blocked,
+        pickup_reference_time,
+    )
+
     result = _loader_or_redirect(request, db)
     if isinstance(result, RedirectResponse):
         return result
@@ -466,33 +458,63 @@ def loader_cancel_load(
     if load.status == models.LoadStatusEnum.CANCELLED.value:
         return RedirectResponse(url="/?section=loads&load_error=already_cancelled", status_code=303)
 
+    now = datetime.now(timezone.utc)
     job = _primary_job_for_load(db, load_id)
-    payment = None
-    if job:
+    h = hours_until_pickup(load, job, now)
+
+    if not job:
+        if open_load_cancel_blocked(h):
+            return RedirectResponse(url="/?section=loads&cancel_blocked=1", status_code=303)
+        fee_gbp = 0.0
+        tier_key = "unmatched"
+    else:
         if job.completed_at:
             return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_completed", status_code=303)
         if job.collected_at:
             return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_collected", status_code=303)
+        payment_chk = (
+            db.query(models.Payment)
+            .filter(models.Payment.backhaul_job_id == job.id)
+            .order_by(models.Payment.created_at.asc())
+            .first()
+        )
+        if payment_chk and (payment_chk.status or "").strip().lower() == models.PaymentStatusEnum.PAID_OUT.value:
+            return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_paid_out", status_code=303)
+
+        blocked, fee_gbp, tier_key = loader_matched_cancellation_tier(h)
+        if blocked:
+            pt = pickup_reference_time(load, job)
+            ps = pt.strftime("%d+%b+%Y+%H%3A%M") if pt else ""
+            return RedirectResponse(
+                url=f"/?section=loads&cancel_blocked=1&pickup_time={ps}",
+                status_code=303,
+            )
+
+    payment = None
+    if job:
         payment = (
             db.query(models.Payment)
             .filter(models.Payment.backhaul_job_id == job.id)
             .order_by(models.Payment.created_at.asc())
             .first()
         )
-        if payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.PAID_OUT.value:
-            return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_paid_out", status_code=303)
 
     refund_warning = False
-    if payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.CAPTURED.value:
+    if job and payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.CAPTURED.value:
         from app.services.stripe_loader_charge import try_refund_loader_charge
 
-        ok_ref, _err = try_refund_loader_charge(payment, db)
+        total_gbp = float(payment.amount_gbp or 0) + float(payment.flat_fee_gbp or 0)
+        refund_gbp = max(0.0, round(total_gbp - float(fee_gbp), 2))
+        ok_ref, _err = try_refund_loader_charge(payment, db, refund_amount_gbp=refund_gbp)
         if not ok_ref:
             refund_warning = True
-        else:
-            db.add(payment)
+        db.add(payment)
 
     load.status = models.LoadStatusEnum.CANCELLED.value
+    load.cancelled_at = now
+    load.cancelled_by_user_id = _user.id
+    load.cancellation_fee_gbp = fee_gbp if fee_gbp else None
+    load.cancellation_reason = f"loader_cancel:{tier_key}"
     db.add(load)
 
     for li in db.query(models.LoadInterest).filter(models.LoadInterest.load_id == load.id).all():
@@ -504,7 +526,7 @@ def loader_cancel_load(
 
     if job:
         try:
-            _notify_hauliers_load_cancelled(db, job, load)
+            notify_hauliers_loader_cancelled(db, job, load, float(fee_gbp or 0), tier_key)
         except Exception:
             logger.exception("notify haulier load cancelled")
         try:
@@ -518,7 +540,108 @@ def loader_cancel_load(
     q = "section=loads&load_cancelled=1"
     if refund_warning:
         q += "&refund_warning=1"
+    if fee_gbp and fee_gbp > 0:
+        q += f"&cancel_fee={int(fee_gbp)}"
     return RedirectResponse(url=f"/?{q}", status_code=303)
+
+
+@router.post("/loader/jobs/{job_id}/report-no-show", response_class=RedirectResponse)
+async def loader_report_no_show(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Loader reports haulier no-show / late / issue (confirmed jobs only)."""
+    from datetime import datetime, timezone
+
+    from app.services.cancellation_emails import notify_no_show_report
+    from app.services.stripe_loader_charge import try_refund_loader_charge
+
+    result = _loader_or_redirect(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    user, loader = result
+    job = db.get(models.BackhaulJob, job_id)
+    if not job:
+        return RedirectResponse(url="/?section=matches&no_show_error=not_found", status_code=303)
+    load = db.get(models.Load, job.load_id)
+    if not load or load.loader_id != loader.id:
+        return RedirectResponse(url="/?section=matches&no_show_error=not_found", status_code=303)
+    if job.completed_at or job.collected_at:
+        return RedirectResponse(url="/?section=matches&no_show_error=too_late", status_code=303)
+
+    form = await request.form()
+    reason = (form.get("reason") or "").strip().lower()
+    vehicle = db.get(models.Vehicle, job.vehicle_id)
+    haulier = db.get(models.Haulier, vehicle.haulier_id) if vehicle else None
+    if not haulier:
+        return RedirectResponse(url="/?section=matches&no_show_error=not_found", status_code=303)
+
+    now = datetime.now(timezone.utc)
+
+    if reason == "no_contact":
+        job.no_show_reported_at = now
+        job.no_show_reported_by_user_id = user.id
+        db.add(job)
+
+        payment = (
+            db.query(models.Payment)
+            .filter(models.Payment.backhaul_job_id == job.id)
+            .order_by(models.Payment.created_at.asc())
+            .first()
+        )
+        if payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.CAPTURED.value:
+            try_refund_loader_charge(payment, db, refund_amount_gbp=None)
+            db.add(payment)
+
+        haulier.cancellation_strikes = int(haulier.cancellation_strikes or 0) + 2
+        haulier.no_show_count = int(haulier.no_show_count or 0) + 1
+        haulier.last_strike_date = now
+        if haulier.cancellation_strikes >= get_settings().suspension_strike_threshold:
+            haulier.account_status = "suspended"
+        db.add(haulier)
+
+        load.status = models.LoadStatusEnum.OPEN.value
+        load.load_priority = "emergency"
+        load.reopened_at = now
+        load.cancellation_reason = "loader_no_show_report"
+        db.add(load)
+
+        vid = job.vehicle_id
+        try:
+            notify_no_show_report(db, job, load, haulier, loader, commit_in_app=False)
+        except Exception:
+            logger.exception("notify_no_show_report")
+
+        db.query(models.POD).filter(models.POD.backhaul_job_id == job.id).delete()
+        db.query(models.Payment).filter(models.Payment.backhaul_job_id == job.id).delete()
+        db.delete(job)
+        db.commit()
+
+        try:
+            from app.services import vehicle_availability as vehicle_availability_svc
+
+            vehicle_availability_svc.refresh_vehicle_availability(db, vid)
+            db.commit()
+        except Exception:
+            logger.exception("refresh_vehicle_availability after no-show")
+
+        return RedirectResponse(url="/?section=matches&no_show_reported=1", status_code=303)
+
+    if reason == "running_late":
+        job.late_notification_at = now
+        db.add(job)
+        db.commit()
+        return RedirectResponse(url="/?section=matches&late_noted=1", status_code=303)
+
+    if reason == "vehicle_issue":
+        job.issue_reported_at = now
+        job.issue_type = "vehicle"
+        db.add(job)
+        db.commit()
+        return RedirectResponse(url="/?section=matches&issue_noted=1", status_code=303)
+
+    return RedirectResponse(url="/?section=matches&no_show_error=invalid", status_code=303)
 
 
 @router.post("/loader/planned-loads", response_class=RedirectResponse)

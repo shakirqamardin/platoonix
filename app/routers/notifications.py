@@ -19,6 +19,7 @@ class NotificationItem(BaseModel):
     body: Optional[str] = None
     link_url: Optional[str] = None
     kind: str
+    priority: str = "normal"
     read_at: Optional[str] = None
     created_at: str
 
@@ -60,6 +61,7 @@ def list_notifications(
                 body=n.body,
                 link_url=n.link_url,
                 kind=n.kind,
+                priority=getattr(n, "priority", None) or "normal",
                 read_at=n.read_at.isoformat() if n.read_at else None,
                 created_at=n.created_at.isoformat() if n.created_at else "",
             )

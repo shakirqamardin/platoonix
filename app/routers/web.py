@@ -1,5 +1,6 @@
+import logging
 import math
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional, Union
@@ -27,6 +28,8 @@ from app.services import ratings as ratings_svc
 from app.services import load_pricing as load_pricing_svc
 from app.services import vehicle_availability as vehicle_availability_svc
 from app.services.payment_fees import compute_loader_platform_fee_gbp
+logger = logging.getLogger(__name__)
+
 from app.services.insurance_status import (
     apply_insurance_status_to_vehicles,
     calculate_insurance_status,
@@ -58,6 +61,8 @@ def _job_status_parts(job):
             return f"{int(secs // 3600)} hrs ago"
         return f"{int(secs // 86400)} days ago"
 
+    if getattr(job, "haulier_cancelled_at", None):
+        return {"headline": "Cancelled (haulier)", "detail": "Awaiting evidence" if getattr(job, "emergency_evidence_required", None) else ""}
     if getattr(job, "completed_at", None):
         return {"headline": "Completed", "detail": ago(job.completed_at)}
     if getattr(job, "reached_delivery_at", None):
@@ -83,6 +88,9 @@ def _whatsapp_href_load(load, base_url: str) -> str:
 
 
 templates.env.filters["whatsapp_href_load"] = _whatsapp_href_load
+
+templates.env.globals["utcnow"] = lambda: datetime.now(timezone.utc)
+templates.env.globals["timedelta"] = timedelta
 
 
 def _haulier_or_admin_can_job(user: models.User, job: models.BackhaulJob, db: Session) -> bool:
@@ -533,6 +541,7 @@ def _haulier_scoped_lists(
     jobs = (
         db.query(models.BackhaulJob)
         .filter(models.BackhaulJob.vehicle_id.in_(vehicle_ids))
+        .filter(models.BackhaulJob.haulier_cancelled_at.is_(None))
         .order_by(models.BackhaulJob.matched_at.desc())
         .all()
         if vehicle_ids
@@ -599,8 +608,18 @@ def home(
         if planned_ids:
             load_interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.planned_load_id.in_(planned_ids)).all())
         
-        # Only jobs for their loads
-        jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.load_id.in_(load_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if load_ids else []
+        # Only jobs for their loads (exclude soft-cancelled haulier rows kept for evidence)
+        jobs = (
+            db.query(models.BackhaulJob)
+            .filter(
+                models.BackhaulJob.load_id.in_(load_ids),
+                models.BackhaulJob.haulier_cancelled_at.is_(None),
+            )
+            .order_by(models.BackhaulJob.matched_at.desc())
+            .all()
+            if load_ids
+            else []
+        )
         payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
         
         # No vehicles or hauliers for loaders
@@ -614,7 +633,17 @@ def home(
         vehicles = db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier.id).order_by(models.Vehicle.registration).all()
 
         vehicle_ids = [v.id for v in vehicles]
-        jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id.in_(vehicle_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if vehicle_ids else []
+        jobs = (
+            db.query(models.BackhaulJob)
+            .filter(
+                models.BackhaulJob.vehicle_id.in_(vehicle_ids),
+                models.BackhaulJob.haulier_cancelled_at.is_(None),
+            )
+            .order_by(models.BackhaulJob.matched_at.desc())
+            .all()
+            if vehicle_ids
+            else []
+        )
         payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
         
         # Show all loads (for searching)
@@ -645,7 +674,12 @@ def home(
         hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
         vehicles = db.query(models.Vehicle).order_by(models.Vehicle.created_at.desc()).all()
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
-        jobs = db.query(models.BackhaulJob).order_by(models.BackhaulJob.matched_at.desc()).all()
+        jobs = (
+            db.query(models.BackhaulJob)
+            .filter(models.BackhaulJob.haulier_cancelled_at.is_(None))
+            .order_by(models.BackhaulJob.matched_at.desc())
+            .all()
+        )
         payments = db.query(models.Payment).order_by(models.Payment.created_at.desc()).all()
         load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
         
@@ -712,6 +746,28 @@ def home(
         shared_load_id = None
     _pub_base = get_settings().public_app_base_url
     onboarding_checklist = _build_onboarding_checklist(current_user, haulier_profile, loader_profile, vehicles, loads)
+    _cset_home = get_settings()
+    cancellation_ui_settings = {
+        "free_h": _cset_home.free_cancellation_hours,
+        "warn_h": _cset_home.warning_cancellation_hours,
+        "pen_h": _cset_home.penalty_cancellation_hours,
+        "fee_warn": _cset_home.cancellation_fee_warning_gbp,
+        "fee_pen": _cset_home.cancellation_fee_penalty_gbp,
+    }
+    emergency_evidence_jobs: list = []
+    if current_user and getattr(current_user, "role", None) == "haulier" and getattr(current_user, "haulier_id", None):
+        _evids = [v.id for v in vehicles] if vehicles else []
+        if _evids:
+            emergency_evidence_jobs = (
+                db.query(models.BackhaulJob)
+                .filter(models.BackhaulJob.vehicle_id.in_(_evids))
+                .filter(models.BackhaulJob.haulier_cancelled_at.isnot(None))
+                .filter(models.BackhaulJob.emergency_cancellation.is_(True))
+                .filter(models.BackhaulJob.emergency_evidence_required.is_(True))
+                .filter(models.BackhaulJob.emergency_evidence_submitted_at.is_(None))
+                .order_by(models.BackhaulJob.haulier_cancelled_at.desc())
+                .all()
+            )
     job_by_load_id = {}
     for j in jobs:
         prev = job_by_load_id.get(j.load_id)
@@ -737,6 +793,8 @@ def home(
             "payments": payments,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,
+            "emergency_evidence_jobs": emergency_evidence_jobs,
+            "cancellation_ui_settings": cancellation_ui_settings,
             "uploaded": int(uploaded) if uploaded and uploaded.isdigit() else None,
             "upload_errors": int(errors_count) if errors_count and errors_count.isdigit() else None,
             "upload_type": upload_type or "",
@@ -1185,7 +1243,17 @@ def find_backhaul_page(
             load_interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.load_id.in_(load_ids)).all())
         if planned_ids:
             load_interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.planned_load_id.in_(planned_ids)).all())
-        jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.load_id.in_(load_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if load_ids else []
+        jobs = (
+            db.query(models.BackhaulJob)
+            .filter(
+                models.BackhaulJob.load_id.in_(load_ids),
+                models.BackhaulJob.haulier_cancelled_at.is_(None),
+            )
+            .order_by(models.BackhaulJob.matched_at.desc())
+            .all()
+            if load_ids
+            else []
+        )
         payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
         hauliers = []
         vehicles = []
@@ -1195,7 +1263,17 @@ def find_backhaul_page(
         haulier = db.get(models.Haulier, current_user.haulier_id)
         vehicles = db.query(models.Vehicle).filter(models.Vehicle.haulier_id == haulier.id).order_by(models.Vehicle.registration).all()
         vehicle_ids = [v.id for v in vehicles]
-        jobs = db.query(models.BackhaulJob).filter(models.BackhaulJob.vehicle_id.in_(vehicle_ids)).order_by(models.BackhaulJob.matched_at.desc()).all() if vehicle_ids else []
+        jobs = (
+            db.query(models.BackhaulJob)
+            .filter(
+                models.BackhaulJob.vehicle_id.in_(vehicle_ids),
+                models.BackhaulJob.haulier_cancelled_at.is_(None),
+            )
+            .order_by(models.BackhaulJob.matched_at.desc())
+            .all()
+            if vehicle_ids
+            else []
+        )
         payments = db.query(models.Payment).filter(models.Payment.backhaul_job_id.in_([j.id for j in jobs])).all() if jobs else []
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
         load_interests = db.query(models.LoadInterest).filter(models.LoadInterest.haulier_id == haulier.id).all()
@@ -1217,7 +1295,12 @@ def find_backhaul_page(
         hauliers = db.query(models.Haulier).order_by(models.Haulier.created_at.desc()).all()
         vehicles = db.query(models.Vehicle).order_by(models.Vehicle.created_at.desc()).all()
         loads = db.query(models.Load).order_by(models.Load.created_at.desc()).all()
-        jobs = db.query(models.BackhaulJob).order_by(models.BackhaulJob.matched_at.desc()).all()
+        jobs = (
+            db.query(models.BackhaulJob)
+            .filter(models.BackhaulJob.haulier_cancelled_at.is_(None))
+            .order_by(models.BackhaulJob.matched_at.desc())
+            .all()
+        )
         payments = db.query(models.Payment).order_by(models.Payment.created_at.desc()).all()
         load_interests = db.query(models.LoadInterest).order_by(models.LoadInterest.created_at.desc()).all()
         planned_loads = []
@@ -1267,6 +1350,29 @@ def find_backhaul_page(
     _pub_base = get_settings().public_app_base_url
     find_backhaul_msg = (request.query_params.get("msg") or "").strip() or None
     onboarding_checklist = _build_onboarding_checklist(current_user, haulier_profile, loader_profile, vehicles, loads)
+
+    _cset = get_settings()
+    cancellation_ui_settings = {
+        "free_h": _cset.free_cancellation_hours,
+        "warn_h": _cset.warning_cancellation_hours,
+        "pen_h": _cset.penalty_cancellation_hours,
+        "fee_warn": _cset.cancellation_fee_warning_gbp,
+        "fee_pen": _cset.cancellation_fee_penalty_gbp,
+    }
+    emergency_evidence_jobs: list = []
+    if current_user and getattr(current_user, "role", None) == "haulier" and getattr(current_user, "haulier_id", None):
+        _evids = [v.id for v in vehicles] if vehicles else []
+        if _evids:
+            emergency_evidence_jobs = (
+                db.query(models.BackhaulJob)
+                .filter(models.BackhaulJob.vehicle_id.in_(_evids))
+                .filter(models.BackhaulJob.haulier_cancelled_at.isnot(None))
+                .filter(models.BackhaulJob.emergency_cancellation.is_(True))
+                .filter(models.BackhaulJob.emergency_evidence_required.is_(True))
+                .filter(models.BackhaulJob.emergency_evidence_submitted_at.is_(None))
+                .order_by(models.BackhaulJob.haulier_cancelled_at.desc())
+                .all()
+            )
 
     job_by_load_id = {}
     for j in jobs:
@@ -1332,6 +1438,8 @@ def find_backhaul_page(
             "approval_confirmation": None,
             "find_backhaul_msg": find_backhaul_msg,
             "onboarding_checklist": onboarding_checklist,
+            "emergency_evidence_jobs": emergency_evidence_jobs,
+            "cancellation_ui_settings": cancellation_ui_settings,
             **rating_ctx,
         },
     )
@@ -1669,12 +1777,23 @@ def delete_vehicle_form(
     return RedirectResponse(url="/?section=vehicles&deleted=vehicle", status_code=303)
 
 @router.post("/delete-job/{job_id}", response_class=RedirectResponse)
-def delete_job_form(
+async def delete_job_form(
     job_id: int,
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    """Haulier office or admin: cancel/delete a backhaul job. Resets load to open and interest to suggested."""
+    """Haulier office or admin: cancel a backhaul job. Policy: time windows, strikes, emergency soft-cancel."""
+    from app.services.cancellation_emails import (
+        notify_loader_emergency_haulier_cancel,
+        notify_loader_haulier_cancelled,
+        notify_support_emergency_cancellation,
+        send_haulier_emergency_evidence_reminder,
+        send_haulier_probation_notice,
+        send_haulier_suspension_notice,
+    )
+    from app.services.cancellation_policy import haulier_cancellation_penalty_kind, hours_until_pickup
+    from app.services.stripe_loader_charge import try_refund_loader_charge
+
     current_user = get_current_user_optional(request, db)
     if get_current_driver_optional(request, db) is not None:
         return RedirectResponse(url="/?section=matches&delete_error=Not+authorized", status_code=303)
@@ -1683,9 +1802,16 @@ def delete_job_form(
     if current_user.role not in ("haulier", "admin"):
         return RedirectResponse(url="/?section=matches&delete_error=Not+authorized", status_code=303)
 
+    form = await request.form()
+    cancellation_type = (form.get("cancellation_type") or "normal").strip().lower()
+    emergency_reason = (form.get("emergency_reason") or "").strip().lower()
+    emergency_details = (form.get("emergency_details") or "").strip()[:1000]
+
     job = db.get(models.BackhaulJob, job_id)
     if not job:
         return RedirectResponse(url="/?section=matches&delete_error=Job+not+found", status_code=303)
+    if getattr(job, "haulier_cancelled_at", None):
+        return RedirectResponse(url="/?section=matches&delete_error=already_cancelled", status_code=303)
 
     vehicle_id_for_refresh = job.vehicle_id
     vehicle = db.get(models.Vehicle, job.vehicle_id)
@@ -1693,24 +1819,146 @@ def delete_job_form(
         if not current_user.haulier_id or not vehicle or vehicle.haulier_id != current_user.haulier_id:
             return RedirectResponse(url="/?section=matches&delete_error=Not+your+job", status_code=303)
 
-    # Reset load status to open
-    if job.load_id:
-        load = db.get(models.Load, job.load_id)
-        if load:
-            load.status = models.LoadStatusEnum.OPEN.value
-    
-    # Reset interest status to suggested (so haulier can try again)
-    interest = db.query(models.LoadInterest).filter(
-        models.LoadInterest.load_id == job.load_id,
-        models.LoadInterest.vehicle_id == job.vehicle_id,
-        models.LoadInterest.status == "accepted"
-    ).first()
-    if interest:
-        interest.status = "suggested"
-    
-    # Delete related records
-    db.query(models.Payment).filter(models.Payment.backhaul_job_id == job_id).delete()
+    load = db.get(models.Load, job.load_id)
+    if not load:
+        return RedirectResponse(url="/?section=matches&delete_error=Load+not+found", status_code=303)
+
+    now = datetime.now(timezone.utc)
+    hours = hours_until_pickup(load, job, now)
+    settings = get_settings()
+    pen_h = float(settings.penalty_cancellation_hours)
+    is_emergency = cancellation_type == "emergency" and bool(emergency_reason)
+
+    payment = (
+        db.query(models.Payment)
+        .filter(models.Payment.backhaul_job_id == job.id)
+        .order_by(models.Payment.created_at.asc())
+        .first()
+    )
+
+    def _refund_loader_if_captured() -> None:
+        if payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.CAPTURED.value:
+            try_refund_loader_charge(payment, db, refund_amount_gbp=None)
+            db.add(payment)
+
+    def _interest_to_suggested() -> None:
+        interest = (
+            db.query(models.LoadInterest)
+            .filter(
+                models.LoadInterest.load_id == job.load_id,
+                models.LoadInterest.vehicle_id == job.vehicle_id,
+                models.LoadInterest.status == "accepted",
+            )
+            .first()
+        )
+        if interest:
+            interest.status = "suggested"
+            db.add(interest)
+
+    if current_user.role == "admin":
+        _refund_loader_if_captured()
+        load.status = models.LoadStatusEnum.OPEN.value
+        load.reopened_at = now
+        db.add(load)
+        _interest_to_suggested()
+        db.query(models.Payment).filter(models.Payment.backhaul_job_id == job_id).delete()
+        db.query(models.POD).filter(models.POD.backhaul_job_id == job_id).delete()
+        db.delete(job)
+        vehicle_availability_svc.refresh_vehicle_availability(db, vehicle_id_for_refresh)
+        db.commit()
+        return RedirectResponse(url="/?section=matches&deleted=job", status_code=303)
+
+    haulier = db.get(models.Haulier, current_user.haulier_id)
+    if not haulier:
+        return RedirectResponse(url="/?section=matches&delete_error=Not+your+job", status_code=303)
+    if (haulier.account_status or "").strip().lower() == "suspended":
+        return RedirectResponse(url="/?section=matches&delete_error=account_suspended", status_code=303)
+
+    if hours < pen_h and not is_emergency:
+        return RedirectResponse(url="/?section=matches&haulier_cancel_blocked=1", status_code=303)
+
+    if is_emergency:
+        _refund_loader_if_captured()
+        db.query(models.POD).filter(models.POD.backhaul_job_id == job.id).delete()
+        db.query(models.Payment).filter(models.Payment.backhaul_job_id == job.id).delete()
+
+        job.haulier_cancelled_at = now
+        job.emergency_cancellation = True
+        job.emergency_details = emergency_details or None
+        job.issue_type = emergency_reason[:50] if emergency_reason else None
+        job.emergency_evidence_required = True
+        haulier.pending_emergency_reviews = int(haulier.pending_emergency_reviews or 0) + 1
+        db.add(haulier)
+        db.add(job)
+
+        load.status = models.LoadStatusEnum.OPEN.value
+        load.load_priority = "urgent" if hours < 24.0 else "normal"
+        load.reopened_at = now
+        load.cancellation_reason = "haulier_emergency_cancel"
+        db.add(load)
+
+        _interest_to_suggested()
+
+        try:
+            notify_loader_emergency_haulier_cancel(
+                db, job, emergency_reason, hours, commit_in_app=False
+            )
+            send_haulier_emergency_evidence_reminder(
+                db, haulier, job, emergency_reason, commit_in_app=False
+            )
+            notify_support_emergency_cancellation(job, emergency_reason, emergency_details)
+        except Exception:
+            logger.exception("emergency haulier cancel emails")
+
+        vehicle_availability_svc.refresh_vehicle_availability(db, vehicle_id_for_refresh)
+        db.commit()
+        return RedirectResponse(url="/?section=matches&deleted=job&emergency=1", status_code=303)
+
+    kind = haulier_cancellation_penalty_kind(hours)
+    if kind == "blocked":
+        return RedirectResponse(url="/?section=matches&haulier_cancel_blocked=1", status_code=303)
+
+    _refund_loader_if_captured()
+
+    if kind == "strike":
+        haulier.cancellation_strikes = int(haulier.cancellation_strikes or 0) + 1
+        haulier.last_strike_date = now
+        thr = settings.suspension_strike_threshold
+        prob = settings.probation_strike_threshold
+        if haulier.cancellation_strikes >= thr:
+            haulier.account_status = "suspended"
+            try:
+                send_haulier_suspension_notice(haulier)
+            except Exception:
+                logger.exception("send_haulier_suspension_notice")
+        elif haulier.cancellation_strikes >= prob:
+            haulier.account_status = "probation"
+            try:
+                send_haulier_probation_notice(haulier)
+            except Exception:
+                logger.exception("send_haulier_probation_notice")
+        db.add(haulier)
+
+    try:
+        notify_loader_haulier_cancelled(db, job, hours, commit_in_app=False)
+    except Exception:
+        logger.exception("notify_loader_haulier_cancelled")
+
+    load.status = models.LoadStatusEnum.OPEN.value
+    if hours < 12.0:
+        load.load_priority = "emergency"
+    elif hours < 24.0:
+        load.load_priority = "urgent"
+    else:
+        load.load_priority = "normal"
+    load.reopened_at = now
+    load.cancellation_reason = "haulier_cancel"
+    db.add(load)
+
+    _interest_to_suggested()
+
     db.query(models.POD).filter(models.POD.backhaul_job_id == job_id).delete()
+    db.query(models.Payment).filter(models.Payment.backhaul_job_id == job_id).delete()
     db.delete(job)
     vehicle_availability_svc.refresh_vehicle_availability(db, vehicle_id_for_refresh)
     db.commit()

@@ -89,9 +89,15 @@ def try_charge_loader_for_job(payment: models.Payment, db: Session) -> Tuple[boo
         return (False, err)
 
 
-def try_refund_loader_charge(payment: models.Payment, db: Session) -> Tuple[bool, Optional[str]]:
+def try_refund_loader_charge(
+    payment: models.Payment,
+    db: Session,
+    refund_amount_gbp: Optional[float] = None,
+) -> Tuple[bool, Optional[str]]:
     """
     Refund a captured loader PaymentIntent when a load is cancelled after charge.
+    If refund_amount_gbp is None, refunds the full captured amount.
+    Otherwise refunds that many GBP (partial), capped at the charge total.
     Skips if no Stripe key, no PI id, or payment not captured. Returns (ok, error_message).
     """
     settings = get_settings()
@@ -101,6 +107,15 @@ def try_refund_loader_charge(payment: models.Payment, db: Session) -> Tuple[bool
     if not pid:
         return (True, None)
     if (payment.status or "").strip().lower() != models.PaymentStatusEnum.CAPTURED.value:
+        return (True, None)
+    total_gbp = float(payment.amount_gbp or 0) + float(payment.flat_fee_gbp or 0)
+    total_pence = max(0, int(round(total_gbp * 100)))
+    if refund_amount_gbp is not None:
+        want_pence = max(0, int(round(float(refund_amount_gbp) * 100)))
+        refund_pence = min(want_pence, total_pence)
+    else:
+        refund_pence = total_pence
+    if refund_pence <= 0:
         return (True, None)
     try:
         import stripe
@@ -123,8 +138,11 @@ def try_refund_loader_charge(payment: models.Payment, db: Session) -> Tuple[bool
             ch_id = getattr(ch0, "id", None) or (ch0.get("id") if isinstance(ch0, dict) else None)
         if not ch_id:
             return (False, "No charge id on PaymentIntent")
-        stripe.Refund.create(charge=ch_id)
-        print(f"[STRIPE] Refunded loader charge for payment {payment.id} (PI {pid})")
+        kwargs = {"charge": ch_id}
+        if refund_pence < total_pence:
+            kwargs["amount"] = refund_pence
+        stripe.Refund.create(**kwargs)
+        print(f"[STRIPE] Refunded £{refund_pence/100:.2f} for payment {payment.id} (PI {pid})")
         return (True, None)
     except Exception as e:
         err = str(e)

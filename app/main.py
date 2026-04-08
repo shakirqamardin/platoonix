@@ -300,6 +300,78 @@ def check_db_and_create_tables():
                 if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                     print(f"Migration loads.load_notes: {e!r}", file=sys.stderr)
             for col_sql in (
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancelled_by_user_id INTEGER REFERENCES users(id)",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancellation_fee_gbp DOUBLE PRECISION",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(500)",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS load_priority VARCHAR(20) DEFAULT 'normal'",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS reopened_at TIMESTAMP WITH TIME ZONE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration loads cancellation columns: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS cancellation_strikes INTEGER DEFAULT 0",
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS last_strike_date TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS account_status VARCHAR(20) DEFAULT 'active'",
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS no_show_count INTEGER DEFAULT 0",
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS pending_emergency_reviews INTEGER DEFAULT 0",
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS approved_emergencies_count INTEGER DEFAULT 0",
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS rejected_emergencies_count INTEGER DEFAULT 0",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration hauliers policy columns: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS no_show_reported_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS no_show_reported_by_user_id INTEGER REFERENCES users(id)",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS late_notification_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS issue_reported_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS issue_type VARCHAR(50)",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS emergency_cancellation BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS emergency_details VARCHAR(1000)",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS emergency_evidence_required BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS emergency_evidence_path VARCHAR(500)",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS emergency_evidence_notes VARCHAR(1000)",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS emergency_evidence_submitted_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS emergency_reviewed_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS emergency_approved BOOLEAN",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS haulier_cancelled_at TIMESTAMP WITH TIME ZONE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration backhaul_jobs policy columns: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_kind VARCHAR(50)"))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration payments.payment_kind: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(
+                    text(
+                        "ALTER TABLE app_notifications ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'normal'"
+                    )
+                )
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration app_notifications.priority: {e!r}", file=sys.stderr)
+            for col_sql in (
                 "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS make VARCHAR(128)",
                 "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS model VARCHAR(128)",
                 "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS colour VARCHAR(64)",

@@ -1,9 +1,65 @@
 """Persist in-app notifications for haulier office users, drivers, and loader office users."""
-from typing import Optional, Set, Tuple
+from typing import Iterable, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
 from app import models
+
+
+def record_user_notifications(
+    db: Session,
+    user_ids: Iterable[int],
+    *,
+    title: str,
+    body: str,
+    link_url: str,
+    kind: str,
+    priority: str = "normal",
+    commit: bool = True,
+) -> None:
+    """Insert AppNotification rows for office users (user_id). Caller controls commit when commit=False."""
+    ids = [int(x) for x in user_ids if x is not None]
+    if not ids:
+        return
+    t = (title or "")[:255]
+    for uid in ids:
+        db.add(
+            models.AppNotification(
+                user_id=uid,
+                driver_id=None,
+                title=t,
+                body=body,
+                link_url=link_url,
+                kind=kind,
+                priority=priority or "normal",
+            )
+        )
+    if not commit:
+        return
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def loader_office_user_ids(db: Session, loader_id: int) -> list[int]:
+    rows = (
+        db.query(models.User.id)
+        .filter(models.User.loader_id == loader_id)
+        .filter(models.User.role == "loader")
+        .all()
+    )
+    return [int(r[0]) for r in rows]
+
+
+def haulier_office_user_ids(db: Session, haulier_id: int) -> list[int]:
+    rows = (
+        db.query(models.User.id)
+        .filter(models.User.haulier_id == haulier_id)
+        .filter(models.User.role == "haulier")
+        .all()
+    )
+    return [int(r[0]) for r in rows]
 
 
 def _dedupe_key_load_haulier(load_id: int, haulier_id: int) -> Tuple[int, int]:

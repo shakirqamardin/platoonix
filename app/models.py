@@ -93,7 +93,14 @@ class Haulier(Base):
     )
     contact_name: Mapped[Optional[str]] = mapped_column(String(255))
     driver_photo_url: Mapped[Optional[str]] = mapped_column(String(500))
-    
+    cancellation_strikes: Mapped[int] = mapped_column(Integer, default=0)
+    last_strike_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    account_status: Mapped[str] = mapped_column(String(20), default="active")
+    no_show_count: Mapped[int] = mapped_column(Integer, default=0)
+    pending_emergency_reviews: Mapped[int] = mapped_column(Integer, default=0)
+    approved_emergencies_count: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_emergencies_count: Mapped[int] = mapped_column(Integer, default=0)
+
     vehicles: Mapped[list["Vehicle"]] = relationship("Vehicle", back_populates="haulier")
     drivers: Mapped[list["Driver"]] = relationship("Driver", back_populates="haulier")
 
@@ -217,10 +224,16 @@ class Load(Base):
     budget_gbp: Mapped[Optional[float]] = mapped_column(Float)
     load_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=LoadStatusEnum.OPEN.value)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    cancelled_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    cancellation_fee_gbp: Mapped[Optional[float]] = mapped_column(Float)
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(String(500))
+    load_priority: Mapped[Optional[str]] = mapped_column(String(20), default="normal")
+    reopened_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
-        
+
     loader: Mapped[Optional["Loader"]] = relationship("Loader", back_populates="loads")
 
 
@@ -315,7 +328,22 @@ class BackhaulJob(Base):
 
     route_geometry: Mapped[Optional[dict]] = mapped_column(JSON)
     ulez_caz_status: Mapped[Optional[str]] = mapped_column(String(50))
-    
+    no_show_reported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    no_show_reported_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    late_notification_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    issue_reported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    issue_type: Mapped[Optional[str]] = mapped_column(String(50))
+    emergency_cancellation: Mapped[bool] = mapped_column(Boolean, default=False)
+    emergency_details: Mapped[Optional[str]] = mapped_column(String(1000))
+    emergency_evidence_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    emergency_evidence_path: Mapped[Optional[str]] = mapped_column(String(500))
+    emergency_evidence_notes: Mapped[Optional[str]] = mapped_column(String(1000))
+    emergency_evidence_submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    emergency_reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    emergency_approved: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    # Haulier cancelled via dashboard: row kept for emergency evidence workflow (soft cancel)
+    haulier_cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     vehicle: Mapped["Vehicle"] = relationship("Vehicle", foreign_keys=[vehicle_id])
     load: Mapped["Load"] = relationship("Load")
     driver: Mapped[Optional["Driver"]] = relationship("Driver", back_populates="jobs")
@@ -374,6 +402,7 @@ class Payment(Base):
     # Stripe PaymentIntent id for the loader charge (pi_...); haulier transfer may use provider_payment_id
     loader_stripe_payment_intent_id: Mapped[Optional[str]] = mapped_column(String(255))
     provider_payment_id: Mapped[Optional[str]] = mapped_column(String(255))
+    payment_kind: Mapped[Optional[str]] = mapped_column(String(50))
     status: Mapped[str] = mapped_column(String(20), default=PaymentStatusEnum.RESERVED.value)
 
     @property
@@ -399,6 +428,7 @@ class AppNotification(Base):
     body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     link_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    priority: Mapped[str] = mapped_column(String(20), default="normal")  # normal | important | critical
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
