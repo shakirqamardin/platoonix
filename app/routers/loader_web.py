@@ -3,7 +3,7 @@ Loader-facing dashboard: my loads, planned loads, who's interested.
 Only for users with role=loader; data filtered by loader_id.
 """
 import logging
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -27,6 +27,58 @@ def _checkout_public_base_url(request: Request, settings) -> str:
     if pub:
         return pub
     return str(request.base_url).rstrip("/")
+
+
+def _form_checkbox(form, name: str) -> bool:
+    v = form.get(name)
+    if v is None:
+        return False
+    s = str(v).strip().lower()
+    return s in ("on", "true", "1", "yes")
+
+
+def _loader_get_load_owned(db: Session, load_id: int, loader_id: int) -> Optional[models.Load]:
+    load = db.get(models.Load, load_id)
+    if not load or load.loader_id != loader_id:
+        return None
+    return load
+
+
+def _fmt_dt_for_input(dt) -> str:
+    if dt is None:
+        return ""
+    from datetime import timezone as tz
+
+    if getattr(dt, "tzinfo", None) is not None:
+        dt = dt.astimezone(tz.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M")
+
+
+def _primary_job_for_load(db: Session, load_id: int) -> Optional[models.BackhaulJob]:
+    return (
+        db.query(models.BackhaulJob)
+        .filter(models.BackhaulJob.load_id == load_id)
+        .order_by(models.BackhaulJob.matched_at.desc())
+        .first()
+    )
+
+
+def _notify_hauliers_load_cancelled(db: Session, job: models.BackhaulJob, load: models.Load) -> None:
+    vehicle = db.get(models.Vehicle, job.vehicle_id)
+    if not vehicle:
+        return
+    from app.services.email_sender import send_email
+
+    users = db.query(models.User).filter(models.User.haulier_id == vehicle.haulier_id).all()
+    jref = job.display_number
+    for u in users:
+        if u.email:
+            send_email(
+                u.email,
+                "Platoonix: load cancelled by shipper",
+                f"The load \"{load.shipper_name}\" ({load.pickup_postcode} → {load.delivery_postcode}) has been cancelled by the loader.\n\n"
+                f"Job: {jref}.\n",
+            )
 
 
 def _loader_or_redirect(request: Request, db: Session) -> Union[Tuple[models.User, models.Loader], RedirectResponse]:
@@ -246,6 +298,227 @@ def loader_delete_load(
     db.delete(load)
     db.commit()
     return RedirectResponse(url="/?section=loads&deleted=load", status_code=303)
+
+
+@router.get("/loader/loads/{load_id}/edit", response_class=HTMLResponse, response_model=None)
+def loader_edit_load_page(
+    load_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Union[HTMLResponse, RedirectResponse]:
+    result = _loader_or_redirect(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    _user, loader = result
+    load = _loader_get_load_owned(db, load_id, loader.id)
+    if not load:
+        return RedirectResponse(url="/?section=loads&load_error=not_found", status_code=303)
+    if load.status != models.LoadStatusEnum.OPEN.value:
+        return RedirectResponse(url="/?section=loads&load_error=cannot_edit_status", status_code=303)
+    if _primary_job_for_load(db, load_id):
+        return RedirectResponse(url="/?section=loads&load_error=cannot_edit_matched", status_code=303)
+    req = load.requirements or {}
+    vt = (req.get("vehicle_type") or "") if isinstance(req, dict) else ""
+    tt = (req.get("trailer_type") or "") if isinstance(req, dict) else ""
+    pallet_vol = get_settings().pallet_volume_m3
+    return templates.TemplateResponse(
+        "loader_load_edit.html",
+        {
+            "request": request,
+            "load": load,
+            "vehicle_type": vt,
+            "trailer_type": tt,
+            "pickup_window_start": _fmt_dt_for_input(load.pickup_window_start),
+            "pickup_window_end": _fmt_dt_for_input(load.pickup_window_end),
+            "delivery_window_start": _fmt_dt_for_input(load.delivery_window_start),
+            "delivery_window_end": _fmt_dt_for_input(load.delivery_window_end),
+            "pallet_volume_m3": pallet_vol,
+            "loader_fee_minimum_gbp": get_settings().loader_flat_fee_gbp,
+            "loader_fee_percent_of_load": get_settings().loader_fee_percent_of_load,
+        },
+    )
+
+
+@router.post("/loader/loads/{load_id}/update", response_class=RedirectResponse)
+async def loader_update_load(
+    load_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    result = _loader_or_redirect(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    _user, loader = result
+    load = _loader_get_load_owned(db, load_id, loader.id)
+    if not load:
+        return RedirectResponse(url="/?section=loads&load_error=not_found", status_code=303)
+    if load.status != models.LoadStatusEnum.OPEN.value:
+        return RedirectResponse(url="/?section=loads&load_error=cannot_edit_status", status_code=303)
+    if _primary_job_for_load(db, load_id):
+        return RedirectResponse(url="/?section=loads&load_error=cannot_edit_matched", status_code=303)
+
+    from datetime import datetime, timezone
+
+    from app.services.upload_parser import parse_datetime_optional
+
+    form = await request.form()
+    shipper_name = (form.get("shipper_name") or "").strip()
+    booking_name = (form.get("booking_name") or "").strip() or None
+    booking_ref = (form.get("booking_ref") or "").strip() or None
+    pickup_postcode = (form.get("pickup_postcode") or "").strip().upper()
+    delivery_postcode = (form.get("delivery_postcode") or "").strip().upper()
+    vehicle_type_required = (form.get("vehicle_type_required") or "").strip().lower() or None
+    trailer_type_required = (form.get("trailer_type_required") or "").strip().lower() or None
+
+    pallets_val = None
+    try:
+        p = form.get("pallets")
+        if p is not None and str(p).strip():
+            pallets_val = float(p)
+    except (TypeError, ValueError):
+        pass
+    volume_m3 = None
+    try:
+        c = form.get("cubic_metres")
+        if c is not None and str(c).strip():
+            volume_m3 = float(c)
+    except (TypeError, ValueError):
+        pass
+    if pallets_val and pallets_val > 0:
+        volume_m3 = pallets_val * get_settings().pallet_volume_m3
+
+    budget_val = None
+    try:
+        b = form.get("budget_gbp")
+        if b is not None and str(b).strip():
+            budget_val = float(b)
+    except (TypeError, ValueError):
+        pass
+
+    notes = (form.get("load_notes") or "").strip() or None
+
+    now = datetime.now(timezone.utc)
+    ps = parse_datetime_optional(form.get("pickup_window_start"))
+    pe = parse_datetime_optional(form.get("pickup_window_end"))
+    ds = parse_datetime_optional(form.get("delivery_window_start"))
+    de = parse_datetime_optional(form.get("delivery_window_end"))
+    if ps is None and pe is None:
+        ps = pe = now
+    else:
+        if ps is None:
+            ps = pe
+        if pe is None:
+            pe = ps
+    if ds is None and de is None:
+        ds = de = now
+    else:
+        if ds is None:
+            ds = de
+        if de is None:
+            de = ds
+
+    if not shipper_name or not pickup_postcode or not delivery_postcode:
+        return RedirectResponse(url=f"/loader/loads/{load_id}/edit?error=missing", status_code=303)
+
+    requirements: dict = {}
+    if vehicle_type_required and vehicle_type_required != "any":
+        requirements["vehicle_type"] = vehicle_type_required
+    if trailer_type_required and trailer_type_required != "any":
+        requirements["trailer_type"] = trailer_type_required
+    requirements = requirements if requirements else None
+
+    load.shipper_name = shipper_name
+    load.booking_ref = booking_ref
+    load.booking_name = booking_name
+    load.pickup_postcode = pickup_postcode
+    load.delivery_postcode = delivery_postcode
+    load.pickup_window_start = ps
+    load.pickup_window_end = pe
+    load.delivery_window_start = ds
+    load.delivery_window_end = de
+    load.pallets = pallets_val
+    load.volume_m3 = volume_m3
+    load.budget_gbp = budget_val
+    load.requirements = requirements
+    load.requires_tail_lift = _form_checkbox(form, "requires_tail_lift")
+    load.requires_forklift = _form_checkbox(form, "requires_forklift")
+    load.requires_temp_control = _form_checkbox(form, "requires_temp_control")
+    load.requires_adr = _form_checkbox(form, "requires_adr")
+    load.load_notes = notes
+    db.add(load)
+    db.commit()
+    return RedirectResponse(url="/?section=loads&load_updated=1", status_code=303)
+
+
+@router.post("/loader/loads/{load_id}/cancel", response_class=RedirectResponse)
+def loader_cancel_load(
+    load_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    result = _loader_or_redirect(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    _user, loader = result
+    load = _loader_get_load_owned(db, load_id, loader.id)
+    if not load:
+        return RedirectResponse(url="/?section=loads&load_error=not_found", status_code=303)
+    if load.status == models.LoadStatusEnum.CANCELLED.value:
+        return RedirectResponse(url="/?section=loads&load_error=already_cancelled", status_code=303)
+
+    job = _primary_job_for_load(db, load_id)
+    payment = None
+    if job:
+        if job.completed_at:
+            return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_completed", status_code=303)
+        if job.collected_at:
+            return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_collected", status_code=303)
+        payment = (
+            db.query(models.Payment)
+            .filter(models.Payment.backhaul_job_id == job.id)
+            .order_by(models.Payment.created_at.asc())
+            .first()
+        )
+        if payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.PAID_OUT.value:
+            return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_paid_out", status_code=303)
+
+    refund_warning = False
+    if payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.CAPTURED.value:
+        from app.services.stripe_loader_charge import try_refund_loader_charge
+
+        ok_ref, _err = try_refund_loader_charge(payment, db)
+        if not ok_ref:
+            refund_warning = True
+        else:
+            db.add(payment)
+
+    load.status = models.LoadStatusEnum.CANCELLED.value
+    db.add(load)
+
+    for li in db.query(models.LoadInterest).filter(models.LoadInterest.load_id == load.id).all():
+        if (li.status or "") not in ("declined",):
+            li.status = "declined"
+            db.add(li)
+
+    db.commit()
+
+    if job:
+        try:
+            _notify_hauliers_load_cancelled(db, job, load)
+        except Exception:
+            logger.exception("notify haulier load cancelled")
+        try:
+            from app.services import vehicle_availability as vehicle_availability_svc
+
+            vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
+            db.commit()
+        except Exception:
+            logger.exception("refresh_vehicle_availability after cancel")
+
+    q = "section=loads&load_cancelled=1"
+    if refund_warning:
+        q += "&refund_warning=1"
+    return RedirectResponse(url=f"/?{q}", status_code=303)
 
 
 @router.post("/loader/planned-loads", response_class=RedirectResponse)

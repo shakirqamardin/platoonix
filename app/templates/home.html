@@ -646,7 +646,7 @@
                 {% endif %}
                 {% if request.query_params.get('payment_error') %}
                 <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-2.5 mb-4 text-sm text-amber-100">
-                    {% if request.query_params.get('payment_error') == 'stripe_not_configured' %}Payment setup is not configured yet. Contact support.
+                    {% if request.query_params.get('payment_error') == 'stripe_not_configured' %}Stripe is not configured on this server. Whoever hosts the app must add the <code class="text-amber-200">STRIPE_SECRET_KEY</code> environment variable (from the Stripe Dashboard), redeploy, then you can add a card here.
                     {% else %}Could not start payment setup. Please try again.
                     {% endif %}
                 </div>
@@ -665,9 +665,16 @@
                     <p class="text-slate-300 mb-1">Platform fee: £{{ "%.2f"|format(loader_fee_minimum_gbp|default(5)) }} minimum OR {{ loader_fee_percent_of_load|default(2) }}% of load value (whichever is greater)</p>
                     <p class="text-slate-300 mb-3">Example: £300 load → £6 fee (2%) → Total charge: £306</p>
                     <p class="text-slate-400 mb-4">Your card details are stored securely by Stripe. We never see your full card number. 🔒</p>
+                    {% if stripe_billing_configured|default(false) %}
                     <form method="post" action="/loader/billing/setup" class="mb-3">
                         <button type="submit" class="rounded-lg bg-teal-600 hover:bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white">Add Payment Card</button>
                     </form>
+                    {% else %}
+                    <div class="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 mb-3 text-sm text-amber-100/95">
+                        <p class="font-medium text-amber-50 mb-1">Card setup unavailable</p>
+                        <p class="text-amber-100/90">This deployment has no Stripe API key. Add <code class="text-amber-200 text-xs">STRIPE_SECRET_KEY</code> in your hosting environment and redeploy to enable adding a card.</p>
+                    </div>
+                    {% endif %}
                     <p class="text-xs text-slate-500">Don't have a card on file yet? You'll be prompted to add one when you post your first load.</p>
                 </div>
                 <form method="post" action="/loader/profile" class="space-y-4 max-w-2xl">
@@ -1523,7 +1530,26 @@
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
                     Load Management
                 </h2>
-                
+                {% if request.query_params.get('load_updated') %}
+                <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Load updated successfully.</div>
+                {% endif %}
+                {% if request.query_params.get('load_cancelled') %}
+                <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Load cancelled.{% if request.query_params.get('refund_warning') %} If a card payment could not be refunded automatically, contact support with your load reference.{% endif %}</div>
+                {% endif %}
+                {% set le = request.query_params.get('load_error') %}
+                {% if le %}
+                <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-2.5 mb-4 text-sm text-amber-100">
+                    {% if le == 'not_found' %}Load not found or you do not have access.
+                    {% elif le == 'cannot_edit_status' %}This load cannot be edited (not open).
+                    {% elif le == 'cannot_edit_matched' %}This load already has a job — edit is not available. You can cancel instead if pickup has not started.
+                    {% elif le == 'already_cancelled' %}This load is already cancelled.
+                    {% elif le == 'cannot_cancel_collected' %}Cannot cancel: collection has already been recorded.
+                    {% elif le == 'cannot_cancel_completed' %}Cannot cancel: this job is already completed.
+                    {% elif le == 'cannot_cancel_paid_out' %}Cannot cancel: payment has already been released to the haulier.
+                    {% else %}Something went wrong. Please try again.
+                    {% endif %}
+                </div>
+                {% endif %}
                 <p class="text-slate-300 text-sm mb-6">Add loads with pickup, delivery and capacity. Matching runs automatically and only <strong>suitable vehicles</strong> appear in Matches.</p>
                 
                 <!-- Add Load Form -->
@@ -1913,6 +1939,94 @@
                 </div>
                 
                 <!-- Loads Table -->
+                {% if current_user and current_user.loader_id %}
+                <h3 class="text-lg font-semibold text-slate-200 mb-3">My loads</h3>
+                <div class="md:hidden space-y-3 mb-4">
+                    {% for l in loads %}
+                    {% set lj = job_by_load_id.get(l.id) if job_by_load_id is defined else none %}
+                    {% set st = (l.status or '')|lower %}
+                    {% set can_edit = (st == 'open' and not lj) %}
+                    {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at))) %}
+                    <article class="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-2" data-whatsapp-load-id="{{ l.id }}">
+                        <div class="font-medium text-slate-100">{{ l.shipper_name }}</div>
+                        <div class="font-mono text-teal-300 text-sm">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</div>
+                        <div class="text-xs text-slate-400">Budget: {% if l.budget_gbp is not none %}£{{ "%.2f"|format(l.budget_gbp) }}{% else %}—{% endif %} · Posted {{ l.created_at.strftime('%d %b %Y') }}</div>
+                        <div class="text-xs text-slate-500"><span class="badge badge-success">{{ l.status }}</span></div>
+                        <div class="flex flex-wrap items-center gap-2 pt-2">
+                            {{ wa_share_btn(l) }}
+                            {% if can_edit %}
+                            <a href="/loader/loads/{{ l.id }}/edit" class="min-h-[44px] px-3 py-2 rounded-lg border border-teal-500/40 text-teal-300 text-sm font-medium text-center">Edit</a>
+                            {% endif %}
+                            {% if can_cancel %}
+                            <button type="button" class="min-h-[44px] px-3 py-2 text-rose-300 border border-rose-500/40 rounded-lg text-sm font-medium" onclick="document.getElementById('cancel-load-{{ l.id }}').showModal()">Cancel</button>
+                            <dialog id="cancel-load-{{ l.id }}" class="rounded-xl border border-slate-600 bg-slate-900 p-6 text-slate-100 max-w-md shadow-xl backdrop:bg-black/50">
+                                <p class="text-slate-200 font-medium mb-2">Are you sure you want to cancel this load?</p>
+                                {% if lj %}<p class="text-amber-200/90 text-sm mb-4">A haulier is matched to this job. They will be notified.</p>{% else %}<p class="text-slate-400 text-sm mb-4">This removes the load from active listings.</p>{% endif %}
+                                <div class="flex flex-col sm:flex-row gap-2 justify-end">
+                                    <button type="button" class="rounded-lg border border-slate-600 px-4 py-2.5 text-sm text-slate-300" onclick="document.getElementById('cancel-load-{{ l.id }}').close()">Keep load</button>
+                                    <form method="post" action="/loader/loads/{{ l.id }}/cancel" class="inline">
+                                        <button type="submit" class="w-full sm:w-auto rounded-lg bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white">Cancel load</button>
+                                    </form>
+                                </div>
+                            </dialog>
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                <div class="hidden md:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <table class="w-full text-sm min-w-[720px]">
+                        <thead>
+                            <tr class="border-b border-slate-700">
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Load details</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Status</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Budget</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Posted</th>
+                                <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for l in loads %}
+                            {% set lj = job_by_load_id.get(l.id) if job_by_load_id is defined else none %}
+                            {% set st = (l.status or '')|lower %}
+                            {% set can_edit = (st == 'open' and not lj) %}
+                            {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at))) %}
+                            <tr class="border-b border-slate-800/50" data-whatsapp-load-id="{{ l.id }}">
+                                <td class="py-3 px-4">
+                                    <div class="font-medium text-slate-100">{{ l.shipper_name }}</div>
+                                    <div class="font-mono text-teal-300 text-sm mt-0.5">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</div>
+                                    {% if l.booking_ref or l.booking_name %}<div class="text-xs text-slate-500 mt-1">{% if l.booking_ref %}{{ l.booking_ref }}{% endif %}{% if l.booking_name %} · {{ l.booking_name }}{% endif %}</div>{% endif %}
+                                </td>
+                                <td class="py-3 px-4"><span class="badge badge-success">{{ l.status }}</span></td>
+                                <td class="py-3 px-4 text-slate-300">{% if l.budget_gbp is not none %}£{{ "%.2f"|format(l.budget_gbp) }}{% else %}—{% endif %}</td>
+                                <td class="py-3 px-4 text-slate-400 text-xs whitespace-nowrap">{{ l.created_at.strftime('%d %b %Y') }}</td>
+                                <td class="py-3 px-4 text-right">
+                                    <div class="flex flex-wrap items-center justify-end gap-2">
+                                        {{ wa_share_btn(l) }}
+                                        {% if can_edit %}
+                                        <a href="/loader/loads/{{ l.id }}/edit" class="min-h-[40px] px-3 py-2 rounded-lg border border-teal-500/40 text-teal-300 text-sm font-medium">Edit</a>
+                                        {% endif %}
+                                        {% if can_cancel %}
+                                        <button type="button" class="min-h-[40px] px-3 py-2 text-rose-300 text-sm font-medium rounded-lg border border-rose-500/40" onclick="document.getElementById('cancel-load-d-{{ l.id }}').showModal()">Cancel</button>
+                                        <dialog id="cancel-load-d-{{ l.id }}" class="rounded-xl border border-slate-600 bg-slate-900 p-6 text-slate-100 max-w-md shadow-xl backdrop:bg-black/50">
+                                            <p class="text-slate-200 font-medium mb-2">Are you sure you want to cancel this load?</p>
+                                            {% if lj %}<p class="text-amber-200/90 text-sm mb-4">A haulier is matched to this job. They will be notified.</p>{% else %}<p class="text-slate-400 text-sm mb-4">This removes the load from active listings.</p>{% endif %}
+                                            <div class="flex flex-col sm:flex-row gap-2 justify-end">
+                                                <button type="button" class="rounded-lg border border-slate-600 px-4 py-2.5 text-sm text-slate-300" onclick="document.getElementById('cancel-load-d-{{ l.id }}').close()">Keep load</button>
+                                                <form method="post" action="/loader/loads/{{ l.id }}/cancel" class="inline">
+                                                    <button type="submit" class="w-full sm:w-auto rounded-lg bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white">Cancel load</button>
+                                                </form>
+                                            </div>
+                                        </dialog>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
                 <div class="md:hidden space-y-3 mb-4">
                     {% for l in loads %}
                     <article class="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-2" data-whatsapp-load-id="{{ l.id }}">
@@ -1921,9 +2035,11 @@
                         <div class="text-xs text-slate-500"><span class="badge badge-success">{{ l.status }}</span></div>
                         <div class="flex flex-wrap items-center gap-2 pt-2">
                             {{ wa_share_btn(l) }}
+                            {% if current_user and current_user.role == 'admin' %}
                             <form method="post" action="/delete-load/{{ l.id }}" class="inline flex-1" onsubmit="return confirm('Delete this load?');">
                                 <button type="submit" class="w-full min-h-[44px] px-3 py-2 text-red-400 border border-red-500/30 rounded-lg text-sm font-medium text-center">Delete</button>
                             </form>
+                            {% endif %}
                         </div>
                     </article>
                     {% endfor %}
@@ -1976,9 +2092,11 @@
                                 <td class="py-3 px-4 text-right">
                                     <div class="flex flex-wrap items-center justify-end gap-2">
                                         {{ wa_share_btn(l) }}
+                                        {% if current_user and current_user.role == 'admin' %}
                                         <form method="post" action="/delete-load/{{ l.id }}" class="inline" onsubmit="return confirm('Delete this load?');">
                                             <button type="submit" class="min-h-[44px] px-3 py-2 text-red-400 hover:text-red-300 text-sm font-medium rounded-lg border border-red-500/30 hover:bg-red-950/40">Delete</button>
                                         </form>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
@@ -1986,6 +2104,7 @@
                         </tbody>
                     </table>
                 </div>
+                {% endif %}
                 
                 {% if not loads %}
                 <div class="text-center py-12">

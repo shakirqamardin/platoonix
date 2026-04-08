@@ -89,6 +89,7 @@ class LoadBase(BaseModel):
     requires_temp_control: bool = False
     requires_adr: bool = False
     budget_gbp: Optional[float] = None
+    load_notes: Optional[str] = None
 
 
 class LoadCreate(LoadBase):

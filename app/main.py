@@ -292,6 +292,13 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration vehicles insurance: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(text("ALTER TABLE loads ADD COLUMN IF NOT EXISTS load_notes TEXT"))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration loads.load_notes: {e!r}", file=sys.stderr)
             for col_sql in (
                 "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS make VARCHAR(128)",
                 "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS model VARCHAR(128)",

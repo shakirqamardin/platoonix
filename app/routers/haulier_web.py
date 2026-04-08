@@ -65,8 +65,10 @@ def _driver_visible_group_jobs(
     q = (
         db.query(models.BackhaulJob)
         .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
+        .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
         .filter(models.Vehicle.haulier_id == haulier.id)
         .filter(models.BackhaulJob.completed_at.is_(None))
+        .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
     )
     if active_job.job_group_uuid:
         q = q.filter(models.BackhaulJob.job_group_uuid == active_job.job_group_uuid)
@@ -111,8 +113,10 @@ def driver_page(
     q = (
         db.query(models.BackhaulJob)
         .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
+        .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
         .filter(models.Vehicle.haulier_id == haulier.id)
         .filter(models.BackhaulJob.completed_at.is_(None))
+        .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
     )
     if actor_driver is not None:
         q = q.filter(models.BackhaulJob.driver_id == actor_driver.id)
@@ -170,9 +174,11 @@ def driver_page(
         unassigned = (
             db.query(models.BackhaulJob)
             .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
+            .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
             .filter(models.Vehicle.haulier_id == haulier.id)
             .filter(models.BackhaulJob.completed_at.is_(None))
             .filter(models.BackhaulJob.driver_id.is_(None))
+            .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
             .order_by(models.BackhaulJob.matched_at.desc())
             .all()
         )

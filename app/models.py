@@ -215,6 +215,7 @@ class Load(Base):
     requires_temp_control: Mapped[bool] = mapped_column(Boolean, default=False)
     requires_adr: Mapped[bool] = mapped_column(Boolean, default=False)
     budget_gbp: Mapped[Optional[float]] = mapped_column(Float)
+    load_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=LoadStatusEnum.OPEN.value)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow

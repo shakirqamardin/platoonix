@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     # Stripe (optional): for payouts to hauliers via Connect. Leave unset to skip.
     stripe_secret_key: Optional[str] = None
 
+    @field_validator("stripe_secret_key", mode="before")
+    @classmethod
+    def strip_stripe_secret_key(cls, v: Optional[str]) -> Optional[str]:
+        return _strip_empty_optional_str(v)
+
     # Road routing (matching, pricing, distances): at least one recommended.
     # OpenRouteService: free tier at https://openrouteservice.org/ — matrix + HGV profile.
     openrouteservice_api_key: Optional[str] = None

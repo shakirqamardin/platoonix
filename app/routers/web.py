@@ -99,6 +99,11 @@ def _haulier_or_admin_can_job(user: models.User, job: models.BackhaulJob, db: Se
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "templates"
 
 
+def _stripe_billing_configured() -> bool:
+    """True when Stripe API key is set (loader card setup and dashboard links work)."""
+    return bool((get_settings().stripe_secret_key or "").strip())
+
+
 def _stripe_dashboard_urls() -> tuple[str, str, bool]:
     """
     (customers_root, connect_accounts_root, is_test_key).
@@ -693,6 +698,7 @@ def home(
         default_find_vid = str(_driver_for_find.vehicle_id)
 
     _scust, _sconn, _stest = _stripe_dashboard_urls()
+    _stripe_ok = _stripe_billing_configured()
 
     rating_ctx = ratings_svc.build_home_rating_context(db, current_user, loads, vehicles)
     rating_ok = request.query_params.get("rating_ok")
@@ -706,6 +712,11 @@ def home(
         shared_load_id = None
     _pub_base = get_settings().public_app_base_url
     onboarding_checklist = _build_onboarding_checklist(current_user, haulier_profile, loader_profile, vehicles, loads)
+    job_by_load_id = {}
+    for j in jobs:
+        prev = job_by_load_id.get(j.load_id)
+        if prev is None or j.id > prev.id:
+            job_by_load_id[j.load_id] = j
     return templates.TemplateResponse(
         "home.html",
         {
@@ -718,9 +729,11 @@ def home(
             "stripe_dashboard_customers_root": _scust,
             "stripe_dashboard_connect_accounts_root": _sconn,
             "stripe_is_test_mode": _stest,
+            "stripe_billing_configured": _stripe_ok,
             "vehicles": vehicles,
             "loads": loads,
             "jobs": jobs,
+            "job_by_load_id": job_by_load_id,
             "payments": payments,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,
@@ -1239,6 +1252,7 @@ def find_backhaul_page(
         loader_profile = db.get(models.Loader, current_user.loader_id)
 
     _scust, _sconn, _stest = _stripe_dashboard_urls()
+    _stripe_ok = _stripe_billing_configured()
 
     rating_ctx = ratings_svc.build_home_rating_context(db, current_user, loads, vehicles)
     rating_ok = request.query_params.get("rating_ok")
@@ -1254,6 +1268,12 @@ def find_backhaul_page(
     find_backhaul_msg = (request.query_params.get("msg") or "").strip() or None
     onboarding_checklist = _build_onboarding_checklist(current_user, haulier_profile, loader_profile, vehicles, loads)
 
+    job_by_load_id = {}
+    for j in jobs:
+        prev = job_by_load_id.get(j.load_id)
+        if prev is None or j.id > prev.id:
+            job_by_load_id[j.load_id] = j
+
     return templates.TemplateResponse(
         "home.html",
         {
@@ -1264,6 +1284,7 @@ def find_backhaul_page(
             "vehicles": vehicles,
             "loads": loads,
             "jobs": jobs,
+            "job_by_load_id": job_by_load_id,
             "payments": payments,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,
@@ -1272,6 +1293,7 @@ def find_backhaul_page(
             "stripe_dashboard_customers_root": _scust,
             "stripe_dashboard_connect_accounts_root": _sconn,
             "stripe_is_test_mode": _stest,
+            "stripe_billing_configured": _stripe_ok,
             "uploaded": None,
             "upload_errors": None,
             "upload_type": "",

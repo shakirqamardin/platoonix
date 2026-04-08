@@ -124,7 +124,9 @@ def list_my_jobs(
     q = (
         db.query(models.BackhaulJob)
         .join(models.Vehicle, models.BackhaulJob.vehicle_id == models.Vehicle.id)
+        .join(models.Load, models.BackhaulJob.load_id == models.Load.id)
         .filter(models.Vehicle.haulier_id == haulier.id)
+        .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
         .order_by(models.BackhaulJob.matched_at.desc())
     )
     if active_only:

@@ -87,3 +87,46 @@ def try_charge_loader_for_job(payment: models.Payment, db: Session) -> Tuple[boo
         err = str(e)
         print(f"[STRIPE] Loader charge failed: {err}")
         return (False, err)
+
+
+def try_refund_loader_charge(payment: models.Payment, db: Session) -> Tuple[bool, Optional[str]]:
+    """
+    Refund a captured loader PaymentIntent when a load is cancelled after charge.
+    Skips if no Stripe key, no PI id, or payment not captured. Returns (ok, error_message).
+    """
+    settings = get_settings()
+    if not settings.stripe_secret_key or not str(settings.stripe_secret_key).strip():
+        return (True, None)
+    pid = (payment.loader_stripe_payment_intent_id or "").strip()
+    if not pid:
+        return (True, None)
+    if (payment.status or "").strip().lower() != models.PaymentStatusEnum.CAPTURED.value:
+        return (True, None)
+    try:
+        import stripe
+
+        stripe.api_key = settings.stripe_secret_key.strip()
+        intent = stripe.PaymentIntent.retrieve(pid, expand=["latest_charge"])
+        ch_id = getattr(intent, "latest_charge", None)
+        if ch_id is not None and not isinstance(ch_id, str):
+            ch_id = getattr(ch_id, "id", None)
+        if isinstance(ch_id, str) and ch_id.startswith("ch_"):
+            pass
+        else:
+            charges = getattr(intent, "charges", None)
+            data = getattr(charges, "data", None) if charges is not None else None
+            if not data and isinstance(intent, dict):
+                data = (intent.get("charges") or {}).get("data")
+            if not data:
+                return (True, None)
+            ch0 = data[0]
+            ch_id = getattr(ch0, "id", None) or (ch0.get("id") if isinstance(ch0, dict) else None)
+        if not ch_id:
+            return (False, "No charge id on PaymentIntent")
+        stripe.Refund.create(charge=ch_id)
+        print(f"[STRIPE] Refunded loader charge for payment {payment.id} (PI {pid})")
+        return (True, None)
+    except Exception as e:
+        err = str(e)
+        print(f"[STRIPE] Loader refund failed: {err}")
+        return (False, err)

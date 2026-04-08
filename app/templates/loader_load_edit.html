@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Edit load · Platoonix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <a href="/?section=loads" class="text-teal-400 hover:text-teal-300 text-sm font-medium">← Back to Load Management</a>
+        <a href="/logout" class="text-slate-500 hover:text-slate-300 text-sm">Sign out</a>
+      </div>
+      <h1 class="text-2xl font-bold text-white mb-2">Edit load</h1>
+      <p class="text-slate-400 text-sm mb-6">{{ load.shipper_name }} · {{ load.pickup_postcode }} → {{ load.delivery_postcode }}</p>
+      {% if request.query_params.get('error') == 'missing' %}
+      <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 mb-6 text-sm text-amber-100">Please fill shipper and both postcodes.</div>
+      {% endif %}
+      <form method="post" action="/loader/loads/{{ load.id }}/update" class="rounded-xl border border-slate-700/80 bg-slate-900/50 p-6 space-y-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Shipper</label>
+            <input name="shipper_name" required value="{{ load.shipper_name or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Booking ref <span class="text-slate-500">(optional)</span></label>
+            <input name="booking_ref" value="{{ load.booking_ref or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-slate-300 mb-1">Booking name <span class="text-slate-500">(optional)</span></label>
+            <input name="booking_name" value="{{ load.booking_name or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Pickup postcode</label>
+            <input name="pickup_postcode" required value="{{ load.pickup_postcode or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm uppercase" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Delivery postcode</label>
+            <input name="delivery_postcode" required value="{{ load.delivery_postcode or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm uppercase" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Pickup window start</label>
+            <input name="pickup_window_start" type="datetime-local" value="{{ pickup_window_start }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Pickup window end</label>
+            <input name="pickup_window_end" type="datetime-local" value="{{ pickup_window_end }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Delivery window start</label>
+            <input name="delivery_window_start" type="datetime-local" value="{{ delivery_window_start }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Delivery window end</label>
+            <input name="delivery_window_end" type="datetime-local" value="{{ delivery_window_end }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Vehicle type</label>
+            <select name="vehicle_type_required" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+              <option value="" {% if not vehicle_type %}selected{% endif %}>Any vehicle</option>
+              <option value="artic" {% if vehicle_type == 'artic' %}selected{% endif %}>Artic</option>
+              <option value="rigid" {% if vehicle_type == 'rigid' %}selected{% endif %}>Rigid</option>
+              <option value="van" {% if vehicle_type == 'van' %}selected{% endif %}>Van</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Trailer type</label>
+            <select name="trailer_type_required" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+              <option value="" {% if not trailer_type %}selected{% endif %}>Any trailer</option>
+              <option value="curtain_sider" {% if trailer_type == 'curtain_sider' %}selected{% endif %}>Curtain</option>
+              <option value="refrigerated" {% if trailer_type == 'refrigerated' %}selected{% endif %}>Refrigerated</option>
+              <option value="box" {% if trailer_type == 'box' %}selected{% endif %}>Box</option>
+              <option value="flatbed" {% if trailer_type == 'flatbed' %}selected{% endif %}>Flatbed</option>
+              <option value="other" {% if trailer_type == 'other' %}selected{% endif %}>Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Pallets</label>
+            <input name="pallets" type="number" min="0" step="any" value="{{ load.pallets if load.pallets is not none else '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Cubic metres</label>
+            <input name="cubic_metres" type="number" min="0" step="0.1" value="{{ '%.1f'|format(load.volume_m3) if load.volume_m3 is not none else '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+            <p class="text-xs text-slate-500 mt-1">1 pallet = {{ "%.2f"|format(pallet_volume_m3) }} m³</p>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">Your budget (£)</label>
+          <input name="budget_gbp" type="number" step="0.01" min="0" value="{{ load.budget_gbp if load.budget_gbp is not none else '' }}" class="w-full max-w-xs rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">Notes <span class="text-slate-500">(optional)</span></label>
+          <textarea name="load_notes" rows="3" placeholder="Internal notes for your team" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">{{ load.load_notes or '' }}</textarea>
+        </div>
+        <div class="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300 rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-3">
+          <span class="text-slate-500 font-medium w-full">Equipment requirements</span>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="requires_tail_lift" class="rounded border-slate-600 bg-slate-900" {% if load.requires_tail_lift %}checked{% endif %} /> Tail lift</label>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="requires_forklift" class="rounded border-slate-600 bg-slate-900" {% if load.requires_forklift %}checked{% endif %} /> Forklift / Moffett</label>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="requires_temp_control" class="rounded border-slate-600 bg-slate-900" {% if load.requires_temp_control %}checked{% endif %} /> Temp control</label>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="requires_adr" class="rounded border-slate-600 bg-slate-900" {% if load.requires_adr %}checked{% endif %} /> ADR</label>
+        </div>
+        <div class="flex flex-wrap gap-3 pt-2">
+          <button type="submit" class="rounded-lg bg-teal-600 hover:bg-teal-500 px-5 py-2.5 text-sm font-semibold text-white">Save changes</button>
+          <a href="/?section=loads" class="rounded-lg border border-slate-600 px-5 py-2.5 text-sm text-slate-300 hover:bg-slate-800">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </body>
+</html>
