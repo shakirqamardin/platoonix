@@ -15,8 +15,18 @@ from app.auth import get_current_user_optional, require_loader
 from app.config import get_settings
 from app.database import get_db
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _checkout_public_base_url(request: Request, settings) -> str:
+    """HTTPS public origin for Stripe success/cancel URLs. Prefer env over request.base_url (often http behind Railway)."""
+    pub = (getattr(settings, "public_app_base_url", None) or "").strip().rstrip("/")
+    if pub:
+        return pub
+    return str(request.base_url).rstrip("/")
 
 
 def _loader_or_redirect(request: Request, db: Session) -> Union[Tuple[models.User, models.Loader], RedirectResponse]:
