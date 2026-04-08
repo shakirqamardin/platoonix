@@ -2322,7 +2322,12 @@
                 
                 <!-- Confirmed Jobs -->
                 <div>
-                    <h3 class="text-lg font-semibold text-slate-200 mb-4">✅ Backhaul Jobs (Confirmed)</h3>
+                    <h3 class="text-lg font-semibold text-slate-200 mb-2">✅ Backhaul Jobs (Confirmed)</h3>
+                    {% if current_user and current_user.loader_id %}
+                    <p class="text-xs text-slate-400 mb-4 max-w-2xl leading-relaxed">
+                        You can cancel a matched job from <strong class="text-slate-300">Load Management → My loads</strong> while pickup has not started (same checks, refunds, and haulier notice apply there). To cancel or change a confirmed job after that, contact <a href="mailto:support@platoonix.co.uk" class="text-teal-400 hover:text-teal-300 underline-offset-2 hover:underline">support@platoonix.co.uk</a>.
+                    </p>
+                    {% endif %}
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
@@ -2434,7 +2439,7 @@
                                                 <a href="/driver?job_id={{ j.id }}" class="inline-block rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold px-2.5 py-1">Run job</a>
                                                 {% endif %}
                                                 <a href="/track/{{ j.id }}" class="text-teal-400 hover:text-teal-300 text-xs font-medium">Track</a>
-                                                {% if current_user and current_user.role != 'driver' %}
+                                                {% if current_user and current_user.role in ['haulier', 'admin'] %}
                                                 <form method="post" action="/delete-job/{{ j.id }}" class="inline" onsubmit="return confirm('Cancel this job? The load and vehicle can then be deleted if needed.');">
                                                     <button type="submit" class="text-red-400 hover:text-red-300 text-xs font-medium">Cancel</button>
                                                 </form>
@@ -2457,7 +2462,12 @@
                 </div>
                 
                 <p class="text-xs text-slate-500 mt-6">
-                    Pricing: {{ platform_fee_percent|round(1) }}% of load value (haulier net shown above). Loaders pay load value plus a platform fee of the higher of £{{ "%.2f"|format(loader_fee_minimum_gbp|default(5)) }} or {{ loader_fee_percent_of_load|default(2) }}% of that value, charged at collection (pickup). Haulier payout runs after delivery (ePOD). To delete a load or vehicle that &quot;has jobs&quot;, cancel the job here first.
+                    Pricing: {{ platform_fee_percent|round(1) }}% of load value (haulier net shown above). Loaders pay load value plus a platform fee of the higher of £{{ "%.2f"|format(loader_fee_minimum_gbp|default(5)) }} or {{ loader_fee_percent_of_load|default(2) }}% of that value, charged at collection (pickup). Haulier payout runs after delivery (ePOD).
+                    {% if current_user and current_user.loader_id %}
+                    To remove a load that has an active job, cancel it under <strong class="text-slate-400">My loads</strong> when allowed, or contact <a href="mailto:support@platoonix.co.uk" class="text-teal-500/90 hover:underline">support@platoonix.co.uk</a>.
+                    {% else %}
+                    To delete a load or vehicle that &quot;has jobs&quot;, cancel the job here first (haulier/admin) or via My loads (loader).
+                    {% endif %}
                 </p>
             </div>
         </section>
