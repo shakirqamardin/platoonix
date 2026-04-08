@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.auth import get_current_user_optional, require_loader
+from app.config import get_settings
 from app.database import get_db
 
 router = APIRouter()
@@ -48,7 +49,7 @@ async def loader_update_profile(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    """Save loader company name, contact, and Stripe Customer ID for card charges at collection."""
+    """Save loader company contact details."""
     result = _loader_or_redirect(request, db)
     if isinstance(result, RedirectResponse):
         return result
@@ -58,9 +59,50 @@ async def loader_update_profile(
     loader.contact_email = (form.get("contact_email") or loader.contact_email or "").strip()
     loader.contact_phone = (form.get("contact_phone") or "").strip() or None
     loader.contact_name = (form.get("contact_name") or "").strip() or None
-    loader.stripe_customer_id = (form.get("stripe_customer_id") or "").strip() or None
     db.commit()
     return RedirectResponse(url="/?section=company&profile_saved=1", status_code=303)
+
+
+@router.post("/loader/billing/setup", response_class=RedirectResponse)
+def loader_setup_payment_method(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Create Stripe setup session to collect/update loader card on file."""
+    result = _loader_or_redirect(request, db)
+    if isinstance(result, RedirectResponse):
+        return result
+    _user, loader = result
+
+    settings = get_settings()
+    stripe_key = (settings.stripe_secret_key or "").strip()
+    if not stripe_key:
+        return RedirectResponse(url="/?section=company&payment_error=stripe_not_configured", status_code=303)
+
+    try:
+        import stripe
+
+        stripe.api_key = stripe_key
+        if not (loader.stripe_customer_id or "").strip():
+            customer = stripe.Customer.create(
+                email=(loader.contact_email or "").strip() or None,
+                name=(loader.name or "").strip() or None,
+                metadata={"loader_id": str(loader.id)},
+            )
+            loader.stripe_customer_id = customer.id
+            db.commit()
+
+        base_url = str(request.base_url).rstrip("/")
+        session = stripe.checkout.Session.create(
+            mode="setup",
+            customer=loader.stripe_customer_id,
+            success_url=f"{base_url}/?section=company&payment_setup=1",
+            cancel_url=f"{base_url}/?section=company&payment_setup_cancelled=1",
+        )
+        return RedirectResponse(url=session.url, status_code=303)
+    except Exception as e:
+        print(f"[STRIPE] loader_setup_payment_method failed: {e}")
+        return RedirectResponse(url="/?section=company&payment_error=setup_failed", status_code=303)
 
 
 @router.post("/loader/loads", response_class=RedirectResponse)

@@ -638,14 +638,38 @@
                     </ul>
                 </div>
                 {% endif %}
-                <p class="text-slate-400 text-sm mb-4">Loads are charged to a card on file at <strong class="text-slate-300">collection</strong>. The platform fee is the <strong class="text-slate-300">higher</strong> of £{{ "%.2f"|format(loader_fee_minimum_gbp|default(5)) }} or {{ loader_fee_percent_of_load|default(2) }}% of the load value (applied to the agreed job price). Add your Stripe Customer ID after you create a customer in Stripe and attach a default payment method.</p>
-                <p class="text-xs text-slate-500 mb-4 rounded-lg border border-slate-700/80 bg-slate-900/40 px-3 py-2">
-                    <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Create a Stripe account</a> if needed. Dashboard links use {% if stripe_is_test_mode %}<span class="text-amber-400">test</span>{% else %}<span class="text-emerald-400">live</span>{% endif %} mode from your API key.
-                </p>
-                <ul class="text-xs text-slate-500 list-disc list-inside mb-6 space-y-1">
-                    <li>In Stripe Dashboard: Customers → Create → add card → copy the Customer ID (<code class="text-slate-400">cus_...</code>).</li>
-                    <li>Paste it below so jobs can be charged automatically.</li>
-                </ul>
+                {% if request.query_params.get('payment_setup') %}
+                <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 mb-4 text-sm text-emerald-200">Payment card saved successfully.</div>
+                {% endif %}
+                {% if request.query_params.get('payment_setup_cancelled') %}
+                <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-2.5 mb-4 text-sm text-amber-100">Payment setup cancelled.</div>
+                {% endif %}
+                {% if request.query_params.get('payment_error') %}
+                <div class="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-2.5 mb-4 text-sm text-amber-100">
+                    {% if request.query_params.get('payment_error') == 'stripe_not_configured' %}Payment setup is not configured yet. Contact support.
+                    {% else %}Could not start payment setup. Please try again.
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="rounded-xl border border-slate-700/80 bg-slate-900/50 p-4 mb-5 text-sm">
+                    <h3 class="text-base font-semibold text-white mb-3">Payment Method</h3>
+                    <p class="text-slate-300 mb-3">To post loads, add a payment card for automatic charging.</p>
+                    <p class="text-slate-200 font-semibold mb-2">HOW IT WORKS:</p>
+                    <ol class="list-decimal pl-5 space-y-1 text-slate-300 mb-4">
+                        <li>Post a load with your budget</li>
+                        <li>Haulier accepts your load</li>
+                        <li>At collection, your card is charged automatically</li>
+                        <li>Payment held securely until delivery confirmed</li>
+                    </ol>
+                    <p class="text-slate-200 font-semibold mb-2">FEES:</p>
+                    <p class="text-slate-300 mb-1">Platform fee: £{{ "%.2f"|format(loader_fee_minimum_gbp|default(5)) }} minimum OR {{ loader_fee_percent_of_load|default(2) }}% of load value (whichever is greater)</p>
+                    <p class="text-slate-300 mb-3">Example: £300 load → £6 fee (2%) → Total charge: £306</p>
+                    <p class="text-slate-400 mb-4">Your card details are stored securely by Stripe. We never see your full card number. 🔒</p>
+                    <form method="post" action="/loader/billing/setup" class="mb-3">
+                        <button type="submit" class="rounded-lg bg-teal-600 hover:bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white">Add Payment Card</button>
+                    </form>
+                    <p class="text-xs text-slate-500">Don't have a card on file yet? You'll be prompted to add one when you post your first load.</p>
+                </div>
                 <form method="post" action="/loader/profile" class="space-y-4 max-w-2xl">
                     <div class="grid sm:grid-cols-2 gap-4">
                         <div>
@@ -663,16 +687,6 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Contact name <span class="text-slate-500">(optional)</span></label>
                             <input name="contact_name" value="{{ loader_profile.contact_name or '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Stripe Customer ID</label>
-                        <input name="stripe_customer_id" value="{{ loader_profile.stripe_customer_id or '' }}" placeholder="cus_..." class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm font-mono" autocomplete="off" />
-                        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-xs">
-                            <a href="{{ stripe_dashboard_customers_root }}" target="_blank" rel="noopener noreferrer" class="text-teal-400 hover:underline">Browse customers</a>
-                            {% if loader_profile.stripe_customer_id and loader_profile.stripe_customer_id.startswith('cus_') %}
-                            <a href="{{ stripe_dashboard_customers_root }}/{{ loader_profile.stripe_customer_id }}" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline font-medium">Open this customer in Stripe →</a>
-                            {% endif %}
                         </div>
                     </div>
                     <button type="submit" class="btn-primary px-6 py-2.5 text-sm font-semibold text-white rounded-lg">Save</button>
