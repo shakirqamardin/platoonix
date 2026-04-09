@@ -52,6 +52,10 @@ def loader_matched_cancellation_tier(
     fee_warn = float(getattr(s, "cancellation_fee_warning_gbp", 25.0))
     fee_pen = float(getattr(s, "cancellation_fee_penalty_gbp", 50.0))
 
+    # Past pickup: not "too close" — allow self-serve cancel (fee £0; stale/overdue loads).
+    if hours < 0:
+        return (False, 0.0, "pickup_overdue")
+    # Future pickup within penalty window only — same idea as open_load_cancel_blocked.
     if hours < pen_h:
         return (True, 0.0, "blocked")
     if hours >= free_h:
@@ -83,6 +87,5 @@ def open_load_cancel_blocked(hours: float) -> bool:
     """Loaders cannot cancel open (unmatched) loads less than penalty window before pickup."""
     s = get_settings()
     pen_h = float(getattr(s, "penalty_cancellation_hours", 2))
-    if hours < pen_h:
-        return True
-    return False
+    # Only block when pickup is still in the future but inside the window (not overdue).
+    return 0.0 <= hours < pen_h
