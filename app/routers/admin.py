@@ -1,17 +1,22 @@
 """Dedicated admin monitoring pages (session-based admin login)."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Union
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
 from app import models
 from app.auth import get_session_user_id, require_admin
 from app.database import get_db
+from app.services import vehicle_availability as vehicle_availability_svc
+from app.services.stripe_loader_charge import try_refund_loader_charge
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -108,4 +113,118 @@ def admin_users_list(
             "current_user": current_user,
             "users": users,
         },
+    )
+
+
+@router.post("/admin/cleanup-old-jobs", response_model=None)
+def cleanup_old_jobs(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Union[RedirectResponse, JSONResponse]:
+    """
+    Admin: remove stale backhaul jobs (matched 30+ days ago, never collected/completed, not soft-cancelled).
+    Reopens the load and resets the accepted LoadInterest to suggested. For dev / test data cleanup.
+    """
+    redirect = require_admin(request, db)
+    if redirect:
+        return redirect
+
+    now = datetime.now(timezone.utc)
+    thirty_days_ago = now - timedelta(days=30)
+
+    old_jobs = (
+        db.query(models.BackhaulJob)
+        .filter(
+            models.BackhaulJob.matched_at < thirty_days_ago,
+            models.BackhaulJob.completed_at.is_(None),
+            models.BackhaulJob.collected_at.is_(None),
+            models.BackhaulJob.haulier_cancelled_at.is_(None),
+        )
+        .all()
+    )
+
+    vehicle_ids: set[int] = set()
+    count = 0
+
+    for job in old_jobs:
+        load = db.get(models.Load, job.load_id)
+        if load:
+            load.status = models.LoadStatusEnum.OPEN.value
+            load.reopened_at = now
+            db.add(load)
+
+        for payment in (
+            db.query(models.Payment)
+            .filter(models.Payment.backhaul_job_id == job.id)
+            .order_by(models.Payment.created_at.asc())
+            .all()
+        ):
+            if (payment.status or "").strip().lower() == models.PaymentStatusEnum.CAPTURED.value:
+                try:
+                    try_refund_loader_charge(payment, db, refund_amount_gbp=None)
+                    db.add(payment)
+                except Exception:
+                    logger.exception("cleanup_old_jobs: refund failed for payment %s", payment.id)
+
+        db.query(models.DriverLocation).filter(models.DriverLocation.job_id == job.id).delete(
+            synchronize_session=False
+        )
+        db.query(models.JobRating).filter(models.JobRating.job_id == job.id).delete(
+            synchronize_session=False
+        )
+        db.query(models.POD).filter(models.POD.backhaul_job_id == job.id).delete(
+            synchronize_session=False
+        )
+        db.query(models.Payment).filter(models.Payment.backhaul_job_id == job.id).delete(
+            synchronize_session=False
+        )
+
+        interest = (
+            db.query(models.LoadInterest)
+            .filter(
+                models.LoadInterest.load_id == job.load_id,
+                models.LoadInterest.vehicle_id == job.vehicle_id,
+                models.LoadInterest.status == "accepted",
+            )
+            .first()
+        )
+        if interest:
+            interest.status = "suggested"
+            db.add(interest)
+
+        vehicle_ids.add(int(job.vehicle_id))
+        db.delete(job)
+        count += 1
+
+    try:
+        db.commit()
+    except Exception:
+        logger.exception("cleanup_old_jobs: commit failed")
+        db.rollback()
+        if (request.headers.get("accept") or "").find("application/json") >= 0:
+            return JSONResponse(
+                {"success": False, "deleted": 0, "message": "Database error; nothing deleted."},
+                status_code=500,
+            )
+        return RedirectResponse(url="/admin/dashboard?cleanup_error=1", status_code=303)
+
+    try:
+        for vid in vehicle_ids:
+            vehicle_availability_svc.refresh_vehicle_availability(db, vid)
+        db.commit()
+    except Exception:
+        logger.exception("cleanup_old_jobs: refresh_vehicle_availability batch failed")
+        db.rollback()
+
+    payload = {
+        "success": True,
+        "deleted": count,
+        "message": f"Cleaned up {count} old abandoned job(s) (30+ days, no collection).",
+    }
+    if (request.headers.get("accept") or "").find("application/json") >= 0:
+        return JSONResponse(payload)
+
+    return RedirectResponse(
+        url=f"/admin/dashboard?cleaned_jobs={count}",
+        status_code=303,
     )
