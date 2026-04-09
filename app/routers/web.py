@@ -612,6 +612,9 @@ def home(
         # Only jobs for their loads (exclude soft-cancelled haulier rows kept for evidence)
         jobs = (
             db.query(models.BackhaulJob)
+            .options(
+                joinedload(models.BackhaulJob.vehicle).joinedload(models.Vehicle.haulier),
+            )
             .filter(
                 models.BackhaulJob.load_id.in_(load_ids),
                 models.BackhaulJob.haulier_cancelled_at.is_(None),
@@ -1272,6 +1275,9 @@ def find_backhaul_page(
             load_interests.extend(db.query(models.LoadInterest).filter(models.LoadInterest.planned_load_id.in_(planned_ids)).all())
         jobs = (
             db.query(models.BackhaulJob)
+            .options(
+                joinedload(models.BackhaulJob.vehicle).joinedload(models.Vehicle.haulier),
+            )
             .filter(
                 models.BackhaulJob.load_id.in_(load_ids),
                 models.BackhaulJob.haulier_cancelled_at.is_(None),

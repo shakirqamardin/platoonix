@@ -1930,15 +1930,6 @@
                             </div>
                         </form>
                     </div>
-                    
-                    <!-- Separate Upload (Legacy) -->
-                    <details class="text-sm">
-                        <summary class="cursor-pointer text-slate-400 hover:text-slate-300 mb-3">Or upload loads only (legacy)</summary>
-                        <form action="/api/upload/loads" method="post" enctype="multipart/form-data" class="flex gap-2 pl-4">
-                            <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="flex-1 text-sm" />
-                            <button type="submit" class="px-4 py-2 text-sm border border-slate-600 rounded-lg hover:bg-slate-800">Bulk Upload Loads</button>
-                        </form>
-                    </details>
                 </div>
                 
                 <!-- Loads Table -->
@@ -1953,14 +1944,18 @@
                     {% if l.pickup_window_start %}
                     {% set ns.hu = ((l.pickup_window_start - utcnow()).total_seconds() / 3600) %}
                     {% endif %}
-                    {% if lj %}
-                    {% if ns.hu < cu.pen_h %}{% set ns.blocked = true %}{% endif %}
-                    {% if ns.hu >= cu.free_h %}{% set ns.fee = 0 %}
-                    {% elif ns.hu >= cu.warn_h %}{% set ns.fee = cu.fee_warn %}
-                    {% else %}{% set ns.fee = cu.fee_pen %}
-                    {% endif %}
+                    {# Block self-serve cancel only when pickup is in the future but within penalty window (not when pickup already passed). #}
+                    {% set ns.blocked = l.pickup_window_start and ns.hu >= 0 and ns.hu < cu.pen_h %}
+                    {% if not l.pickup_window_start %}
+                    {% set ns.fee = 0 %}
+                    {% elif ns.hu < 0 %}
+                    {% set ns.fee = 0 %}
+                    {% elif ns.hu >= cu.free_h %}
+                    {% set ns.fee = 0 %}
+                    {% elif ns.hu >= cu.warn_h %}
+                    {% set ns.fee = cu.fee_warn %}
                     {% else %}
-                    {% if ns.hu < cu.pen_h %}{% set ns.blocked = true %}{% endif %}
+                    {% set ns.fee = cu.fee_pen %}
                     {% endif %}
                     {% set can_edit = (st == 'open' and not lj) %}
                     {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at)) and not ns.blocked) %}
@@ -1970,27 +1965,36 @@
                         <div class="text-xs text-slate-400">Budget: {% if l.budget_gbp is not none %}£{{ "%.2f"|format(l.budget_gbp) }}{% else %}—{% endif %} · Posted {{ l.created_at.strftime('%d %b %Y') }}</div>
                         <div class="text-xs text-slate-500"><span class="badge badge-success">{{ l.status }}</span></div>
                         {% if st == 'matched' and lj %}
-                        <div class="rounded border border-emerald-500/30 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200/90">✓ Job confirmed — haulier assigned</div>
+                        <div class="mt-2 rounded border border-emerald-500/30 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200/90">
+                            ✅ <strong>Matched</strong> with {% if lj.vehicle and lj.vehicle.haulier %}{{ lj.vehicle.haulier.name }}{% else %}haulier{% endif %}{% if lj.vehicle and lj.vehicle.registration %} ({{ lj.vehicle.registration }}){% endif %}
+                        </div>
                         {% endif %}
-                        {% if l.pickup_window_start and st != 'cancelled' and ns.hu < 9990 %}
-                        {% if ns.hu > 0 and ns.hu <= 6 %}
+                        {% if st != 'cancelled' %}
+                        {% if not l.pickup_window_start %}
+                        <div class="text-xs text-emerald-400/90">Can cancel anytime (no pickup time set)</div>
+                        {% elif ns.hu < 0 %}
+                        {% if ns.hu > -48 %}
+                        <div class="text-xs text-red-400/90">Pickup overdue</div>
+                        {% endif %}
+                        {% elif ns.hu < cu.pen_h %}
+                        <div class="text-xs text-rose-300/90">Too close to cancel (pickup in {{ ns.hu|int }}h) — support only.</div>
+                        {% elif ns.hu < cu.warn_h %}
+                        <div class="text-xs text-orange-300/90">Cancel now: £{{ cu.fee_pen|int }} fee (pickup in {{ ns.hu|int }}h)</div>
+                        {% elif ns.hu < cu.free_h %}
+                        <div class="text-xs text-amber-300/90">Cancel now: £{{ cu.fee_warn|int }} fee (pickup in {{ ns.hu|int }}h)</div>
+                        {% else %}
+                        <div class="text-xs text-emerald-400/90">Free cancellation until {{ (l.pickup_window_start - timedelta(hours=cu.free_h)).strftime('%d %b, %H:%M') }}</div>
+                        {% endif %}
+                        {% endif %}
+                        {% if l.pickup_window_start and st != 'cancelled' and ns.hu > 0 and ns.hu < 9990 %}
+                        {% if ns.hu <= 6 %}
                         <div class="rounded border border-orange-500/30 bg-orange-950/30 px-2 py-1 text-xs text-orange-200/90">⚠ Pickup in {{ ns.hu|int }}h</div>
-                        {% elif ns.hu > 6 and ns.hu <= 24 %}
+                        {% elif ns.hu <= 24 %}
                         <div class="rounded border border-amber-500/30 bg-amber-950/30 px-2 py-1 text-xs text-amber-200/90">⏰ Pickup in {{ ns.hu|int }}h</div>
                         {% endif %}
                         {% endif %}
                         {% if st == 'cancelled' and l.cancellation_fee_gbp and l.cancellation_fee_gbp > 0 %}
                         <div class="rounded border border-cyan-500/30 bg-cyan-950/30 px-2 py-1 text-xs text-cyan-200/90">Cancellation fee applied: £{{ "%.0f"|format(l.cancellation_fee_gbp) }}</div>
-                        {% endif %}
-                        {% if l.pickup_window_start and can_cancel %}
-                        <div class="text-xs leading-relaxed">
-                            {% if ns.hu >= cu.free_h %}<span class="text-emerald-400/90">Free cancellation until {{ (l.pickup_window_start - timedelta(hours=cu.free_h)).strftime('%d %b, %H:%M') }}</span>
-                            {% elif ns.hu >= cu.warn_h %}<span class="text-amber-300/90">£{{ cu.fee_warn|int }} fee if cancelled now (pickup in {{ ns.hu|int }}h)</span>
-                            {% elif ns.hu >= cu.pen_h %}<span class="text-orange-300/90">£{{ cu.fee_pen|int }} fee if cancelled now (pickup in {{ ns.hu|int }}h)</span>
-                            {% endif %}
-                        </div>
-                        {% elif l.pickup_window_start and ns.blocked %}
-                        <div class="text-xs text-rose-300/90">Too close to pickup to cancel here — contact support.</div>
                         {% endif %}
                         <div class="flex flex-wrap items-center gap-2 pt-2">
                             {{ wa_share_btn(l) }}
@@ -1998,7 +2002,7 @@
                             <a href="/loader/loads/{{ l.id }}/edit" class="min-h-[44px] px-3 py-2 rounded-lg border border-teal-500/40 text-teal-300 text-sm font-medium text-center">Edit</a>
                             {% endif %}
                             {% if can_cancel %}
-                            <button type="button" class="min-h-[44px] px-3 py-2 text-rose-300 border border-rose-500/40 rounded-lg text-sm font-medium" onclick="document.getElementById('cancel-load-{{ l.id }}').showModal()">Cancel</button>
+                            <button type="button" class="min-h-[44px] px-3 py-2 text-rose-300 border border-rose-500/40 rounded-lg text-sm font-medium" onclick="document.getElementById('cancel-load-{{ l.id }}').showModal()">{% if lj %}Cancel job{% else %}Cancel{% endif %}</button>
                             <dialog id="cancel-load-{{ l.id }}" class="rounded-xl border border-slate-600 bg-slate-900 p-6 text-slate-100 max-w-md shadow-xl backdrop:bg-black/50">
                                 <h3 class="text-lg font-semibold text-white mb-2">Cancel load?</h3>
                                 {% if ns.fee <= 0 %}
@@ -2040,14 +2044,17 @@
                             {% if l.pickup_window_start %}
                             {% set ns.hu = ((l.pickup_window_start - utcnow()).total_seconds() / 3600) %}
                             {% endif %}
-                            {% if lj %}
-                            {% if ns.hu < cu.pen_h %}{% set ns.blocked = true %}{% endif %}
-                            {% if ns.hu >= cu.free_h %}{% set ns.fee = 0 %}
-                            {% elif ns.hu >= cu.warn_h %}{% set ns.fee = cu.fee_warn %}
-                            {% else %}{% set ns.fee = cu.fee_pen %}
-                            {% endif %}
+                            {% set ns.blocked = l.pickup_window_start and ns.hu >= 0 and ns.hu < cu.pen_h %}
+                            {% if not l.pickup_window_start %}
+                            {% set ns.fee = 0 %}
+                            {% elif ns.hu < 0 %}
+                            {% set ns.fee = 0 %}
+                            {% elif ns.hu >= cu.free_h %}
+                            {% set ns.fee = 0 %}
+                            {% elif ns.hu >= cu.warn_h %}
+                            {% set ns.fee = cu.fee_warn %}
                             {% else %}
-                            {% if ns.hu < cu.pen_h %}{% set ns.blocked = true %}{% endif %}
+                            {% set ns.fee = cu.fee_pen %}
                             {% endif %}
                             {% set can_edit = (st == 'open' and not lj) %}
                             {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at)) and not ns.blocked) %}
@@ -2056,23 +2063,34 @@
                                     <div class="font-medium text-slate-100">{{ l.shipper_name }}</div>
                                     <div class="font-mono text-teal-300 text-sm mt-0.5">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</div>
                                     {% if l.booking_ref or l.booking_name %}<div class="text-xs text-slate-500 mt-1">{% if l.booking_ref %}{{ l.booking_ref }}{% endif %}{% if l.booking_name %} · {{ l.booking_name }}{% endif %}</div>{% endif %}
-                                    {% if l.pickup_window_start and can_cancel %}
-                                    <div class="text-xs mt-1 max-w-xs">
-                                        {% if ns.hu >= cu.free_h %}<span class="text-emerald-400/90">Free cancel until {{ (l.pickup_window_start - timedelta(hours=cu.free_h)).strftime('%d %b %H:%M') }}</span>
-                                        {% elif ns.hu >= cu.warn_h %}<span class="text-amber-300/90">£{{ cu.fee_warn|int }} fee · pickup in {{ ns.hu|int }}h</span>
-                                        {% elif ns.hu >= cu.pen_h %}<span class="text-orange-300/90">£{{ cu.fee_pen|int }} fee · pickup in {{ ns.hu|int }}h</span>
+                                    {% if st == 'matched' and lj %}
+                                    <div class="mt-1 rounded border border-emerald-500/30 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200/90 max-w-md">
+                                        ✅ <strong>Matched</strong> with {% if lj.vehicle and lj.vehicle.haulier %}{{ lj.vehicle.haulier.name }}{% else %}haulier{% endif %}{% if lj.vehicle and lj.vehicle.registration %} ({{ lj.vehicle.registration }}){% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if st != 'cancelled' %}
+                                    <div class="text-xs mt-1 max-w-md">
+                                        {% if not l.pickup_window_start %}
+                                        <span class="text-emerald-400/90">Can cancel anytime (no pickup time set)</span>
+                                        {% elif ns.hu < 0 %}
+                                        {% if ns.hu > -48 %}
+                                        <span class="text-red-400/90">Pickup overdue</span>
+                                        {% endif %}
+                                        {% elif ns.hu < cu.pen_h %}
+                                        <span class="text-rose-300/90">Too close to cancel (pickup in {{ ns.hu|int }}h) — support only.</span>
+                                        {% elif ns.hu < cu.warn_h %}
+                                        <span class="text-orange-300/90">Cancel now: £{{ cu.fee_pen|int }} fee (pickup in {{ ns.hu|int }}h)</span>
+                                        {% elif ns.hu < cu.free_h %}
+                                        <span class="text-amber-300/90">Cancel now: £{{ cu.fee_warn|int }} fee (pickup in {{ ns.hu|int }}h)</span>
+                                        {% else %}
+                                        <span class="text-emerald-400/90">Free cancellation until {{ (l.pickup_window_start - timedelta(hours=cu.free_h)).strftime('%d %b, %H:%M') }}</span>
                                         {% endif %}
                                     </div>
-                                    {% elif l.pickup_window_start and ns.blocked %}
-                                    <div class="text-xs text-rose-300/90 mt-1">Too close to cancel — support only.</div>
                                     {% endif %}
-                                    {% if st == 'matched' and lj %}
-                                    <div class="mt-1 rounded border border-emerald-500/30 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200/90 max-w-md">✓ Job confirmed — haulier assigned</div>
-                                    {% endif %}
-                                    {% if l.pickup_window_start and st != 'cancelled' and ns.hu < 9990 %}
-                                    {% if ns.hu > 0 and ns.hu <= 6 %}
+                                    {% if l.pickup_window_start and st != 'cancelled' and ns.hu > 0 and ns.hu < 9990 %}
+                                    {% if ns.hu <= 6 %}
                                     <div class="mt-1 rounded border border-orange-500/30 bg-orange-950/30 px-2 py-1 text-xs text-orange-200/90 max-w-md">⚠ Pickup in {{ ns.hu|int }}h</div>
-                                    {% elif ns.hu > 6 and ns.hu <= 24 %}
+                                    {% elif ns.hu <= 24 %}
                                     <div class="mt-1 rounded border border-amber-500/30 bg-amber-950/30 px-2 py-1 text-xs text-amber-200/90 max-w-md">⏰ Pickup in {{ ns.hu|int }}h</div>
                                     {% endif %}
                                     {% endif %}
@@ -2090,7 +2108,7 @@
                                         <a href="/loader/loads/{{ l.id }}/edit" class="min-h-[40px] px-3 py-2 rounded-lg border border-teal-500/40 text-teal-300 text-sm font-medium">Edit</a>
                                         {% endif %}
                                         {% if can_cancel %}
-                                        <button type="button" class="min-h-[40px] px-3 py-2 text-rose-300 text-sm font-medium rounded-lg border border-rose-500/40" onclick="document.getElementById('cancel-load-d-{{ l.id }}').showModal()">Cancel</button>
+                                        <button type="button" class="min-h-[40px] px-3 py-2 text-rose-300 text-sm font-medium rounded-lg border border-rose-500/40" onclick="document.getElementById('cancel-load-d-{{ l.id }}').showModal()">{% if lj %}Cancel job{% else %}Cancel{% endif %}</button>
                                         <dialog id="cancel-load-d-{{ l.id }}" class="rounded-xl border border-slate-600 bg-slate-900 p-6 text-slate-100 max-w-md shadow-xl backdrop:bg-black/50">
                                             <h3 class="text-lg font-semibold text-white mb-2">Cancel load?</h3>
                                             {% if ns.fee <= 0 %}
