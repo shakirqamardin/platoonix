@@ -30,6 +30,7 @@ def notify_hauliers_loader_cancelled(
     *,
     commit_in_app: bool = True,
 ) -> None:
+    """Loader cancelled — no fee language; fee_gbp/tier_key kept for call-site compatibility."""
     vehicle = db.get(models.Vehicle, job.vehicle_id)
     if not vehicle:
         return
@@ -37,21 +38,20 @@ def notify_hauliers_loader_cancelled(
     users = db.query(models.User).filter(models.User.haulier_id == vehicle.haulier_id).all()
     jref = job.display_number
     route = f"{load.pickup_postcode} → {load.delivery_postcode}"
-    if fee_gbp and fee_gbp > 0:
-        subj = f"Platoonix: load cancelled — £{fee_gbp:.2f} compensation (policy)"
-        body = (
-            f"The loader has cancelled job {jref} ({route}).\n\n"
-            f"A cancellation fee of £{fee_gbp:.2f} may be credited per platform policy. "
-            f"Tier: {tier_key}. If you have questions, reply to this thread or contact support@platoonix.co.uk.\n"
-        )
-        priority = "important"
-    else:
-        subj = "Platoonix: load cancelled by shipper"
-        body = (
-            f"The loader has cancelled job {jref} ({route}) with sufficient notice under our policy.\n\n"
-            f"No cancellation compensation applies for this tier ({tier_key}).\n"
-        )
-        priority = "normal"
+    pickup_s = ""
+    if load.pickup_window_start:
+        pickup_s = load.pickup_window_start.strftime("%d %b %Y, %H:%M")
+    subj = "Load cancelled by loader"
+    body = (
+        f"The loader has cancelled the following job:\n\n"
+        f"Job: {jref}\n"
+        f"Route: {route}\n"
+        f"Pickup: {pickup_s or 'Not specified'}\n\n"
+        "You are free to accept other loads on Platoonix.\n\n"
+        "We apologise for the inconvenience.\n\n"
+        "Best regards,\nPlatoonix Team\nsupport@platoonix.co.uk\n"
+    )
+    priority = "normal"
     if haulier and haulier.contact_email:
         send_email(haulier.contact_email, subj, body)
     for u in users:
@@ -89,24 +89,28 @@ def notify_loader_haulier_cancelled(
     haulier = db.get(models.Haulier, vehicle.haulier_id) if vehicle else None
     if not loader or not loader.contact_email:
         return
-    hn = _haulier_name(haulier) if haulier else "the haulier"
-    urgent = hours_until < 24.0
-    subj = ("URGENT: " if urgent else "") + "Haulier cancelled your job"
+    hn = _haulier_name(haulier) if haulier else "The haulier"
+    jref = job.display_number
+    pickup_s = ""
+    if load.pickup_window_start:
+        pickup_s = load.pickup_window_start.strftime("%d %b %Y, %H:%M")
+    subj = "Haulier cancelled your job"
     body = (
-        f"Unfortunately {hn} has cancelled the confirmed job on load {load.pickup_postcode} → {load.delivery_postcode}.\n\n"
-        f"Approx. time until pickup when cancelled: {int(max(0, hours_until))} hours.\n\n"
-        "Your load has been reopened for other hauliers where applicable. "
-        "If a card payment had been taken, our team will align refunds with policy. "
-        "Contact support@platoonix.co.uk if you need help.\n"
+        f"Unfortunately, {hn} has cancelled your job:\n\n"
+        f"Job: {jref}\n"
+        f"Route: {load.pickup_postcode} → {load.delivery_postcode}\n"
+        f"Pickup: {pickup_s or 'Not specified'}\n\n"
+        "What we've done:\n"
+        "• Your load has been reopened automatically\n"
+        "• You will receive a full refund where a payment was taken\n"
+        "• Other hauliers can now see and accept your load\n\n"
+        "You don't need to do anything — the load is live again.\n\n"
+        "Need help? Email support@platoonix.co.uk\n\n"
+        "Best regards,\nPlatoonix Team\n"
     )
     send_email(loader.contact_email, subj, body)
 
-    if hours_until < 12.0:
-        priority = "critical"
-    elif hours_until < 24.0:
-        priority = "important"
-    else:
-        priority = "normal"
+    priority = "important"
     try:
         uids = loader_office_user_ids(db, load.loader_id)
         record_user_notifications(

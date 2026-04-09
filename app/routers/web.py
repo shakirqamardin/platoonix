@@ -64,7 +64,7 @@ def _job_status_parts(job):
         return f"{int(secs // 86400)} days ago"
 
     if getattr(job, "haulier_cancelled_at", None):
-        return {"headline": "Cancelled (haulier)", "detail": "Awaiting evidence" if getattr(job, "emergency_evidence_required", None) else ""}
+        return {"headline": "Cancelled (haulier)", "detail": ""}
     if getattr(job, "completed_at", None):
         return {"headline": "Completed", "detail": ago(job.completed_at)}
     if getattr(job, "reached_delivery_at", None):
@@ -758,21 +758,10 @@ def home(
         "pen_h": _cset_home.penalty_cancellation_hours,
         "fee_warn": _cset_home.cancellation_fee_warning_gbp,
         "fee_pen": _cset_home.cancellation_fee_penalty_gbp,
+        "loader_free_h": _cset_home.loader_matched_free_cancellation_hours,
+        "loader_fee_gbp": _cset_home.loader_matched_penalty_fee_gbp,
     }
     emergency_evidence_jobs: list = []
-    if current_user and getattr(current_user, "role", None) == "haulier" and getattr(current_user, "haulier_id", None):
-        _evids = [v.id for v in vehicles] if vehicles else []
-        if _evids:
-            emergency_evidence_jobs = (
-                db.query(models.BackhaulJob)
-                .filter(models.BackhaulJob.vehicle_id.in_(_evids))
-                .filter(models.BackhaulJob.haulier_cancelled_at.isnot(None))
-                .filter(models.BackhaulJob.emergency_cancellation.is_(True))
-                .filter(models.BackhaulJob.emergency_evidence_required.is_(True))
-                .filter(models.BackhaulJob.emergency_evidence_submitted_at.is_(None))
-                .order_by(models.BackhaulJob.haulier_cancelled_at.desc())
-                .all()
-            )
     job_by_load_id = {}
     for j in jobs:
         prev = job_by_load_id.get(j.load_id)
@@ -1400,21 +1389,10 @@ def find_backhaul_page(
         "pen_h": _cset.penalty_cancellation_hours,
         "fee_warn": _cset.cancellation_fee_warning_gbp,
         "fee_pen": _cset.cancellation_fee_penalty_gbp,
+        "loader_free_h": _cset.loader_matched_free_cancellation_hours,
+        "loader_fee_gbp": _cset.loader_matched_penalty_fee_gbp,
     }
     emergency_evidence_jobs: list = []
-    if current_user and getattr(current_user, "role", None) == "haulier" and getattr(current_user, "haulier_id", None):
-        _evids = [v.id for v in vehicles] if vehicles else []
-        if _evids:
-            emergency_evidence_jobs = (
-                db.query(models.BackhaulJob)
-                .filter(models.BackhaulJob.vehicle_id.in_(_evids))
-                .filter(models.BackhaulJob.haulier_cancelled_at.isnot(None))
-                .filter(models.BackhaulJob.emergency_cancellation.is_(True))
-                .filter(models.BackhaulJob.emergency_evidence_required.is_(True))
-                .filter(models.BackhaulJob.emergency_evidence_submitted_at.is_(None))
-                .order_by(models.BackhaulJob.haulier_cancelled_at.desc())
-                .all()
-            )
 
     job_by_load_id = {}
     for j in jobs:
@@ -1832,16 +1810,9 @@ async def delete_job_form(
     request: Request,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    """Haulier office or admin: cancel a backhaul job. Policy: time windows, strikes, emergency soft-cancel."""
-    from app.services.cancellation_emails import (
-        notify_loader_emergency_haulier_cancel,
-        notify_loader_haulier_cancelled,
-        notify_support_emergency_cancellation,
-        send_haulier_emergency_evidence_reminder,
-        send_haulier_probation_notice,
-        send_haulier_suspension_notice,
-    )
-    from app.services.cancellation_policy import haulier_cancellation_penalty_kind, hours_until_pickup
+    """Haulier office or admin: cancel a backhaul job — full refund, reopen load, track haulier cancellations."""
+    from app.services.cancellation_emails import notify_loader_haulier_cancelled
+    from app.services.cancellation_policy import hours_until_pickup
     from app.services.stripe_loader_charge import try_refund_loader_charge
 
     current_user = get_current_user_optional(request, db)
@@ -1851,11 +1822,6 @@ async def delete_job_form(
         return RedirectResponse(url="/login", status_code=302)
     if current_user.role not in ("haulier", "admin"):
         return RedirectResponse(url="/?section=matches&delete_error=Not+authorized", status_code=303)
-
-    form = await request.form()
-    cancellation_type = (form.get("cancellation_type") or "normal").strip().lower()
-    emergency_reason = (form.get("emergency_reason") or "").strip().lower()
-    emergency_details = (form.get("emergency_details") or "").strip()[:1000]
 
     job = db.get(models.BackhaulJob, job_id)
     if not job:
@@ -1875,9 +1841,6 @@ async def delete_job_form(
 
     now = datetime.now(timezone.utc)
     hours = hours_until_pickup(load, job, now)
-    settings = get_settings()
-    pen_h = float(settings.penalty_cancellation_hours)
-    is_emergency = cancellation_type == "emergency" and bool(emergency_reason)
 
     payment = (
         db.query(models.Payment)
@@ -1924,70 +1887,10 @@ async def delete_job_form(
     if (haulier.account_status or "").strip().lower() == "suspended":
         return RedirectResponse(url="/?section=matches&delete_error=account_suspended", status_code=303)
 
-    if hours < pen_h and not is_emergency:
-        return RedirectResponse(url="/?section=matches&haulier_cancel_blocked=1", status_code=303)
-
-    if is_emergency:
-        _refund_loader_if_captured()
-        db.query(models.POD).filter(models.POD.backhaul_job_id == job.id).delete()
-        db.query(models.Payment).filter(models.Payment.backhaul_job_id == job.id).delete()
-
-        job.haulier_cancelled_at = now
-        job.emergency_cancellation = True
-        job.emergency_details = emergency_details or None
-        job.issue_type = emergency_reason[:50] if emergency_reason else None
-        job.emergency_evidence_required = True
-        haulier.pending_emergency_reviews = int(haulier.pending_emergency_reviews or 0) + 1
-        db.add(haulier)
-        db.add(job)
-
-        load.status = models.LoadStatusEnum.OPEN.value
-        load.load_priority = "urgent" if hours < 24.0 else "normal"
-        load.reopened_at = now
-        load.cancellation_reason = "haulier_emergency_cancel"
-        db.add(load)
-
-        _interest_to_suggested()
-
-        try:
-            notify_loader_emergency_haulier_cancel(
-                db, job, emergency_reason, hours, commit_in_app=False
-            )
-            send_haulier_emergency_evidence_reminder(
-                db, haulier, job, emergency_reason, commit_in_app=False
-            )
-            notify_support_emergency_cancellation(job, emergency_reason, emergency_details)
-        except Exception:
-            logger.exception("emergency haulier cancel emails")
-
-        vehicle_availability_svc.refresh_vehicle_availability(db, vehicle_id_for_refresh)
-        db.commit()
-        return RedirectResponse(url="/?section=matches&deleted=job&emergency=1", status_code=303)
-
-    kind = haulier_cancellation_penalty_kind(hours)
-    if kind == "blocked":
+    if hours < 0:
         return RedirectResponse(url="/?section=matches&haulier_cancel_blocked=1", status_code=303)
 
     _refund_loader_if_captured()
-
-    if kind == "strike":
-        haulier.cancellation_strikes = int(haulier.cancellation_strikes or 0) + 1
-        haulier.last_strike_date = now
-        thr = settings.suspension_strike_threshold
-        prob = settings.probation_strike_threshold
-        if haulier.cancellation_strikes >= thr:
-            haulier.account_status = "suspended"
-            try:
-                send_haulier_suspension_notice(haulier)
-            except Exception:
-                logger.exception("send_haulier_suspension_notice")
-        elif haulier.cancellation_strikes >= prob:
-            haulier.account_status = "probation"
-            try:
-                send_haulier_probation_notice(haulier)
-            except Exception:
-                logger.exception("send_haulier_probation_notice")
-        db.add(haulier)
 
     try:
         notify_loader_haulier_cancelled(db, job, hours, commit_in_app=False)
@@ -1995,17 +1898,16 @@ async def delete_job_form(
         logger.exception("notify_loader_haulier_cancelled")
 
     load.status = models.LoadStatusEnum.OPEN.value
-    if hours < 12.0:
-        load.load_priority = "emergency"
-    elif hours < 24.0:
-        load.load_priority = "urgent"
-    else:
-        load.load_priority = "normal"
+    load.load_priority = "normal"
     load.reopened_at = now
     load.cancellation_reason = "haulier_cancel"
     db.add(load)
 
     _interest_to_suggested()
+
+    haulier.cancellation_count = int(haulier.cancellation_count or 0) + 1
+    haulier.last_cancellation_at = now
+    db.add(haulier)
 
     db.query(models.POD).filter(models.POD.backhaul_job_id == job_id).delete()
     db.query(models.Payment).filter(models.Payment.backhaul_job_id == job_id).delete()

@@ -73,6 +73,8 @@ class Loader(Base):
     contact_name: Mapped[Optional[str]] = mapped_column(String(255))
     # Stripe Billing Customer (cus_...) — set when loader saves a card; used to charge on job completion
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255))
+    cancellation_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_cancellation_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     loads: Mapped[list["Load"]] = relationship("Load", back_populates="loader")
     planned_loads: Mapped[list["PlannedLoad"]] = relationship("PlannedLoad", back_populates="loader")
@@ -96,6 +98,8 @@ class Haulier(Base):
     )
     contact_name: Mapped[Optional[str]] = mapped_column(String(255))
     driver_photo_url: Mapped[Optional[str]] = mapped_column(String(500))
+    cancellation_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_cancellation_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     cancellation_strikes: Mapped[int] = mapped_column(Integer, default=0)
     last_strike_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     account_status: Mapped[str] = mapped_column(String(20), default="active")

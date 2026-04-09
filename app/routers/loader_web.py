@@ -63,6 +63,21 @@ def _primary_job_for_load(db: Session, load_id: int) -> Optional[models.Backhaul
     )
 
 
+def _interest_accepted_to_suggested(db: Session, load_id: int, vehicle_id: int) -> None:
+    interest = (
+        db.query(models.LoadInterest)
+        .filter(
+            models.LoadInterest.load_id == load_id,
+            models.LoadInterest.vehicle_id == vehicle_id,
+            models.LoadInterest.status == "accepted",
+        )
+        .first()
+    )
+    if interest:
+        interest.status = "suggested"
+        db.add(interest)
+
+
 def _loader_or_redirect(request: Request, db: Session) -> Union[Tuple[models.User, models.Loader], RedirectResponse]:
     redirect = require_loader(request, db)
     if redirect is not None:
@@ -462,11 +477,28 @@ def loader_cancel_load(
     job = _primary_job_for_load(db, load_id)
     h = hours_until_pickup(load, job, now)
 
+    refund_warning = False
+    vehicle_id_to_refresh: Optional[int] = None
+    tier_key = "unmatched"
+
     if not job:
         if open_load_cancel_blocked(h):
-            return RedirectResponse(url="/?section=loads&cancel_blocked=1", status_code=303)
-        fee_gbp = 0.0
-        tier_key = "unmatched"
+            pt = pickup_reference_time(load, None)
+            ps = pt.strftime("%d+%b+%Y+%H%3A%M") if pt else ""
+            return RedirectResponse(
+                url=f"/?section=loads&cancel_blocked=1&pickup_time={ps}",
+                status_code=303,
+            )
+        load.status = models.LoadStatusEnum.CANCELLED.value
+        load.cancelled_at = now
+        load.cancelled_by_user_id = _user.id
+        load.cancellation_fee_gbp = None
+        load.cancellation_reason = "loader_cancel:unmatched"
+        db.add(load)
+        for li in db.query(models.LoadInterest).filter(models.LoadInterest.load_id == load.id).all():
+            if (li.status or "") not in ("declined",):
+                li.status = "declined"
+                db.add(li)
     else:
         if job.completed_at:
             return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_completed", status_code=303)
@@ -481,7 +513,7 @@ def loader_cancel_load(
         if payment_chk and (payment_chk.status or "").strip().lower() == models.PaymentStatusEnum.PAID_OUT.value:
             return RedirectResponse(url="/?section=loads&load_error=cannot_cancel_paid_out", status_code=303)
 
-        blocked, fee_gbp, tier_key = loader_matched_cancellation_tier(h)
+        blocked, _fee, tier_key = loader_matched_cancellation_tier(h)
         if blocked:
             pt = pickup_reference_time(load, job)
             ps = pt.strftime("%d+%b+%Y+%H%3A%M") if pt else ""
@@ -490,49 +522,49 @@ def loader_cancel_load(
                 status_code=303,
             )
 
-    payment = None
-    if job:
         payment = (
             db.query(models.Payment)
             .filter(models.Payment.backhaul_job_id == job.id)
             .order_by(models.Payment.created_at.asc())
             .first()
         )
+        if payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.CAPTURED.value:
+            from app.services.stripe_loader_charge import try_refund_loader_charge
 
-    refund_warning = False
-    if job and payment and (payment.status or "").strip().lower() == models.PaymentStatusEnum.CAPTURED.value:
-        from app.services.stripe_loader_charge import try_refund_loader_charge
+            ok_ref, _err = try_refund_loader_charge(payment, db, refund_amount_gbp=None)
+            if not ok_ref:
+                refund_warning = True
+            db.add(payment)
 
-        total_gbp = float(payment.amount_gbp or 0) + float(payment.flat_fee_gbp or 0)
-        refund_gbp = max(0.0, round(total_gbp - float(fee_gbp), 2))
-        ok_ref, _err = try_refund_loader_charge(payment, db, refund_amount_gbp=refund_gbp)
-        if not ok_ref:
-            refund_warning = True
-        db.add(payment)
+        try:
+            notify_hauliers_loader_cancelled(db, job, load, 0.0, tier_key, commit_in_app=False)
+        except Exception:
+            logger.exception("notify haulier load cancelled")
 
-    load.status = models.LoadStatusEnum.CANCELLED.value
-    load.cancelled_at = now
-    load.cancelled_by_user_id = _user.id
-    load.cancellation_fee_gbp = fee_gbp if fee_gbp else None
-    load.cancellation_reason = f"loader_cancel:{tier_key}"
-    db.add(load)
+        vehicle_id_to_refresh = job.vehicle_id
+        db.query(models.POD).filter(models.POD.backhaul_job_id == job.id).delete()
+        db.query(models.Payment).filter(models.Payment.backhaul_job_id == job.id).delete()
+        _interest_accepted_to_suggested(db, load.id, job.vehicle_id)
+        db.delete(job)
+        load.status = models.LoadStatusEnum.OPEN.value
+        load.reopened_at = now
+        load.cancelled_at = None
+        load.cancellation_fee_gbp = None
+        load.cancellation_reason = "loader_cancel_reopen"
+        load.load_priority = "normal"
+        db.add(load)
 
-    for li in db.query(models.LoadInterest).filter(models.LoadInterest.load_id == load.id).all():
-        if (li.status or "") not in ("declined",):
-            li.status = "declined"
-            db.add(li)
+    loader.cancellation_count = int(loader.cancellation_count or 0) + 1
+    loader.last_cancellation_at = now
+    db.add(loader)
 
     db.commit()
 
-    if job:
-        try:
-            notify_hauliers_loader_cancelled(db, job, load, float(fee_gbp or 0), tier_key)
-        except Exception:
-            logger.exception("notify haulier load cancelled")
+    if vehicle_id_to_refresh is not None:
         try:
             from app.services import vehicle_availability as vehicle_availability_svc
 
-            vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
+            vehicle_availability_svc.refresh_vehicle_availability(db, vehicle_id_to_refresh)
             db.commit()
         except Exception:
             logger.exception("refresh_vehicle_availability after cancel")
@@ -540,8 +572,6 @@ def loader_cancel_load(
     q = "section=loads&load_cancelled=1"
     if refund_warning:
         q += "&refund_warning=1"
-    if fee_gbp and fee_gbp > 0:
-        q += f"&cancel_fee={int(fee_gbp)}"
     return RedirectResponse(url=f"/?{q}", status_code=303)
 
 
@@ -594,11 +624,7 @@ async def loader_report_no_show(
             try_refund_loader_charge(payment, db, refund_amount_gbp=None)
             db.add(payment)
 
-        haulier.cancellation_strikes = int(haulier.cancellation_strikes or 0) + 2
         haulier.no_show_count = int(haulier.no_show_count or 0) + 1
-        haulier.last_strike_date = now
-        if haulier.cancellation_strikes >= get_settings().suspension_strike_threshold:
-            haulier.account_status = "suspended"
         db.add(haulier)
 
         load.status = models.LoadStatusEnum.OPEN.value

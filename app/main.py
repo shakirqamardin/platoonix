@@ -322,6 +322,8 @@ def check_db_and_create_tables():
                 "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS pending_emergency_reviews INTEGER DEFAULT 0",
                 "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS approved_emergencies_count INTEGER DEFAULT 0",
                 "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS rejected_emergencies_count INTEGER DEFAULT 0",
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS cancellation_count INTEGER DEFAULT 0",
+                "ALTER TABLE hauliers ADD COLUMN IF NOT EXISTS last_cancellation_at TIMESTAMP WITH TIME ZONE",
             ):
                 try:
                     conn.execute(text(col_sql))
@@ -330,6 +332,17 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration hauliers policy columns: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE loaders ADD COLUMN IF NOT EXISTS cancellation_count INTEGER DEFAULT 0",
+                "ALTER TABLE loaders ADD COLUMN IF NOT EXISTS last_cancellation_at TIMESTAMP WITH TIME ZONE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration loaders cancellation columns: {e!r}", file=sys.stderr)
             for col_sql in (
                 "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS no_show_reported_at TIMESTAMP WITH TIME ZONE",
                 "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS no_show_reported_by_user_id INTEGER REFERENCES users(id)",

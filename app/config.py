@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     penalty_cancellation_hours: int = 2
     cancellation_fee_warning_gbp: float = 25.0
     cancellation_fee_penalty_gbp: float = 50.0
+    # Loader matched loads (backhaul): two tiers — free ≥6h before pickup; £25 if 0<h<6; blocked after pickup
+    loader_matched_free_cancellation_hours: int = 6
+    loader_matched_penalty_fee_gbp: float = 25.0
     no_show_penalty_gbp: float = 100.0
     no_show_compensation_loader_gbp: float = 50.0
     suspension_strike_threshold: int = 3
