@@ -28,6 +28,7 @@ from app.services import ratings as ratings_svc
 from app.services import load_pricing as load_pricing_svc
 from app.services import vehicle_availability as vehicle_availability_svc
 from app.services.payment_fees import compute_loader_platform_fee_gbp
+from app.services.cancellation_policy import hours_until_pickup
 from app.services.email_sender import schedule_registration_emails
 logger = logging.getLogger(__name__)
 
@@ -778,6 +779,13 @@ def home(
         if prev is None or j.id > prev.id:
             job_by_load_id[j.load_id] = j
 
+    loader_load_hours_by_id: dict[int, float] = {}
+    if current_user and getattr(current_user, "loader_id", None) and loads:
+        _now_pickup = datetime.now(timezone.utc)
+        for _ld in loads:
+            _jb = job_by_load_id.get(_ld.id)
+            loader_load_hours_by_id[_ld.id] = hours_until_pickup(_ld, _jb, _now_pickup)
+
     total_users = 0
     loader_user_count = 0
     haulier_user_count = 0
@@ -815,6 +823,7 @@ def home(
             "loads": loads,
             "jobs": jobs,
             "job_by_load_id": job_by_load_id,
+            "loader_load_hours_by_id": loader_load_hours_by_id,
             "payments": payments,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,
@@ -1413,6 +1422,13 @@ def find_backhaul_page(
         if prev is None or j.id > prev.id:
             job_by_load_id[j.load_id] = j
 
+    loader_load_hours_by_id = {}
+    if current_user and getattr(current_user, "loader_id", None) and loads:
+        _now_pickup_f = datetime.now(timezone.utc)
+        for _ld in loads:
+            _jb = job_by_load_id.get(_ld.id)
+            loader_load_hours_by_id[_ld.id] = hours_until_pickup(_ld, _jb, _now_pickup_f)
+
     return templates.TemplateResponse(
         "home.html",
         {
@@ -1424,6 +1440,7 @@ def find_backhaul_page(
             "loads": loads,
             "jobs": jobs,
             "job_by_load_id": job_by_load_id,
+            "loader_load_hours_by_id": loader_load_hours_by_id,
             "payments": payments,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,

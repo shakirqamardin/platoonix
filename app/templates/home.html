@@ -1941,11 +1941,14 @@
                     {% set lj = job_by_load_id.get(l.id) if job_by_load_id is defined else none %}
                     {% set st = (l.status or '')|lower %}
                     {% set ns = namespace(hu=9999.0, blocked=false, fee=0) %}
-                    {% if l.pickup_window_start %}
+                    {# Same hours as loader_cancel_load / cancellation_policy (pickup window or matched_at+24h when no window). #}
+                    {% if loader_load_hours_by_id is defined and l.id in loader_load_hours_by_id %}
+                    {% set ns.hu = loader_load_hours_by_id[l.id] %}
+                    {% elif l.pickup_window_start %}
                     {% set ns.hu = ((l.pickup_window_start - utcnow()).total_seconds() / 3600) %}
                     {% endif %}
                     {# Block self-serve cancel only when pickup is in the future but within penalty window (not when pickup already passed). #}
-                    {% set ns.blocked = l.pickup_window_start and ns.hu >= 0 and ns.hu < cu.pen_h %}
+                    {% set ns.blocked = ns.hu >= 0 and ns.hu < cu.pen_h %}
                     {% if not l.pickup_window_start %}
                     {% set ns.fee = 0 %}
                     {% elif ns.hu < 0 %}
@@ -2041,10 +2044,12 @@
                             {% set lj = job_by_load_id.get(l.id) if job_by_load_id is defined else none %}
                             {% set st = (l.status or '')|lower %}
                             {% set ns = namespace(hu=9999.0, blocked=false, fee=0) %}
-                            {% if l.pickup_window_start %}
+                            {% if loader_load_hours_by_id is defined and l.id in loader_load_hours_by_id %}
+                            {% set ns.hu = loader_load_hours_by_id[l.id] %}
+                            {% elif l.pickup_window_start %}
                             {% set ns.hu = ((l.pickup_window_start - utcnow()).total_seconds() / 3600) %}
                             {% endif %}
-                            {% set ns.blocked = l.pickup_window_start and ns.hu >= 0 and ns.hu < cu.pen_h %}
+                            {% set ns.blocked = ns.hu >= 0 and ns.hu < cu.pen_h %}
                             {% if not l.pickup_window_start %}
                             {% set ns.fee = 0 %}
                             {% elif ns.hu < 0 %}
