@@ -5,7 +5,7 @@ Only for users with role=haulier; data filtered by haulier_id.
 import logging
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
@@ -417,13 +417,12 @@ async def driver_epod_submit(
     return RedirectResponse(url="/driver?epod_done=1", status_code=303)
 
 
-@router.post("/driver/jobs/{job_id}/request-sms-code")
-def driver_request_sms_code(
-    job_id: int,
+def _driver_request_verification_code_json(
     request: Request,
-    db: Session = Depends(get_db),
-):
-    """Driver requests a 6-digit code sent to the loader's phone (logged until SMS provider is wired)."""
+    db: Session,
+    job_id: int,
+) -> JSONResponse:
+    """Shared: issue code on load + in-app notification + email (no SMS cost)."""
     result = _haulier_or_driver_context(request, db)
     if isinstance(result, RedirectResponse):
         return JSONResponse({"success": False, "message": "Unauthorized"}, status_code=401)
@@ -431,38 +430,41 @@ def driver_request_sms_code(
     job = _driver_job_for_haulier(job_id, haulier, db, actor_driver=actor_driver)
     if not job:
         return JSONResponse({"success": False, "message": "Job not found"}, status_code=404)
-    load = db.get(models.Load, job.load_id)
-    if not load or not load.loader_id:
-        return JSONResponse({"success": False, "message": "No loader for load"}, status_code=400)
-    loader = db.get(models.Loader, load.loader_id)
-    if not loader:
-        return JSONResponse({"success": False, "message": "Loader not found"}, status_code=400)
 
-    from app.services.sms_verification import generate_sms_code, send_verification_sms
+    from app.services.verification_code_delivery import issue_delivery_verification_code
 
-    code = generate_sms_code()
-    now = datetime.now(timezone.utc)
-    load.sms_verification_code = code
-    load.sms_code_sent_at = now
-    load.sms_code_expires_at = now + timedelta(minutes=15)
-    load.sms_code_used = False
-    db.add(load)
-    phone = (loader.contact_phone or "").strip()
-    if phone:
-        send_verification_sms(phone, code)
+    ok, msg = issue_delivery_verification_code(db, job)
+    if not ok:
+        db.rollback()
+        return JSONResponse({"success": False, "message": msg}, status_code=400)
     try:
         db.commit()
     except Exception:
+        logger.exception("commit verification code")
         db.rollback()
         return JSONResponse({"success": False, "message": "Could not save code"}, status_code=500)
 
-    tail = phone[-4:] if len(phone) >= 4 else "****"
-    return JSONResponse(
-        {
-            "success": True,
-            "message": (f"Code sent to loader phone ending {tail}" if phone else "Code generated — loader has no phone on file; contact support"),
-        }
-    )
+    return JSONResponse({"success": True, "message": msg})
+
+
+@router.post("/driver/jobs/{job_id}/request-sms-code")
+def driver_request_sms_code(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Legacy path: same as request-app-code (in-app + email, no SMS)."""
+    return _driver_request_verification_code_json(request, db, job_id)
+
+
+@router.post("/driver/jobs/{job_id}/request-app-code")
+def driver_request_app_verification_code(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Driver requests a 6-digit code for the loader via in-app notification + email backup (free)."""
+    return _driver_request_verification_code_json(request, db, job_id)
 
 
 @router.get("/haulier", response_class=HTMLResponse)

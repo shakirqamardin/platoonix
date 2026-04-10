@@ -255,12 +255,21 @@
             <li>The driver scans the code (or enters the same text) and uploads proof.</li>
             <li>When valid and unused, payment can be released to the haulier immediately.</li>
           </ul>
-          <h4 class="text-sm font-semibold text-white mt-3 mb-2">Tier 2: SMS code (instant payment)</h4>
+          <h4 class="text-sm font-semibold text-white mt-3 mb-2">Tier 2: App code verification (instant payment)</h4>
           <ul class="list-disc pl-6 space-y-1 mt-2">
-            <li>The driver can request a six-digit code sent to the loader’s phone on file.</li>
-            <li>The driver enters the code and uploads proof.</li>
+            <li>The driver requests a delivery code from the app.</li>
+            <li>The system generates a six-digit code and sends it to the loader via:
+              <ul class="list-disc pl-6 mt-1 space-y-1">
+                <li>In-app notification (bell icon on the loader dashboard)</li>
+                <li>Email backup to the loader company contact (if the loader is not in the app)</li>
+              </ul>
+            </li>
+            <li>The loader checks that delivery is actually present, then gives the code to the driver.</li>
+            <li>The driver enters the code and uploads proof; the system verifies the code and can release payment immediately.</li>
             <li>Codes expire after a short period (typically 15 minutes).</li>
+            <li><strong>Cost: free</strong> — uses the existing notification system (no SMS charges).</li>
           </ul>
+          <p class="mt-3 text-sm">Security: loaders should verify the delivery is actually at their location before providing the code. Do not give the code if the delivery has not arrived or something is wrong — contact support instead.</p>
           <h4 class="text-sm font-semibold text-white mt-3 mb-2">Tier 3: GPS photo (instant payment)</h4>
           <ul class="list-disc pl-6 space-y-1 mt-2">
             <li>The driver uploads an image with embedded GPS near the delivery postcode and a recent timestamp.</li>

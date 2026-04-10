@@ -2,7 +2,7 @@
 {% block title %}Upload ePOD – Job #{{ job_id }}{% endblock %}
 {% block content %}
   <h1 class="text-lg font-semibold text-slate-200 mb-1">Proof of delivery (ePOD)</h1>
-  <p class="text-slate-400 text-sm mb-4">Job #{{ job_id }}{% if load %} · {{ load.pickup_postcode }} → {{ load.delivery_postcode }}{% endif %}. Choose how delivery is verified — QR, SMS, and GPS can release payment immediately when valid.</p>
+  <p class="text-slate-400 text-sm mb-4">Job #{{ job_id }}{% if load %} · {{ load.pickup_postcode }} → {{ load.delivery_postcode }}{% endif %}. QR, app code, and GPS can release payment immediately when valid (app code is free — no SMS).</p>
   {% if request.query_params.get('error') %}<p class="mb-3 text-amber-300 text-sm">{{ request.query_params.get('error') }}</p>{% endif %}
   <form method="post" action="/driver/epod" enctype="multipart/form-data" class="space-y-4" id="epod-form">
     <input type="hidden" name="job_id" value="{{ job_id }}" />
@@ -19,10 +19,10 @@
       </label>
 
       <label class="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3 cursor-pointer hover:border-emerald-500/40">
-        <input type="radio" name="verification_method" value="sms_code" class="mt-1" onchange="showVerificationOption('sms')" />
+        <input type="radio" name="verification_method" value="sms_code" class="mt-1" onchange="showVerificationOption('app')" />
         <span>
-          <span class="text-emerald-400 font-medium">SMS code (instant)</span>
-          <span class="block text-slate-500 text-xs mt-0.5">Request a code to the loader’s phone, enter it, then upload.</span>
+          <span class="text-emerald-400 font-medium">App code (instant, free)</span>
+          <span class="block text-slate-500 text-xs mt-0.5">Request a code to the loader’s dashboard (bell) + email backup — enter it then upload.</span>
         </span>
       </label>
 
@@ -49,12 +49,14 @@
       <p class="text-slate-500 text-xs">Scan with your phone camera or app, then paste the full text here.</p>
     </div>
 
-    <div id="sms-option" class="hidden rounded-lg border border-slate-700 bg-slate-900/40 p-3 space-y-2">
-      <button type="button" onclick="requestSMSCode({{ job_id }})" class="rounded-lg bg-sky-600 hover:bg-sky-500 px-3 py-2 text-xs font-semibold text-white">Send code to loader</button>
+    <div id="app-option" class="hidden rounded-lg border border-slate-700 bg-slate-900/40 p-3 space-y-2">
+      <button type="button" onclick="requestAppCode({{ job_id }})" class="rounded-lg bg-sky-600 hover:bg-sky-500 px-3 py-2 text-xs font-semibold text-white w-full sm:w-auto">Send code to loader (app + email)</button>
+      <p id="code-status" class="text-xs text-slate-500 min-h-[1.25rem]"></p>
       <div>
-        <label class="block text-slate-400 text-xs mb-1">6-digit code</label>
+        <label class="block text-slate-400 text-xs mb-1">6-digit code from loader</label>
         <input type="text" name="sms_code" inputmode="numeric" maxlength="6" pattern="[0-9]*" placeholder="000000" class="w-32 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white tracking-widest" autocomplete="one-time-code" />
       </div>
+      <p class="text-slate-500 text-[11px]">Loader sees the code in their bell notifications and email.</p>
     </div>
 
     <div id="gps-option" class="hidden rounded-lg border border-amber-500/20 bg-amber-950/20 p-3 text-amber-100/90 text-xs">
@@ -75,23 +77,39 @@
   <script>
     function showVerificationOption(method) {
       var qr = document.getElementById('qr-option');
-      var sms = document.getElementById('sms-option');
+      var app = document.getElementById('app-option');
       var gps = document.getElementById('gps-option');
-      if (!qr || !sms || !gps) return;
+      if (!qr || !app || !gps) return;
       qr.classList.add('hidden');
-      sms.classList.add('hidden');
+      app.classList.add('hidden');
       gps.classList.add('hidden');
       if (method === 'qr') qr.classList.remove('hidden');
-      if (method === 'sms') sms.classList.remove('hidden');
+      if (method === 'app') app.classList.remove('hidden');
       if (method === 'gps') gps.classList.remove('hidden');
     }
-    async function requestSMSCode(jobId) {
+    async function requestAppCode(jobId) {
+      var statusEl = document.getElementById('code-status');
+      if (statusEl) {
+        statusEl.textContent = 'Sending…';
+        statusEl.className = 'text-xs text-sky-400 min-h-[1.25rem]';
+      }
       try {
-        var r = await fetch('/driver/jobs/' + jobId + '/request-sms-code', { method: 'POST', credentials: 'same-origin' });
+        var r = await fetch('/driver/jobs/' + jobId + '/request-app-code', { method: 'POST', credentials: 'same-origin' });
         var data = await r.json();
-        alert(data.message || (data.success ? 'OK' : 'Request failed'));
+        if (statusEl) {
+          if (data.success) {
+            statusEl.textContent = data.message || 'Code sent.';
+            statusEl.className = 'text-xs text-emerald-400/90 min-h-[1.25rem]';
+          } else {
+            statusEl.textContent = data.message || 'Request failed';
+            statusEl.className = 'text-xs text-amber-300 min-h-[1.25rem]';
+          }
+        }
       } catch (e) {
-        alert('Could not request SMS code');
+        if (statusEl) {
+          statusEl.textContent = 'Network error — try again.';
+          statusEl.className = 'text-xs text-amber-300 min-h-[1.25rem]';
+        }
       }
     }
     showVerificationOption('manual');

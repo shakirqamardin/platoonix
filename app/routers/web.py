@@ -789,6 +789,26 @@ def home(
             _jb = job_by_load_id.get(_ld.id)
             loader_load_hours_by_id[_ld.id] = hours_until_pickup(_ld, _jb, _now_pickup)
 
+    pending_verification_code_jobs: list = []
+    if current_user and getattr(current_user, "loader_id", None) and loads:
+        now_vc = datetime.now(timezone.utc)
+        for _ld in loads:
+            if not getattr(_ld, "sms_verification_code", None) or getattr(_ld, "sms_code_used", False):
+                continue
+            exp = getattr(_ld, "sms_code_expires_at", None)
+            if not exp:
+                continue
+            e = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
+            if e <= now_vc:
+                continue
+            _jb = job_by_load_id.get(_ld.id)
+            if not _jb or _jb.completed_at:
+                continue
+            _drv = db.get(models.Driver, _jb.driver_id) if _jb.driver_id else None
+            pending_verification_code_jobs.append(
+                {"load": _ld, "job": _jb, "driver": _drv}
+            )
+
     total_users = 0
     loader_user_count = 0
     haulier_user_count = 0
@@ -827,6 +847,7 @@ def home(
             "jobs": jobs,
             "job_by_load_id": job_by_load_id,
             "loader_load_hours_by_id": loader_load_hours_by_id,
+            "pending_verification_code_jobs": pending_verification_code_jobs,
             "payments": payments,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,
@@ -1421,6 +1442,26 @@ def find_backhaul_page(
             _jb = job_by_load_id.get(_ld.id)
             loader_load_hours_by_id[_ld.id] = hours_until_pickup(_ld, _jb, _now_pickup_f)
 
+    pending_verification_code_jobs_find: list = []
+    if current_user and getattr(current_user, "loader_id", None) and loads:
+        now_vc = datetime.now(timezone.utc)
+        for _ld in loads:
+            if not getattr(_ld, "sms_verification_code", None) or getattr(_ld, "sms_code_used", False):
+                continue
+            exp = getattr(_ld, "sms_code_expires_at", None)
+            if not exp:
+                continue
+            e = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
+            if e <= now_vc:
+                continue
+            _jb = job_by_load_id.get(_ld.id)
+            if not _jb or _jb.completed_at:
+                continue
+            _drv = db.get(models.Driver, _jb.driver_id) if _jb.driver_id else None
+            pending_verification_code_jobs_find.append(
+                {"load": _ld, "job": _jb, "driver": _drv}
+            )
+
     return templates.TemplateResponse(
         "home.html",
         {
@@ -1433,6 +1474,7 @@ def find_backhaul_page(
             "jobs": jobs,
             "job_by_load_id": job_by_load_id,
             "loader_load_hours_by_id": loader_load_hours_by_id,
+            "pending_verification_code_jobs": pending_verification_code_jobs_find,
             "payments": payments,
             "load_interests": load_interests,
             "load_interests_display": load_interests_display,

@@ -2439,6 +2439,38 @@
                 <!-- Confirmed Jobs -->
                 <div>
                     <h3 class="text-lg font-semibold text-slate-200 mb-2">✅ Backhaul Jobs (Confirmed)</h3>
+                    {% if current_user and current_user.loader_id and (pending_verification_code_jobs|default([])) %}
+                    <div class="rounded-xl border-2 border-sky-500/40 bg-sky-950/25 px-4 py-4 mb-4 max-w-3xl">
+                        <h4 class="text-sm font-semibold text-sky-200 mb-3">Driver requesting verification code</h4>
+                        <p class="text-xs text-slate-400 mb-3">The code was also sent to your in-app notifications (bell) and to your company email. Only share it after you confirm delivery.</p>
+                        {% for row in pending_verification_code_jobs %}
+                        <div class="rounded-lg border border-slate-600 bg-slate-900/60 p-4 mb-3 last:mb-0">
+                            <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+                                <div>
+                                    <p class="font-mono text-teal-300 text-sm font-semibold">{{ row.job.display_number }}</p>
+                                    <p class="text-xs text-slate-400 mt-0.5">{{ row.load.pickup_postcode }} → {{ row.load.delivery_postcode }}</p>
+                                    <p class="text-xs text-slate-500 mt-1">Driver: {% if row.driver %}{{ row.driver.name }}{% else %}Assigned driver{% endif %}</p>
+                                </div>
+                                {% if row.load.sms_code_expires_at %}
+                                <span class="text-xs text-amber-300/90 whitespace-nowrap">Expires {{ row.load.sms_code_expires_at.strftime('%d %b, %H:%M') }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="rounded-lg border border-sky-500/30 bg-slate-950/80 px-3 py-3 text-center">
+                                <p class="text-[11px] text-slate-500 mb-1">Verification code</p>
+                                <p class="text-3xl sm:text-4xl font-bold font-mono tracking-[0.25em] text-sky-300">{{ row.load.sms_verification_code }}</p>
+                            </div>
+                            <div class="mt-3 rounded-lg border border-amber-500/25 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-100/90 leading-relaxed">
+                                <p class="font-medium text-amber-200 mb-1">Before giving this code</p>
+                                <ul class="list-disc pl-4 space-y-0.5 text-amber-100/80">
+                                    <li>Confirm the driver is at your location</li>
+                                    <li>Check the goods are correct</li>
+                                    <li>Do not share if anything is wrong — contact support instead</li>
+                                </ul>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                     {% if current_user and current_user.loader_id %}
                     <p class="text-xs text-slate-400 mb-4 max-w-2xl leading-relaxed">
                         You can cancel a matched job from <strong class="text-slate-300">Load Management → My loads</strong> while pickup has not started (same checks, refunds, and haulier notice apply there). To cancel or change a confirmed job after that, contact <a href="mailto:support@platoonix.co.uk" class="text-teal-400 hover:text-teal-300 underline-offset-2 hover:underline">support@platoonix.co.uk</a>.
