@@ -108,6 +108,21 @@
             <option value="loader">Loader (I have loads)</option>
         </select>
     </div>
+
+    {% if referral_program_active %}
+    <div class="rounded-xl border border-cyan-500/30 bg-slate-900/50 px-4 py-3">
+        <label for="referral_code" class="block text-sm font-medium text-slate-300 mb-2">Referral code <span class="text-slate-500 font-normal">(optional)</span></label>
+        <input id="referral_code" name="referral_code" type="text" maxlength="20" autocomplete="off"
+            class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-4 py-3 text-white uppercase placeholder-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+            placeholder="e.g. PLTNX-A1B2" />
+        <p class="text-xs text-slate-500 mt-2">If someone invited you, enter their code — they get 50% off platform fees for 3 months. You pay standard rates.</p>
+        <p class="text-xs text-amber-400/90 mt-1 font-medium">{{ referral_spots_remaining }} of {{ referral_cap }} launch referral spots left.</p>
+    </div>
+    {% else %}
+    <div class="rounded-xl border border-slate-600/60 bg-slate-900/40 px-4 py-3 text-xs text-slate-500">
+        The launch referral programme has ended (all {{ referral_cap }} spots claimed).
+    </div>
+    {% endif %}
     
     <button type="submit" class="btn-primary w-full px-4 py-3.5 text-white font-semibold rounded-lg shadow-lg">
         Create Account

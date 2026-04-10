@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -10,6 +10,11 @@ from app.config import get_settings
 from app.database import get_db
 from app.services.matching import find_matching_loads
 from app.services.payment_fees import compute_job_payment_splits, compute_loader_platform_fee_gbp
+from app.services.insurance_status import vehicle_may_accept_loads
+from app.services.referral_program import (
+    haulier_referral_fee_multiplier,
+    loader_referral_fee_multiplier,
+)
 
 
 router = APIRouter()
@@ -32,6 +37,11 @@ def assign_load_to_vehicle(
     vehicle = db.get(models.Vehicle, body.vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid vehicle_id")
+    if not vehicle_may_accept_loads(vehicle):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vehicle insurance is not verified or has expired",
+        )
 
     load = db.get(models.Load, body.load_id)
     if not load:
@@ -53,12 +63,23 @@ def assign_load_to_vehicle(
 
     ensure_qr_for_load(db, load)
 
+    today = date.today()
+    h_mult = haulier_referral_fee_multiplier(db, vehicle.haulier_id, today)
+    l_mult = loader_referral_fee_multiplier(db, load.loader_id, today)
+
     if body.fee_gbp is not None:
         fee_gbp = round(float(body.fee_gbp), 2)
         net_payout_gbp = round(body.amount_gbp - fee_gbp, 2)
-        flat_fee_gbp, _ = compute_loader_platform_fee_gbp(body.amount_gbp, settings)
+        flat_fee_gbp, _ = compute_loader_platform_fee_gbp(
+            body.amount_gbp, settings, fee_multiplier=l_mult
+        )
     else:
-        splits = compute_job_payment_splits(body.amount_gbp, settings)
+        splits = compute_job_payment_splits(
+            body.amount_gbp,
+            settings,
+            haulier_fee_multiplier=h_mult,
+            loader_flat_fee_multiplier=l_mult,
+        )
         fee_gbp = splits.fee_gbp
         net_payout_gbp = splits.net_payout_gbp
         flat_fee_gbp = splits.flat_fee_gbp

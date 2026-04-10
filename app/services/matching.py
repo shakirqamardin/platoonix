@@ -2,7 +2,7 @@
 Smart matching: find open loads within radius that suit a vehicle (trailer type, capacity).
 Distances are road miles via OpenRouteService, Mapbox Matrix, or Google Distance Matrix (in that order) — not straight-line.
 """
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,27 @@ from app.services.road_distance import (
     road_distances_from_origin_to_postcodes,
     single_road_miles_between_postcodes,
 )
+
+
+def vehicle_meets_requirements_vehicle_type(vehicle: models.Vehicle, requirements: Any) -> bool:
+    """
+    If requirements specify vehicle_type, the vehicle must match exactly.
+    Empty or 'any' means all vehicle types may see the load. Hard filter — not a near-match score.
+    """
+    req = requirements or {}
+    if not isinstance(req, dict):
+        req = {}
+    required = (req.get("vehicle_type") or "").strip().lower()
+    if not required or required == "any":
+        return True
+    return (vehicle.vehicle_type or "").strip().lower() == required
+
+
+def vehicle_satisfies_load_vehicle_type(
+    vehicle: models.Vehicle,
+    load: models.Load,
+) -> bool:
+    return vehicle_meets_requirements_vehicle_type(vehicle, getattr(load, "requirements", None))
 
 
 def vehicle_satisfies_load_equipment_hard(
@@ -83,18 +104,16 @@ def find_matching_loads(
         if not vehicle_satisfies_load_equipment_hard(vehicle, load):
             continue
 
-        # Check for perfect match vs near match
+        if not vehicle_satisfies_load_vehicle_type(vehicle, load):
+            continue
+
+        # Check for perfect match vs near match (vehicle type is already filtered — never a near-match factor)
         is_perfect_match = True
         mismatch_reasons = []
 
         req = load.requirements or {}
         if not isinstance(req, dict):
             req = {}
-
-        required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
-        if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
-            is_perfect_match = False
-            mismatch_reasons.append(f"Vehicle type: need {required_vehicle_type}")
 
         required_trailer = (req.get("trailer_type") or "").strip().lower()
         if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
@@ -146,12 +165,12 @@ def load_matches_vehicle(
     if not vehicle_satisfies_load_equipment_hard(vehicle, load):
         return False
 
+    if not vehicle_satisfies_load_vehicle_type(vehicle, load):
+        return False
+
     req = load.requirements or {}
     if not isinstance(req, dict):
         req = {}
-    required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
-    if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
-        return False
     required_trailer = (req.get("trailer_type") or "").strip().lower()
     if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
         return False
@@ -219,12 +238,12 @@ def planned_load_matches_route(
     if distance is None or distance > radius:
         return False
 
+    if not vehicle_meets_requirements_vehicle_type(vehicle, getattr(planned_load, "requirements", None)):
+        return False
+
     req = planned_load.requirements or {}
     if not isinstance(req, dict):
         req = {}
-    required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
-    if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
-        return False
     required_trailer = (req.get("trailer_type") or "").strip().lower()
     if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:
         return False
@@ -342,17 +361,15 @@ def find_matching_loads_along_route(
         if not vehicle_satisfies_load_equipment_hard(vehicle, load):
             continue
 
+        if not vehicle_satisfies_load_vehicle_type(vehicle, load):
+            continue
+
         req = load.requirements or {}
         if not isinstance(req, dict):
             req = {}
-        # Check for perfect match vs near match
+        # Check for perfect match vs near match (vehicle type already filtered)
         is_perfect_match = True
         mismatch_reasons = []
-
-        required_vehicle_type = (req.get("vehicle_type") or "").strip().lower()
-        if required_vehicle_type and (vehicle.vehicle_type or "").strip().lower() != required_vehicle_type:
-            is_perfect_match = False
-            mismatch_reasons.append(f"Vehicle type: need {required_vehicle_type}")
 
         required_trailer = (req.get("trailer_type") or "").strip().lower()
         if required_trailer and (vehicle.trailer_type or "").strip().lower() != required_trailer:

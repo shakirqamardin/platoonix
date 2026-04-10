@@ -82,6 +82,31 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration users column: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(20)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_code VARCHAR(20)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_discount_until DATE",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER DEFAULT 0",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration users referral columns: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_referral_code "
+                        "ON users (referral_code) WHERE referral_code IS NOT NULL"
+                    )
+                )
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                    print(f"Migration users referral_code unique index: {e!r}", file=sys.stderr)
             try:
                 conn.execute(text(
                     "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS driver_id INTEGER REFERENCES drivers(id)"
@@ -434,6 +459,34 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration vehicles DVLA display columns: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_certificate_verified BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_verified_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_verified_by INTEGER REFERENCES users(id)",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_uploaded_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_rejection_reason VARCHAR(500)",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration vehicles insurance verification columns: {e!r}", file=sys.stderr)
+            try:
+                conn.execute(
+                    text(
+                        "UPDATE vehicles SET insurance_certificate_verified = TRUE "
+                        "WHERE insurance_certificate_path IS NOT NULL "
+                        "AND TRIM(COALESCE(insurance_certificate_path, '')) <> '' "
+                        "AND insurance_uploaded_at IS NULL"
+                    )
+                )
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                if "no such column" not in str(e).lower():
+                    print(f"Migration vehicles insurance grandfather verify: {e!r}", file=sys.stderr)
         # Create or sync admin from ADMIN_EMAIL / ADMIN_PASSWORD
         db = SessionLocal()
         try:
@@ -468,6 +521,19 @@ def check_db_and_create_tables():
             print(f"Vehicle availability backfill: {e!r}", file=sys.stderr)
         finally:
             db_av.close()
+
+        db_ref = SessionLocal()
+        try:
+            from app.services.referral_program import backfill_missing_referral_codes
+
+            n_ref = backfill_missing_referral_codes(db_ref)
+            if n_ref:
+                print(f"Referral codes assigned for {n_ref} user(s)", file=sys.stderr)
+        except Exception as e:
+            db_ref.rollback()
+            print(f"Referral code backfill: {e!r}", file=sys.stderr)
+        finally:
+            db_ref.close()
     except Exception as e:
         print(f"Startup error: {e!r}", file=sys.stderr)
         raise

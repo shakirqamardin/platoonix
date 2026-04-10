@@ -177,7 +177,11 @@
 
 <body class="min-h-screen text-slate-100 bg-slate-950 overflow-x-hidden">
 {% macro insurance_badge_vehicle(v) -%}
-{% if v.insurance_status == 'valid' and v.insurance_expiry_date %}
+{% if v.insurance_certificate_path and not v.insurance_certificate_verified %}
+  <span class="inline-flex px-2 py-1 text-xs rounded bg-amber-900/30 text-amber-300">⏳ Certificate pending admin verification</span>
+{% elif v.insurance_rejection_reason and not v.insurance_certificate_path %}
+  <span class="inline-flex px-2 py-1 text-xs rounded bg-rose-900/30 text-rose-300" title="{{ v.insurance_rejection_reason }}">❌ Previous upload rejected — upload a new certificate</span>
+{% elif v.insurance_status == 'valid' and v.insurance_expiry_date %}
   <span class="inline-flex px-2 py-1 text-xs rounded bg-emerald-900/30 text-emerald-400">✅ Insurance valid until {{ v.insurance_expiry_date.strftime('%d %b %Y') }}</span>
 {% elif v.insurance_status == 'expiring_soon' and v.insurance_expiry_date %}
   <span class="inline-flex px-2 py-1 text-xs rounded bg-amber-900/30 text-amber-400">⚠️ Insurance expires {{ v.insurance_expiry_date.strftime('%d %b %Y') }}</span>
@@ -738,6 +742,45 @@
                     </a>
                 </div>
                 {% endif %}
+                {% if current_user and current_user.role in ['haulier', 'loader'] and referral_cap is defined %}
+                <div class="rounded-xl border border-cyan-500/35 bg-gradient-to-r from-slate-900/90 to-cyan-950/20 px-4 py-4 mb-4 text-sm text-slate-200">
+                    <h3 class="font-display font-bold text-base text-cyan-200 mb-2">Refer &amp; save</h3>
+                    {% set _spots = referral_spots_remaining|default(0) %}
+                    {% set _cap = referral_cap|default(100) %}
+                    {% if _spots <= 0 %}
+                    <p class="text-slate-400 mb-2">Launch referral offer has ended — all {{ _cap }} signup spots are filled. Thank you for helping grow Platoonix.</p>
+                    {% else %}
+                    {% if current_user.referral_discount_until and referral_today and current_user.referral_discount_until >= referral_today %}
+                    <div class="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 mb-3 text-emerald-100">
+                        <p class="font-semibold text-emerald-200">50% off platform fees (referral reward)</p>
+                        <p class="text-xs mt-1">Active until {{ current_user.referral_discount_until.strftime('%d %b %Y') }} · {{ (current_user.referral_discount_until - referral_today).days }} day(s) left</p>
+                    </div>
+                    {% else %}
+                    <p class="text-slate-300 mb-2">Share your code — when someone registers with it, you get <strong class="text-white">50% off</strong> platform fees for 3 months (one reward period; no extensions).</p>
+                    <p class="text-xs text-amber-400/90 mb-3 font-medium">{{ _spots }} referral spot{{ 's' if _spots != 1 else '' }} left out of {{ _cap }}</p>
+                    {% endif %}
+                    {% if current_user.referral_code %}
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <code id="referral-code-val" class="text-lg font-mono font-bold text-cyan-300 bg-slate-950/80 px-3 py-2 rounded-lg border border-cyan-500/30">{{ current_user.referral_code }}</code>
+                        <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('referral-code-val').textContent.trim());this.textContent='Copied!';" class="min-h-[44px] px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold">Copy</button>
+                    </div>
+                    {% endif %}
+                    {% if current_user.referral_count and current_user.referral_count > 0 %}
+                    <p class="text-xs text-slate-400">Successful referrals recorded: <strong class="text-slate-200">{{ current_user.referral_count }}</strong></p>
+                    {% endif %}
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if pending_insurance_verification %}
+                <div class="rounded-xl border-2 border-rose-500/50 bg-rose-950/30 px-4 py-4 mb-4 text-sm text-rose-50">
+                    <h3 class="font-bold text-rose-200 text-base mb-2">Insurance verification required</h3>
+                    <p class="text-rose-100/95 mb-3">
+                        At least one vehicle has a certificate <strong class="text-white">waiting for admin approval</strong>, or was <strong class="text-white">rejected</strong>.
+                        You cannot express interest or be matched on loads until each vehicle you use has an <strong class="text-white">approved</strong> certificate.
+                    </p>
+                    <a href="/?section=vehicles" class="inline-flex items-center rounded-lg bg-rose-600 hover:bg-rose-500 px-4 py-2 text-sm font-semibold text-white">Review vehicles &amp; uploads</a>
+                </div>
+                {% endif %}
                 {% if shared_load_id is defined and shared_load_id %}
                 <div class="rounded-xl border border-teal-500/30 bg-teal-950/25 px-4 py-3 mb-4 text-sm text-teal-100/95">
                     <strong class="text-teal-300">Shared load link:</strong> load #{{ shared_load_id }}. Select your vehicle and postcodes, then <strong class="text-white">Find Loads</strong> — if this load is still open and matches, it will appear in the results below.
@@ -758,6 +801,7 @@
                     {% elif find_backhaul_msg == 'load_not_available' %}That load is no longer available.
                     {% elif find_backhaul_msg == 'already_interested' %}Your company already has an interest on this load.
                     {% elif find_backhaul_msg == 'invalid_request' %}Could not process that request. Try again.
+                    {% elif find_backhaul_msg == 'insurance_not_verified' %}Insurance must be uploaded, approved by Platoonix, and not expired before you can express interest. Open <strong class="text-white">Vehicles</strong> to upload or check status.
                     {% else %}{{ find_backhaul_msg }}{% endif %}
                 </div>
                 {% endif %}
@@ -782,7 +826,7 @@
                                 <option value="{{ v.id }}" {% if find_vehicle_id and (v.id|string) == find_vehicle_id %}selected{% endif %} {% if av and not av.get('selectable', True) %}disabled{% endif %}>
                                     {{ v.registration }} • {{ v.vehicle_type }}{% if v.trailer_type %} • {{ v.trailer_type }}{% endif %}
                                     {% if av.get('selectable', True) %} · Available now{% else %} · {{ av.get('label', 'On job') }}{% endif %}
-                                    {% if v.insurance_status == 'expired' %} · INS EXPIRED{% elif v.insurance_status == 'expiring_soon' %} · INS EXPIRING{% endif %}
+                                    {% if v.insurance_certificate_path and not v.insurance_certificate_verified %} · INS PENDING{% elif v.insurance_status == 'expired' %} · INS EXPIRED{% elif v.insurance_status == 'expiring_soon' %} · INS EXPIRING{% endif %}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -981,7 +1025,9 @@
                                             <summary class="cursor-pointer text-xs text-amber-400">Why near match?</summary>
                                             <ul class="mt-1 space-y-1">
                                                 {% for reason in m.mismatch_reasons %}
+                                                {% if not reason.startswith('Vehicle type:') %}
                                                 <li class="text-xs text-amber-300">• {{ reason }}</li>
+                                                {% endif %}
                                                 {% endfor %}
                                             </ul>
                                         </details>
@@ -1656,11 +1702,15 @@
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Vehicle Type</label>
                                 <select id="load-vehicle-type" name="vehicle_type_required" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm">
-                                    <option value="">Any vehicle</option>
-                                    <option value="artic">Artic</option>
-                                    <option value="rigid">Rigid</option>
-                                    <option value="van">Van</option>
+                                    <option value="">Any vehicle (recommended for smaller loads)</option>
+                                    <option value="artic">Artic (44t — full trailer)</option>
+                                    <option value="rigid">Rigid (7.5–18t)</option>
+                                    <option value="van">Van / LGV</option>
                                 </select>
+                                <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                                    <strong class="text-slate-400">Only set a type if you need that size.</strong> A specific choice hides the load from other vehicle types in Find Backhaul.
+                                    <span class="block mt-1 text-slate-500">1–5 pallets: often leave as Any · 10–15 pallets: Rigid · 20–26 pallets: Artic · Specialized: choose the type you need.</span>
+                                </p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Trailer Type</label>
@@ -2223,6 +2273,12 @@
                 <h2 class="text-2xl font-display font-bold mb-4 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
                     Matches & Jobs
                 </h2>
+                {% if request.query_params.get('msg') == 'insurance_not_verified' %}
+                <div class="rounded-xl border-2 border-rose-500/45 bg-rose-950/30 px-4 py-3 mb-4 text-sm text-rose-100">
+                    Insurance must be uploaded, approved by Platoonix, and not expired before interest can be accepted or expressed.
+                    <a href="/?section=vehicles" class="text-teal-400 hover:underline font-medium">Open Vehicles</a>
+                </div>
+                {% endif %}
                 {% if request.query_params.get('haulier_cancel_blocked') %}
                 <div class="rounded-lg border border-rose-500/40 bg-rose-950/30 px-4 py-2.5 mb-4 text-sm text-rose-100">Cancellation isn’t available after the scheduled pickup time. Contact <a href="mailto:support@platoonix.co.uk" class="underline">support@platoonix.co.uk</a> if you need help.</div>
                 {% endif %}

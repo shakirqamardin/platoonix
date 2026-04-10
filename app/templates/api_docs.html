@@ -49,6 +49,61 @@
 
         <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
 
+        <section id="matching-algorithm">
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2 not-prose">MATCHING ALGORITHM</h2>
+          <p>Open-load discovery (Find Backhaul) uses the same core logic as <span class="font-mono text-teal-300/90">GET /api/matches/find-for-vehicle</span>: results are <strong class="text-slate-200">sorted on the server</strong> so better vehicle/load fit comes first, then <strong class="text-slate-200">road distance</strong> to the pickup (ascending). Distances use road routing where configured — not straight-line “as the crow flies”.</p>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2 not-prose">Sorting logic (conceptual)</h3>
+          <p class="text-slate-400 text-sm mb-2">If a load specifies a required vehicle type (artic/rigid/van), only that type is returned — mismatches are filtered out, not shown as “near match”. Remaining candidates are scored “perfect” vs near match (trailer preference, equipment flags), then:</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto"><code class="language-python"># Order of results returned to the client
+pairs.sort(key=lambda x: (not x.is_perfect_match, x.distance_miles))</code></pre>
+          <p class="text-slate-500 text-sm mt-2">Loads that fail hard requirements (wrong vehicle type, weight over capacity, missing required tail lift / temp / ADR) are omitted entirely.</p>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2 not-prose">Match endpoint</h3>
+          <p class="font-mono text-teal-300/95 text-sm not-prose">GET /api/matches/find-for-vehicle</p>
+          <p class="text-slate-400 text-sm mt-1">Query parameters:</p>
+          <ul class="list-disc pl-6 space-y-1 text-sm">
+            <li><span class="font-mono text-slate-300">vehicle_id</span> (required)</li>
+            <li><span class="font-mono text-slate-300">origin_postcode</span> (required) — search origin; road miles to each load’s pickup</li>
+            <li><span class="font-mono text-slate-300">radius_miles</span> (optional) — defaults to platform setting (often 25)</li>
+          </ul>
+          <p class="font-mono text-xs text-slate-500 mt-2 break-all not-prose">Example: GET /api/matches/find-for-vehicle?vehicle_id=123&amp;origin_postcode=M1%201AA&amp;radius_miles=25</p>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2 not-prose">Response shape</h3>
+          <p>Each item is a <span class="font-mono text-slate-300">LoadMatchResult</span>: the nested <span class="font-mono text-slate-300">load</span> plus <span class="font-mono text-slate-300">distance_miles</span>. Match quality is reflected in the <strong class="text-slate-200">order of the array</strong> (best matches first). The dashboard may show extra flags (e.g. perfect vs near); ask us if you need those fields exposed in JSON for integrations.</p>
+          <pre class="not-prose rounded-lg border border-slate-700/80 overflow-x-auto mt-2"><code class="language-json">[
+  {
+    "load": {
+      "id": 456,
+      "pickup_postcode": "M2 5DB",
+      "delivery_postcode": "B1 1AA",
+      "budget_gbp": 300,
+      "status": "open",
+      "weight_kg": 5000,
+      "requirements": { "vehicle_type": "rigid", "trailer_type": "curtain_sider" }
+    },
+    "distance_miles": 8.3
+  },
+  {
+    "load": {
+      "id": 789,
+      "pickup_postcode": "M15 6AZ",
+      "delivery_postcode": "L1 8JQ",
+      "budget_gbp": 250,
+      "status": "open"
+    },
+    "distance_miles": 12.1
+  }
+]</code></pre>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2 not-prose">Corridor (origin + destination)</h3>
+          <p>When you use <strong class="text-slate-200">Find Backhaul</strong> in the web app with both origin and destination, we also blend <strong class="text-slate-200">corridor</strong> matches (loads near your return route) with origin-radius matches — still sorted by match quality then distance. There is no separate public JSON endpoint documented here for corridor; behaviour is described in <a href="/terms#matching-algorithm" class="text-teal-400 hover:underline">Terms (section 11)</a>.</p>
+
+          <p class="text-slate-500 text-sm mt-4">For the philosophy behind ranking (no pay-to-rank, no random ordering), see <a href="/terms#matching-algorithm" class="text-teal-400 hover:underline">Terms — Smart Matching Algorithm</a>.</p>
+        </section>
+
+        <p class="text-slate-600 text-[10px] sm:text-xs font-mono overflow-x-auto whitespace-nowrap py-1 select-none" aria-hidden="true">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</p>
+
         <section>
           <h2 class="text-lg font-semibold text-white mt-6 mb-2 not-prose">API ENDPOINTS</h2>
           <p class="font-mono text-teal-300/95 text-sm not-prose">Base URL: https://platoonix.co.uk/api/v1</p>

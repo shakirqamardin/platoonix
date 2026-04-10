@@ -2,17 +2,25 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+import mimetypes
+from datetime import date, datetime, timedelta, timezone
 from typing import Union
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app import models
 from app.auth import get_session_user_id, require_admin
+from app.services.insurance_status import get_insurance_storage_dir, remove_insurance_file_if_exists
+from app.services.in_app_notifications import haulier_office_user_ids, record_user_notifications
+from app.services.referral_program import (
+    REFERRAL_CAP,
+    count_active_referral_discounts,
+    count_successful_referrals,
+)
 from app.database import get_db
 from app.services import vehicle_availability as vehicle_availability_svc
 from app.services.stripe_loader_charge import try_refund_loader_charge
@@ -137,11 +145,21 @@ def admin_monitoring_dashboard(
         db.query(models.BackhaulJob).filter(models.BackhaulJob.completed_at.isnot(None)).count()
     )
 
+    referral_total = count_successful_referrals(db)
+    referral_remaining = max(0, REFERRAL_CAP - referral_total)
+    referral_active_discounts = count_active_referral_discounts(db, date.today())
+    referral_progress_percent = min(100, int(round(100.0 * referral_total / REFERRAL_CAP))) if REFERRAL_CAP else 0
+
     return templates.TemplateResponse(
         "admin_dashboard.html",
         {
             "request": request,
             "current_user": current_user,
+            "referral_cap": REFERRAL_CAP,
+            "referral_total_signups": referral_total,
+            "referral_spots_remaining": referral_remaining,
+            "referral_active_discounts": referral_active_discounts,
+            "referral_progress_percent": referral_progress_percent,
             "total_users": total_users,
             "loader_count": loader_count,
             "haulier_count": haulier_count,
@@ -478,3 +496,118 @@ def cleanup_all_test_data(
         url=f"/admin/dashboard?deleted_old_loads={deleted_count}",
         status_code=303,
     )
+
+
+@router.get("/admin/verify-insurance/{vehicle_id}", response_class=HTMLResponse, response_model=None)
+def verify_insurance_page(
+    vehicle_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Union[HTMLResponse, RedirectResponse]:
+    redirect = require_admin(request, db)
+    if redirect:
+        return redirect
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    haulier = db.get(models.Haulier, vehicle.haulier_id)
+    return templates.TemplateResponse(
+        "admin/verify_insurance.html",
+        {
+            "request": request,
+            "vehicle": vehicle,
+            "haulier": haulier,
+        },
+    )
+
+
+@router.get("/admin/insurance-certificate/{vehicle_id}", response_model=None)
+def admin_insurance_certificate_file(
+    vehicle_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Union[FileResponse, RedirectResponse]:
+    redirect = require_admin(request, db)
+    if redirect:
+        return redirect
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    if not vehicle or not vehicle.insurance_certificate_path:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    path = get_insurance_storage_dir() / vehicle.insurance_certificate_path
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Certificate file missing")
+    media = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media, filename=path.name)
+
+
+@router.post("/admin/verify-insurance/{vehicle_id}", response_model=None)
+def verify_insurance_action(
+    vehicle_id: int,
+    request: Request,
+    action: str = Form(...),
+    rejection_reason: str = Form(""),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    redirect = require_admin(request, db)
+    if redirect:
+        return redirect
+    uid = get_session_user_id(request)
+    vehicle = db.get(models.Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    now = datetime.now(timezone.utc)
+    if action == "approve":
+        vehicle.insurance_certificate_verified = True
+        vehicle.insurance_verified_at = now
+        vehicle.insurance_verified_by = int(uid) if uid else None
+        vehicle.insurance_rejection_reason = None
+        db.add(vehicle)
+        db.commit()
+        try:
+            record_user_notifications(
+                db,
+                haulier_office_user_ids(db, vehicle.haulier_id),
+                title="Insurance certificate approved",
+                body=(
+                    f"Your certificate for vehicle {vehicle.registration} was approved. "
+                    "You can accept loads with this vehicle."
+                ),
+                link_url="/?section=vehicles",
+                kind="insurance_verified",
+                priority="normal",
+            )
+        except Exception:
+            logger.exception("verify_insurance_action approve notify")
+        return RedirectResponse(url="/admin/dashboard?insurance_verified=1", status_code=303)
+
+    if action == "reject":
+        remove_insurance_file_if_exists(vehicle.insurance_certificate_path)
+        vehicle.insurance_certificate_path = None
+        vehicle.insurance_certificate_verified = False
+        vehicle.insurance_verified_at = None
+        vehicle.insurance_verified_by = None
+        vehicle.insurance_uploaded_at = None
+        rr = (rejection_reason or "").strip()[:500]
+        vehicle.insurance_rejection_reason = rr or None
+        vehicle.insurance_status = "unknown"
+        db.add(vehicle)
+        db.commit()
+        try:
+            record_user_notifications(
+                db,
+                haulier_office_user_ids(db, vehicle.haulier_id),
+                title="Insurance certificate rejected",
+                body=(
+                    f"Your insurance upload for {vehicle.registration} was rejected. "
+                    f"{'Reason: ' + rr if rr else 'Please upload a valid certificate under Vehicles.'}"
+                ),
+                link_url="/?section=vehicles",
+                kind="insurance_rejected",
+                priority="important",
+            )
+        except Exception:
+            logger.exception("verify_insurance_action reject notify")
+        return RedirectResponse(url="/admin/dashboard?insurance_rejected=1", status_code=303)
+
+    return RedirectResponse(url="/admin/dashboard?insurance_action_error=1", status_code=303)

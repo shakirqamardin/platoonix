@@ -43,6 +43,11 @@ class User(Base):
         DateTime(timezone=True), default=datetime.utcnow
     )
 
+    referral_code: Mapped[Optional[str]] = mapped_column(String(20), unique=True, nullable=True)
+    referred_by_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    referral_discount_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    referral_count: Mapped[int] = mapped_column(Integer, default=0)
+
     loader: Mapped[Optional["Loader"]] = relationship("Loader", foreign_keys=[loader_id])
     haulier: Mapped[Optional["Haulier"]] = relationship("Haulier", foreign_keys=[haulier_id])
 
@@ -173,6 +178,17 @@ class Vehicle(Base):
     insurance_last_checked: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    insurance_certificate_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    insurance_verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    insurance_verified_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    insurance_uploaded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    insurance_rejection_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow

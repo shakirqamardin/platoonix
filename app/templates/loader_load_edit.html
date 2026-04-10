@@ -64,11 +64,12 @@
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-1">Vehicle type</label>
             <select name="vehicle_type_required" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
-              <option value="" {% if not vehicle_type %}selected{% endif %}>Any vehicle</option>
+              <option value="" {% if not vehicle_type %}selected{% endif %}>Any vehicle (maximises matches)</option>
               <option value="artic" {% if vehicle_type == 'artic' %}selected{% endif %}>Artic</option>
               <option value="rigid" {% if vehicle_type == 'rigid' %}selected{% endif %}>Rigid</option>
               <option value="van" {% if vehicle_type == 'van' %}selected{% endif %}>Van</option>
             </select>
+            <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">Only specify artic/rigid/van if required — hauliers with other vehicle types will not see this load.</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-1">Trailer type</label>

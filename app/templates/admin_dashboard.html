@@ -61,6 +61,36 @@
             </form>
         </div>
 
+        <div class="bg-white p-6 rounded-lg shadow mb-8">
+            <h3 class="font-bold text-gray-900 mb-4">Referral programme</h3>
+            {% set cap = referral_cap|default(100) %}
+            {% set total = referral_total_signups|default(0) %}
+            {% set rem = referral_spots_remaining|default(cap) %}
+            {% set pct = referral_progress_percent|default(0) %}
+            <div class="flex justify-between text-sm text-gray-600 mb-2">
+                <span>Signups with a referral code</span>
+                <span class="font-bold text-gray-900">{{ total }} / {{ cap }}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3 mb-4">
+                <div class="bg-blue-600 h-3 rounded-full transition-all" style="width: {{ pct }}%;"></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <p class="text-gray-500">Spots remaining</p>
+                    <p class="text-2xl font-bold {% if rem <= 10 %}text-orange-600{% else %}text-blue-600{% endif %}">{{ rem }}</p>
+                </div>
+                <div>
+                    <p class="text-gray-500">Users with active referral discount</p>
+                    <p class="text-2xl font-bold text-green-600">{{ referral_active_discounts|default(0) }}</p>
+                </div>
+            </div>
+            {% if rem <= 0 %}
+            <p class="text-sm text-gray-600 mt-3 font-medium">Cap reached — new referral codes are no longer accepted at registration.</p>
+            {% elif rem <= 10 %}
+            <p class="text-sm text-orange-700 mt-3 font-medium">Only {{ rem }} spot(s) left.</p>
+            {% endif %}
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div class="bg-white p-6 rounded-lg shadow">
                 <h3 class="text-gray-600 text-sm font-medium mb-2">Total users</h3>

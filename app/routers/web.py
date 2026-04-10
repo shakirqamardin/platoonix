@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional, Union
@@ -36,6 +36,14 @@ from app.services.insurance_status import (
     apply_insurance_status_to_vehicles,
     calculate_insurance_status,
     finalize_vehicle_insurance_upload,
+    haulier_has_pending_insurance_review,
+    vehicle_may_accept_loads,
+)
+from app.services.referral_program import (
+    REFERRAL_CAP,
+    count_successful_referrals,
+    ensure_user_referral_code,
+    loader_referral_fee_multiplier,
 )
 
 
@@ -757,6 +765,7 @@ def home(
     rating_ok = request.query_params.get("rating_ok")
     rating_error = request.query_params.get("rating_error")
     apply_insurance_status_to_vehicles(vehicles)
+    pending_insurance_verification = haulier_has_pending_insurance_review(vehicles)
     vehicle_availability = _vehicle_availability_map(vehicles)
     _sl = (request.query_params.get("load_id") or "").strip()
     try:
@@ -764,6 +773,20 @@ def home(
     except ValueError:
         shared_load_id = None
     _pub_base = get_settings().public_app_base_url
+    if current_user and isinstance(current_user, models.User) and getattr(current_user, "role", None) in (
+        "haulier",
+        "loader",
+    ):
+        _u = db.get(models.User, current_user.id)
+        if _u:
+            ensure_user_referral_code(db, _u)
+            db.commit()
+            db.refresh(_u)
+            current_user = _u
+
+    referral_total_signups = count_successful_referrals(db)
+    referral_spots_remaining = max(0, REFERRAL_CAP - referral_total_signups)
+    referral_today = date.today()
     onboarding_checklist = _build_onboarding_checklist(current_user, haulier_profile, loader_profile, vehicles, loads)
     _cset_home = get_settings()
     cancellation_ui_settings = {
@@ -890,6 +913,11 @@ def home(
             "haulier_pending_backhaul_approvals": [],
             "approval_confirmation": None,
             "find_backhaul_msg": None,
+            "pending_insurance_verification": pending_insurance_verification,
+            "referral_cap": REFERRAL_CAP,
+            "referral_total_signups": referral_total_signups,
+            "referral_spots_remaining": referral_spots_remaining,
+            "referral_today": referral_today,
             "onboarding_checklist": onboarding_checklist,
             "total_users": total_users,
             "loader_user_count": loader_user_count,
@@ -1110,7 +1138,7 @@ def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
     """Explain why each open load did or didn't match (for 'no matches' debugging)."""
     from app.config import get_settings
     from app.services.geocode import get_lat_lon, normalize_postcode
-    from app.services.matching import vehicle_satisfies_load_equipment_hard
+    from app.services.matching import vehicle_satisfies_load_equipment_hard, vehicle_satisfies_load_vehicle_type
     from app.services.road_distance import road_distances_from_origin_to_postcodes
 
     vehicle = db.get(models.Vehicle, vehicle_id)
@@ -1162,6 +1190,21 @@ def _match_diagnostic(vehicle_id: int, origin_postcode: str, db: Session):
                 }
             )
             continue
+        if not vehicle_satisfies_load_vehicle_type(vehicle, load):
+            req = load.requirements or {}
+            need = (
+                (req.get("vehicle_type") or "").strip()
+                if isinstance(req, dict)
+                else ""
+            )
+            rows.append(
+                {
+                    "load": load,
+                    "reason": f"Vehicle type (need {need or 'specific type'})",
+                    "distance_miles": dist,
+                }
+            )
+            continue
         req = load.requirements or {}
         required_trailer = req.get("trailer_type") if isinstance(req, dict) else None
         if required_trailer not in (None, ""):
@@ -1191,6 +1234,7 @@ def find_backhaul_page(
     if login_redir is not None:
         return login_redir
     current_user = get_current_user_optional(request, db)
+    session_office_user = current_user
     driver_actor: Optional[models.Driver] = None
     if current_user is None:
         driver_actor = get_current_driver_optional(request, db)
@@ -1276,9 +1320,15 @@ def find_backhaul_page(
 
         ratings_svc.enrich_matching_results_with_loader_ratings(db, matching_results)
         _settings = get_settings()
+        _ld_fee_mult = 1.0
+        _su = session_office_user
+        if _su and getattr(_su, "role", None) == "loader" and getattr(_su, "loader_id", None):
+            _ld_fee_mult = loader_referral_fee_multiplier(db, _su.loader_id, date.today())
         for m in matching_results:
             m["market_rate"] = load_pricing_svc.suggest_for_open_load(m["load"])
-            m["loader_platform_fee"] = loader_platform_fee_payload(m["load"].budget_gbp, _settings)
+            m["loader_platform_fee"] = loader_platform_fee_payload(
+                m["load"].budget_gbp, _settings, fee_multiplier=_ld_fee_mult
+            )
 
     if driver_actor is not None:
         haulier = db.get(models.Haulier, driver_actor.haulier_id)
@@ -1407,6 +1457,7 @@ def find_backhaul_page(
     rating_ok = request.query_params.get("rating_ok")
     rating_error = request.query_params.get("rating_error")
     apply_insurance_status_to_vehicles(vehicles)
+    pending_insurance_verification = haulier_has_pending_insurance_review(vehicles)
     vehicle_availability = _vehicle_availability_map(vehicles)
     _sl = (request.query_params.get("load_id") or "").strip()
     try:
@@ -1461,6 +1512,21 @@ def find_backhaul_page(
             pending_verification_code_jobs_find.append(
                 {"load": _ld, "job": _jb, "driver": _drv}
             )
+
+    if current_user and isinstance(current_user, models.User) and getattr(current_user, "role", None) in (
+        "haulier",
+        "loader",
+    ):
+        _u = db.get(models.User, current_user.id)
+        if _u:
+            ensure_user_referral_code(db, _u)
+            db.commit()
+            db.refresh(_u)
+            current_user = _u
+
+    referral_total_signups_fb = count_successful_referrals(db)
+    referral_spots_remaining_fb = max(0, REFERRAL_CAP - referral_total_signups_fb)
+    referral_today_fb = date.today()
 
     return templates.TemplateResponse(
         "home.html",
@@ -1521,6 +1587,11 @@ def find_backhaul_page(
             "haulier_pending_backhaul_approvals": [],
             "approval_confirmation": None,
             "find_backhaul_msg": find_backhaul_msg,
+            "pending_insurance_verification": pending_insurance_verification,
+            "referral_cap": REFERRAL_CAP,
+            "referral_total_signups": referral_total_signups_fb,
+            "referral_spots_remaining": referral_spots_remaining_fb,
+            "referral_today": referral_today_fb,
             "onboarding_checklist": onboarding_checklist,
             "emergency_evidence_jobs": emergency_evidence_jobs,
             "cancellation_ui_settings": cancellation_ui_settings,
@@ -1628,6 +1699,11 @@ async def create_vehicle_form(
     except ValueError:
         return RedirectResponse(
             url="/?section=vehicles&delete_error=" + quote_plus("Invalid insurance expiry date"),
+            status_code=303,
+        )
+    if insurance_expiry <= date_cls.today():
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus("Insurance expiry must be in the future"),
             status_code=303,
         )
     if not isinstance(insurance_file, UploadFile) or not getattr(insurance_file, "filename", None):
@@ -2148,6 +2224,8 @@ async def show_interest_form(
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Haulier office or driver: express interest in a suggested load or planned load."""
+    from urllib.parse import quote_plus
+
     current_user = get_current_user_optional(request, db)
     driver_actor = get_current_driver_optional(request, db) if current_user is None else None
     if current_user is None and driver_actor is None:
@@ -2172,6 +2250,11 @@ async def show_interest_form(
     v = db.get(models.Vehicle, vehicle_id)
     if not v or v.haulier_id != haulier_id:
         return RedirectResponse(url="/?section=matches", status_code=303)
+    if not vehicle_may_accept_loads(v):
+        return RedirectResponse(
+            url="/?section=matches&msg=" + quote_plus("insurance_not_verified"),
+            status_code=303,
+        )
     if current_user and getattr(current_user, "role", None) == "haulier":
         if not current_user.haulier_id or current_user.haulier_id != haulier_id:
             return RedirectResponse(url="/?section=matches", status_code=303)
@@ -2283,6 +2366,13 @@ async def accept_interest(
                 url="/?section=matches&msg=" + quote_plus("not_your_load"),
                 status_code=303,
             )
+
+    veh = db.get(models.Vehicle, interest.vehicle_id)
+    if not veh or not vehicle_may_accept_loads(veh):
+        return RedirectResponse(
+            url="/?section=matches&msg=" + quote_plus("insurance_not_verified"),
+            status_code=303,
+        )
 
     from app.services.job_driver_resolution import resolve_driver_id_for_accepted_interest
 
@@ -2771,6 +2861,8 @@ async def create_company_team_user(
         loader_id=current_user.loader_id if role == "loader" else None,
     )
     db.add(new_user)
+    db.flush()
+    ensure_user_referral_code(db, new_user)
     db.commit()
     return RedirectResponse(url=base + "&team_ok=" + quote_plus("Team login created"), status_code=303)
 
@@ -2878,6 +2970,9 @@ async def express_interest(
     vehicle = db.get(models.Vehicle, vid)
     if not vehicle or vehicle.haulier_id != haulier_id:
         return _redirect_matches("not_your_vehicle")
+
+    if not vehicle_may_accept_loads(vehicle):
+        return _redirect_matches("insurance_not_verified")
 
     if driver_actor is not None and driver_actor.vehicle_id and driver_actor.vehicle_id != vid:
         return _redirect_matches("not_your_vehicle")

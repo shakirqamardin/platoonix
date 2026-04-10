@@ -14,6 +14,12 @@
         </a>
         <h1 class="text-2xl font-semibold text-white">Terms &amp; Conditions</h1>
         <p class="text-slate-500 text-sm mt-1">Last updated: {{ last_updated }}</p>
+        <nav class="rounded-lg border border-slate-800 bg-slate-900/50 p-4 mt-6 text-sm" aria-label="On this page">
+          <p class="text-slate-500 text-xs uppercase tracking-wide mb-2">On this page</p>
+          <ul class="list-disc pl-5 text-slate-400 space-y-1">
+            <li><a href="#matching-algorithm" class="text-teal-400 hover:underline">11. Smart Matching Algorithm</a></li>
+          </ul>
+        </nav>
       </header>
 
       <div class="prose prose-invert prose-slate max-w-none text-slate-300 space-y-6">
@@ -285,16 +291,85 @@
           <p class="mt-3">Drivers should use the strongest method available (QR or SMS when the loader is present, GPS when appropriate, manual as a fallback).</p>
         </section>
 
+        <section id="matching-algorithm">
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2">11. Smart Matching Algorithm</h2>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2">11.1 How load matching works</h3>
+          <p>When a haulier searches for backhaul loads, our matching logic sorts results using multiple factors so the best options appear first:</p>
+
+          <h4 class="text-sm font-semibold text-white mt-3 mb-2">Matching priority order</h4>
+          <ol class="list-decimal pl-6 space-y-3 mt-2">
+            <li>
+              <strong class="text-slate-200">Perfect match (highest priority)</strong>
+              <ul class="list-disc pl-6 space-y-1 mt-2">
+                <li>Vehicle type aligns with load requirements (e.g. rigid, artic, van) where specified</li>
+                <li>Vehicle capacity covers load weight and volume where specified</li>
+                <li>Trailer type aligns with load requirements (e.g. curtain, box, flatbed) where specified</li>
+                <li>Any required equipment flags on the load (e.g. tail lift, temperature, ADR) must be satisfied — loads that fail these checks are excluded</li>
+              </ul>
+              <p class="text-slate-500 text-sm mt-2">Perfect matches are listed before any “near” matches, regardless of distance, so specialised loads surface to suitable vehicles.</p>
+            </li>
+            <li>
+              <strong class="text-slate-200">Distance (secondary priority)</strong>
+              <ul class="list-disc pl-6 space-y-1 mt-2">
+                <li>Road distance from the search origin to the load’s pickup point (not straight-line)</li>
+                <li>Default search radius is configurable (commonly 25 miles; searches may allow a larger radius where supported)</li>
+                <li>Within the same match tier, closer pickups appear first</li>
+              </ul>
+              <p class="text-slate-500 text-sm mt-2">Distance-based ordering reduces empty miles and fuel. Loads a few miles off your position rank above those farther away when match quality is equal.</p>
+            </li>
+          </ol>
+
+          <h4 class="text-sm font-semibold text-white mt-4 mb-2">What we don’t use (and why)</h4>
+          <ul class="list-disc pl-6 space-y-2 mt-2">
+            <li><strong class="text-slate-200">Date posted:</strong> We do not push older loads above newer ones purely by posting time. Visibility is driven by compatibility and distance, not recency alone.</li>
+            <li><strong class="text-slate-200">Payment amount:</strong> We do not sort by highest budget first. That avoids giving an unfair advantage to loaders with larger posted budgets.</li>
+            <li><strong class="text-slate-200">Paid promotions:</strong> There are no paid “featured” or “priority” slots in organic search results — the same rules apply to every load.</li>
+            <li><strong class="text-slate-200">Random ordering:</strong> Results follow a deterministic sort (match quality, then distance), not arbitrary shuffling.</li>
+          </ul>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2">11.2 Benefits of smart matching</h3>
+          <p class="font-semibold text-slate-200 mt-2">For hauliers</p>
+          <ul class="list-disc pl-6 space-y-1 mt-2">
+            <li>See loads you can realistically run with your vehicle and equipment</li>
+            <li>Shorter diversions when multiple loads qualify</li>
+            <li>Less time scrolling past incompatible work</li>
+            <li>Specialist kit (e.g. temp, ADR) pairs with loads that need it</li>
+          </ul>
+          <p class="font-semibold text-slate-200 mt-4">For loaders</p>
+          <ul class="list-disc pl-6 space-y-1 mt-2">
+            <li>Nearby, suitable vehicles see your load earlier</li>
+            <li>Fair visibility without paying for placement</li>
+            <li>Specialist loads reach operators who can actually do the job</li>
+          </ul>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2">11.3 Corridor matching</h3>
+          <p>When a haulier searches with both an origin and a destination (return corridor), we combine corridor-based suggestions with origin-based matches: loads along or near the planned route can appear with corridor-aware distances, still subject to vehicle/load compatibility and the same sort principles (match quality first, then distance).</p>
+          <p class="text-slate-500 text-sm mt-2"><strong class="text-slate-300">Example:</strong> A run from Manchester toward Birmingham may surface pickups and drops that fit the corridor home, prioritising workable diversions over random listings.</p>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2">11.4 Algorithmic transparency</h3>
+          <p>Our matching is intended to be understandable: same inputs and data should yield the same ordering. We do not sell ranking positions. Core signals are vehicle/load fit (including hard equipment requirements), then road distance.</p>
+          <p class="mt-2">The implementation uses a two-level sort equivalent to:</p>
+          <pre class="rounded-lg border border-slate-700 bg-slate-900/80 p-4 text-xs text-slate-300 overflow-x-auto not-prose">results.sort(key=lambda x: (not x.is_perfect_match, x.distance_miles))</pre>
+          <p class="text-slate-500 text-sm mt-2">Required vehicle type (when set on a load) is enforced as a hard filter. <code class="text-teal-300/90">is_perfect_match</code> then reflects trailer/equipment alignment among compatible loads, and <code class="text-teal-300/90">distance_miles</code> is road miles to pickup (or corridor-adjusted where applicable).</p>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2">11.5 Future enhancements</h3>
+          <p>We may add optional filters or preferences (e.g. urgency, user-selected sort keys). Core principles remain: fit your vehicle and route first; we do not intend to introduce pay-to-rank organic listings.</p>
+
+          <h3 class="text-base font-semibold text-white mt-4 mb-2">11.6 Questions about matching</h3>
+          <p>Email <a href="mailto:support@platoonix.co.uk" class="text-teal-400 hover:underline">support@platoonix.co.uk</a>.</p>
+        </section>
+
         <section>
-          <h2 class="text-lg font-semibold text-white mt-6 mb-2">10. Confidentiality and non-disclosure</h2>
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2">12. Confidentiality and non-disclosure</h2>
           <p>By using the platform you agree to keep <strong>confidential</strong> any confidential information you receive through Platoonix (including but not limited to business details, routes, pricing, customer names and contact details) and not to disclose it to any third party without the consent of the person who shared it, except as required by law. This applies both during and after your use of the platform. For full confidentiality and non-disclosure terms, see our <a href="/confidentiality" class="text-emerald-400 hover:underline">Confidentiality &amp; Non-Disclosure</a> page.</p>
         </section>
 
         <section>
-          <h2 class="text-lg font-semibold text-white mt-6 mb-2">11. Acceptable use of the discovery platform</h2>
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2">13. Acceptable use of the discovery platform</h2>
           <p>By using Platoonix you agree to these terms. The discovery platform and payment tools are provided “as is”. We aim to keep them available and accurate but do not guarantee uninterrupted or error-free operation. We may change these terms or the platform from time to time; continued use after changes means you accept the updated terms. If you do not agree, you must stop using the platform.</p>
           <p class="mt-2">You must be 18+ to use the platform. By registering, you confirm you meet this requirement.</p>
-          <h3 class="text-base font-semibold text-white mt-4 mb-2">11a. Prohibited use</h3>
+          <h3 class="text-base font-semibold text-white mt-4 mb-2">13a. Prohibited use</h3>
           <p>You must not use the platform to:</p>
           <ul class="list-disc pl-6 space-y-1 mt-2">
             <li>Post false or misleading information about loads, vehicles, or credentials</li>
@@ -307,12 +382,12 @@
         </section>
 
         <section>
-          <h2 class="text-lg font-semibold text-white mt-6 mb-2">12. Data protection</h2>
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2">14. Data protection</h2>
           <p>We process personal data in accordance with UK data protection law (UK GDPR and Data Protection Act 2018) to operate the discovery service, facilitate payments, and meet our legal obligations. Platoonix Ltd is registered with the Information Commissioner's Office (ICO Registration: ZC115501). For what we collect, why, and your rights, see our <a href="/privacy" class="text-emerald-400 hover:underline">Privacy Policy</a>.</p>
         </section>
 
         <section>
-          <h2 class="text-lg font-semibold text-white mt-6 mb-2">13. Statutory rights</h2>
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2">15. Statutory rights</h2>
           <p>If you are a consumer, nothing in these terms affects your statutory rights under UK law. If you are a business user, you confirm that you have authority to bind your organisation to these terms.</p>
         </section>
 
@@ -322,7 +397,7 @@
         </section>
 
         <section>
-          <h2 class="text-lg font-semibold text-white mt-6 mb-2">15. Contact</h2>
+          <h2 class="text-lg font-semibold text-white mt-6 mb-2">17. Contact</h2>
           <p>For questions about these terms, contact us using the details provided in the app or on our website.</p>
         </section>
       </div>

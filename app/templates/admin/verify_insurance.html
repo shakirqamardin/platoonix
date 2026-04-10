@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Verify insurance — {{ vehicle.registration }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+<div class="max-w-4xl mx-auto p-6">
+    <p class="mb-4"><a href="/admin/dashboard" class="text-teal-400 hover:underline">← Admin dashboard</a></p>
+    <h1 class="text-2xl font-bold mb-6">Verify insurance certificate</h1>
+
+    <div class="bg-slate-800 rounded-lg shadow p-6 mb-6 border border-slate-700">
+        <h2 class="font-bold text-lg mb-4">Vehicle &amp; haulier</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div>
+                <dt class="text-slate-400">Registration</dt>
+                <dd class="font-semibold">{{ vehicle.registration }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-400">Haulier</dt>
+                <dd class="font-semibold">{{ haulier.name if haulier else '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-400">Contact email</dt>
+                <dd>{{ haulier.contact_email if haulier else '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-400">Expiry date</dt>
+                <dd class="font-semibold">{{ vehicle.insurance_expiry_date or '—' }}</dd>
+            </div>
+            <div class="sm:col-span-2">
+                <dt class="text-slate-400">Uploaded</dt>
+                <dd>{% if vehicle.insurance_uploaded_at %}{{ vehicle.insurance_uploaded_at.strftime('%d %b %Y, %H:%M UTC') }}{% else %}—{% endif %}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <div class="bg-slate-800 rounded-lg shadow p-6 mb-6 border border-slate-700">
+        <h2 class="font-bold text-lg mb-4">Certificate file</h2>
+        {% if vehicle.insurance_certificate_path %}
+            {% set _bn = vehicle.insurance_certificate_path %}
+            {% if _bn.lower().endswith('.pdf') %}
+            <iframe src="/admin/insurance-certificate/{{ vehicle.id }}" class="w-full h-[600px] border border-slate-600 rounded bg-white"></iframe>
+            {% else %}
+            <img src="/admin/insurance-certificate/{{ vehicle.id }}" alt="Insurance certificate" class="max-w-full border border-slate-600 rounded" />
+            {% endif %}
+        {% else %}
+        <p class="text-slate-400">No file on record.</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-slate-800 rounded-lg shadow p-6 border border-slate-700">
+        <h2 class="font-bold text-lg mb-4">Checklist</h2>
+        <ul class="space-y-2 mb-6 text-sm text-slate-300 list-disc list-inside">
+            <li>Document is a valid insurance certificate (not a random image).</li>
+            <li>Policy covers goods in transit / relevant liability for haulage.</li>
+            <li>Company name matches the registered haulier where applicable.</li>
+            <li>Expiry date matches the date entered ({{ vehicle.insurance_expiry_date or '—' }}).</li>
+        </ul>
+
+        <form method="post" class="space-y-4">
+            <div class="flex flex-wrap gap-4">
+                <button type="submit" name="action" value="approve"
+                        class="px-6 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-500">
+                    Approve insurance
+                </button>
+                <button type="button" onclick="document.getElementById('reject-modal').showModal()"
+                        class="px-6 py-3 bg-rose-600 text-white rounded-lg font-semibold hover:bg-rose-500">
+                    Reject insurance
+                </button>
+            </div>
+        </form>
+
+        <dialog id="reject-modal" class="bg-slate-800 text-slate-100 border border-slate-600 rounded-lg p-6 max-w-md w-[calc(100%-2rem)] backdrop:bg-black/60">
+            <h3 class="font-bold text-lg mb-4">Reject certificate</h3>
+            <form method="post">
+                <input type="hidden" name="action" value="reject" />
+                <label class="block mb-4">
+                    <span class="text-sm font-medium text-slate-300">Reason (shown to the haulier)</span>
+                    <textarea name="rejection_reason" required rows="4"
+                              class="mt-2 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm"></textarea>
+                </label>
+                <div class="flex gap-2 justify-end">
+                    <button type="button" onclick="this.closest('dialog').close()"
+                            class="px-4 py-2 bg-slate-700 rounded hover:bg-slate-600">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-500">
+                        Reject and notify haulier
+                    </button>
+                </div>
+            </form>
+        </dialog>
+    </div>
+</div>
+</body>
+</html>

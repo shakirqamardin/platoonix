@@ -3,6 +3,7 @@ Loader-facing dashboard: my loads, planned loads, who's interested.
 Only for users with role=loader; data filtered by loader_id.
 """
 import logging
+from datetime import date
 from typing import Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, Request
@@ -746,6 +747,16 @@ async def loader_accept_interest(
     interest = db.get(models.LoadInterest, load_interest_id)
     if not interest or interest.status != "expressed":
         return RedirectResponse(url="/?section=matches", status_code=303)
+    from urllib.parse import quote_plus
+
+    from app.services.insurance_status import vehicle_may_accept_loads
+
+    veh = db.get(models.Vehicle, interest.vehicle_id)
+    if not veh or not vehicle_may_accept_loads(veh):
+        return RedirectResponse(
+            url="/?section=matches&msg=" + quote_plus("insurance_not_verified"),
+            status_code=303,
+        )
     load = None
     if interest.load_id:
         load = db.get(models.Load, interest.load_id)
@@ -780,8 +791,19 @@ async def loader_accept_interest(
     amount_gbp = float(load.budget_gbp or 0)
     settings = get_settings()
     from app.services.payment_fees import compute_job_payment_splits
+    from app.services.referral_program import haulier_referral_fee_multiplier, loader_referral_fee_multiplier
 
-    splits = compute_job_payment_splits(amount_gbp, settings)
+    vehicle = db.get(models.Vehicle, interest.vehicle_id)
+    today = date.today()
+    h_mult = haulier_referral_fee_multiplier(db, vehicle.haulier_id if vehicle else None, today)
+    l_mult = loader_referral_fee_multiplier(db, load.loader_id, today)
+
+    splits = compute_job_payment_splits(
+        amount_gbp,
+        settings,
+        haulier_fee_multiplier=h_mult,
+        loader_flat_fee_multiplier=l_mult,
+    )
 
     from app.services.job_driver_resolution import resolve_driver_id_for_accepted_interest
 

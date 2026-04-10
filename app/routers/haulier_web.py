@@ -554,6 +554,11 @@ async def haulier_add_vehicle(
             url="/?section=vehicles&delete_error=" + quote_plus("Invalid insurance expiry date"),
             status_code=303,
         )
+    if insurance_expiry <= date_cls.today():
+        return RedirectResponse(
+            url="/?section=vehicles&delete_error=" + quote_plus("Insurance expiry must be in the future"),
+            status_code=303,
+        )
     if not isinstance(insurance_file, UploadFile) or not getattr(insurance_file, "filename", None):
         return RedirectResponse(
             url="/?section=vehicles&delete_error=" + quote_plus("Insurance certificate file is required"),

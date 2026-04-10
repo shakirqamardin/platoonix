@@ -19,6 +19,12 @@ from app.auth import (
 )
 from app.database import get_db
 from app.services.email_sender import schedule_registration_emails
+from app.services.referral_program import (
+    REFERRAL_CAP,
+    count_successful_referrals,
+    ensure_user_referral_code,
+    process_referral_for_new_user,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -299,9 +305,18 @@ def register_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
     if driver:
         return RedirectResponse(url="/driver", status_code=302)
     error = request.query_params.get("error")
+    total_ref = count_successful_referrals(db)
+    spots = max(0, REFERRAL_CAP - total_ref)
     return templates.TemplateResponse(
         "register.html",
-        {"request": request, "error": error, "success": None},
+        {
+            "request": request,
+            "error": error,
+            "success": None,
+            "referral_program_active": total_ref < REFERRAL_CAP,
+            "referral_spots_remaining": spots,
+            "referral_cap": REFERRAL_CAP,
+        },
     )
 
 
@@ -318,6 +333,7 @@ async def register_haulier_submit(
     phone = (form.get("contact_phone") or "").strip() or None
     password = form.get("password") or ""
     password_confirm = form.get("password_confirm") or ""
+    referral_code_input = (form.get("referral_code") or "").strip()
     if not name or not email:
         return _register_redirect("Company name and email required.")
     if len(password) < 6:
@@ -337,6 +353,8 @@ async def register_haulier_submit(
     )
     db.add(user)
     db.flush()
+    ensure_user_referral_code(db, user)
+    process_referral_for_new_user(db, user, referral_code_input)
     user_id, user_role = user.id, user.role
     db.commit()
     request.session["user_id"] = user_id
@@ -372,6 +390,7 @@ async def register_loader_submit(
     phone = (form.get("contact_phone") or "").strip() or None
     password = form.get("password") or ""
     password_confirm = form.get("password_confirm") or ""
+    referral_code_input = (form.get("referral_code") or "").strip()
     if not name or not email:
         return _register_redirect("Company name and email required.")
     if len(password) < 6:
@@ -391,6 +410,8 @@ async def register_loader_submit(
     )
     db.add(user)
     db.flush()
+    ensure_user_referral_code(db, user)
+    process_referral_for_new_user(db, user, referral_code_input)
     user_id, user_role = user.id, user.role
     db.commit()
     request.session["user_id"] = user_id
