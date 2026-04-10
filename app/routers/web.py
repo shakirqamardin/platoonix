@@ -68,6 +68,13 @@ def _job_status_parts(job):
     if getattr(job, "completed_at", None):
         return {"headline": "Completed", "detail": ago(job.completed_at)}
     if getattr(job, "reached_delivery_at", None):
+        if (getattr(job, "verification_status", None) or "") == "awaiting_loader" and not getattr(
+            job, "completed_at", None
+        ):
+            return {
+                "headline": "At delivery",
+                "detail": f"{ago(job.reached_delivery_at)} · proof pending loader confirm",
+            }
         return {"headline": "At delivery", "detail": ago(job.reached_delivery_at)}
     if getattr(job, "departed_pickup_at", None):
         return {"headline": "En route", "detail": f"Departed {ago(job.departed_pickup_at)}"}
@@ -572,6 +579,13 @@ def home(
     request: Request,
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
+    try:
+        from app.services.delivery_verification_flow import run_auto_confirm_due_deliveries
+
+        run_auto_confirm_due_deliveries(db)
+    except Exception:
+        db.rollback()
+
     if get_current_user_optional(request, db) is None and get_current_driver_optional(request, db) is None:
         return templates.TemplateResponse("index.html", {"request": request})
     current_user = get_current_user_optional(request, db)
@@ -2245,6 +2259,9 @@ async def accept_interest(
     from app.services.job_groups import try_link_new_job_pickup_group
 
     try_link_new_job_pickup_group(db, job)
+    from app.services.qr_verification import ensure_qr_for_load
+
+    ensure_qr_for_load(db, load)
     db.commit()
     db.refresh(job)
     vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)

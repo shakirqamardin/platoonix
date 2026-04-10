@@ -49,6 +49,10 @@ def assign_load_to_vehicle(
     load.status = models.LoadStatusEnum.MATCHED.value
     db.add(load)
 
+    from app.services.qr_verification import ensure_qr_for_load
+
+    ensure_qr_for_load(db, load)
+
     if body.fee_gbp is not None:
         fee_gbp = round(float(body.fee_gbp), 2)
         net_payout_gbp = round(body.amount_gbp - fee_gbp, 2)

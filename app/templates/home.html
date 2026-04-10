@@ -2507,6 +2507,17 @@
                                         {% endif %}
                                         {% endif %}
                                         {% endif %}
+                                        {% if current_user and current_user.loader_id %}
+                                        {% for l in loads %}
+                                        {% if l.id == j.load_id and not j.completed_at %}
+                                        <div class="mt-3 rounded-lg border border-cyan-500/25 bg-slate-950/50 px-2 py-2 text-[11px] text-slate-300 max-w-xs">
+                                            <div class="font-semibold text-cyan-200/90 mb-1">Delivery verification</div>
+                                            <p class="text-slate-500 mb-2 leading-snug">Show this QR to the driver for instant verification, or confirm manually below if they used photo-only delivery.</p>
+                                            <img src="/loader/loads/{{ l.id }}/qr.png" alt="Delivery verification QR" width="128" height="128" class="w-32 h-32 border border-slate-600 rounded bg-white p-1" loading="lazy" />
+                                        </div>
+                                        {% endif %}
+                                        {% endfor %}
+                                        {% endif %}
                                     </td>
                                     <td class="py-3 px-4">
                                         {% if current_user and current_user.role == 'haulier' %}
@@ -2654,6 +2665,11 @@
                                                 {% endif %}
                                                 {% endif %}
                                                 {% endfor %}
+                                                {% endif %}
+                                                {% if current_user and current_user.loader_id and j.verification_status == 'awaiting_loader' and not j.completed_at %}
+                                                <form method="post" action="/loader/jobs/{{ j.id }}/confirm-delivery" class="inline">
+                                                    <button type="submit" class="rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-2.5 py-1">Confirm delivery</button>
+                                                </form>
                                                 {% endif %}
                                                 {% if current_user and current_user.role == 'haulier' and not j.completed_at %}
                                                 <button type="button" class="text-red-400 hover:text-red-300 text-xs font-medium" onclick="document.getElementById('cancel-job-{{ j.id }}').showModal()">Cancel</button>

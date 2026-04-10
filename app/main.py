@@ -344,6 +344,22 @@ def check_db_and_create_tables():
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration loaders cancellation columns: {e!r}", file=sys.stderr)
             for col_sql in (
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS qr_code VARCHAR(100)",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS qr_code_used BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS qr_code_used_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS sms_verification_code VARCHAR(6)",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS sms_code_sent_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS sms_code_expires_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS sms_code_used BOOLEAN DEFAULT FALSE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration loads verification columns: {e!r}", file=sys.stderr)
+            for col_sql in (
                 "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS no_show_reported_at TIMESTAMP WITH TIME ZONE",
                 "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS no_show_reported_by_user_id INTEGER REFERENCES users(id)",
                 "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS late_notification_at TIMESTAMP WITH TIME ZONE",
@@ -366,6 +382,25 @@ def check_db_and_create_tables():
                     conn.rollback()
                     if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
                         print(f"Migration backhaul_jobs policy columns: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS verification_method VARCHAR(20)",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS verification_status VARCHAR(20) DEFAULT 'pending'",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS delivery_gps_lat DOUBLE PRECISION",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS delivery_gps_lng DOUBLE PRECISION",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS delivery_photo_timestamp TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS gps_verified BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS loader_confirmed_at TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS auto_confirm_deadline TIMESTAMP WITH TIME ZONE",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS dispute_reason VARCHAR(1000)",
+                "ALTER TABLE backhaul_jobs ADD COLUMN IF NOT EXISTS disputed_at TIMESTAMP WITH TIME ZONE",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration backhaul_jobs verification columns: {e!r}", file=sys.stderr)
             try:
                 conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_kind VARCHAR(50)"))
                 conn.commit()

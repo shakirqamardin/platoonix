@@ -9,26 +9,11 @@ from sqlalchemy.orm import Session
 from app import models
 
 
-def finalize_job_with_pod_upload(
-    db: Session,
-    job: models.BackhaulJob,
-    file_url: str,
-    notes: Optional[str],
-) -> Optional[str]:
+def release_payout_for_delivery(db: Session, job: models.BackhaulJob) -> Optional[str]:
     """
-    Create confirmed POD, set completed_at, run Stripe payout if payment CAPTURED.
-    Refreshes vehicle availability. Caller should not commit before this returns success.
+    Run Stripe payout when payment is CAPTURED (after collection). Refreshes vehicle availability.
     Returns None on success, or error message.
     """
-    pod = models.POD(backhaul_job_id=job.id, file_url=file_url, notes=notes)
-    db.add(pod)
-    db.flush()
-    pod.status = models.PODStatusEnum.CONFIRMED.value
-    pod.confirmed_at = datetime.now(timezone.utc)
-    job.completed_at = datetime.now(timezone.utc)
-    db.add(job)
-    db.flush()
-
     payment = (
         db.query(models.Payment)
         .filter(models.Payment.backhaul_job_id == job.id)
@@ -51,3 +36,47 @@ def finalize_job_with_pod_upload(
 
     vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
     return None
+
+
+def finalize_job_with_pod_upload(
+    db: Session,
+    job: models.BackhaulJob,
+    file_url: str,
+    notes: Optional[str],
+) -> Optional[str]:
+    """
+    Create confirmed POD, set completed_at, run Stripe payout if payment CAPTURED.
+    Refreshes vehicle availability. Caller should not commit before this returns success.
+    Returns None on success, or error message.
+    """
+    pod = models.POD(backhaul_job_id=job.id, file_url=file_url, notes=notes)
+    db.add(pod)
+    db.flush()
+    pod.status = models.PODStatusEnum.CONFIRMED.value
+    pod.confirmed_at = datetime.now(timezone.utc)
+    job.completed_at = datetime.now(timezone.utc)
+    db.add(pod)
+    db.add(job)
+    db.flush()
+    return release_payout_for_delivery(db, job)
+
+
+def confirm_pending_pod_and_release(
+    db: Session,
+    job: models.BackhaulJob,
+    pod: models.POD,
+    *,
+    auto_confirmed: bool = False,
+) -> Optional[str]:
+    """Confirm a pending ePOD and release payout (loader confirmation or auto-confirm)."""
+    now = datetime.now(timezone.utc)
+    pod.status = models.PODStatusEnum.CONFIRMED.value
+    pod.confirmed_at = now
+    job.completed_at = now
+    job.verification_status = "confirmed"
+    if not auto_confirmed:
+        job.loader_confirmed_at = now
+    db.add(pod)
+    db.add(job)
+    db.flush()
+    return release_payout_for_delivery(db, job)

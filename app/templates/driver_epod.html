@@ -2,19 +2,98 @@
 {% block title %}Upload ePOD – Job #{{ job_id }}{% endblock %}
 {% block content %}
   <h1 class="text-lg font-semibold text-slate-200 mb-1">Proof of delivery (ePOD)</h1>
-  <p class="text-slate-400 text-sm mb-4">Job #{{ job_id }}{% if load %} · {{ load.pickup_postcode }} → {{ load.delivery_postcode }}{% endif %}. Upload completes the job and releases payment.</p>
+  <p class="text-slate-400 text-sm mb-4">Job #{{ job_id }}{% if load %} · {{ load.pickup_postcode }} → {{ load.delivery_postcode }}{% endif %}. Choose how delivery is verified — QR, SMS, and GPS can release payment immediately when valid.</p>
   {% if request.query_params.get('error') %}<p class="mb-3 text-amber-300 text-sm">{{ request.query_params.get('error') }}</p>{% endif %}
-  <form method="post" action="/driver/epod" enctype="multipart/form-data" class="space-y-3">
+  <form method="post" action="/driver/epod" enctype="multipart/form-data" class="space-y-4" id="epod-form">
     <input type="hidden" name="job_id" value="{{ job_id }}" />
+
+    <div class="space-y-3">
+      <p class="text-slate-500 text-xs uppercase tracking-wide">Verification method</p>
+
+      <label class="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3 cursor-pointer hover:border-emerald-500/40">
+        <input type="radio" name="verification_method" value="qr_code" class="mt-1" onchange="showVerificationOption('qr')" />
+        <span>
+          <span class="text-emerald-400 font-medium">QR code (instant)</span>
+          <span class="block text-slate-500 text-xs mt-0.5">Scan the loader’s QR, then upload your proof file.</span>
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3 cursor-pointer hover:border-emerald-500/40">
+        <input type="radio" name="verification_method" value="sms_code" class="mt-1" onchange="showVerificationOption('sms')" />
+        <span>
+          <span class="text-emerald-400 font-medium">SMS code (instant)</span>
+          <span class="block text-slate-500 text-xs mt-0.5">Request a code to the loader’s phone, enter it, then upload.</span>
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3 cursor-pointer hover:border-emerald-500/40">
+        <input type="radio" name="verification_method" value="gps_photo" class="mt-1" onchange="showVerificationOption('gps')" />
+        <span>
+          <span class="text-emerald-400 font-medium">GPS photo (instant)</span>
+          <span class="block text-slate-500 text-xs mt-0.5">Photo with location embedded near delivery (within ~1 mile, recent).</span>
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3 cursor-pointer hover:border-emerald-500/40">
+        <input type="radio" name="verification_method" value="manual" class="mt-1" checked onchange="showVerificationOption('manual')" />
+        <span>
+          <span class="text-slate-300 font-medium">Manual (up to 48h)</span>
+          <span class="block text-slate-500 text-xs mt-0.5">Upload proof — loader confirms or auto-confirms after 48h.</span>
+        </span>
+      </label>
+    </div>
+
+    <div id="qr-option" class="hidden rounded-lg border border-slate-700 bg-slate-900/40 p-3 space-y-2">
+      <label class="block text-slate-400 text-xs">Scanned QR payload</label>
+      <input type="text" name="qr_code" id="qr-code-input" placeholder="Paste code from scan" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500" autocomplete="off" />
+      <p class="text-slate-500 text-xs">Scan with your phone camera or app, then paste the full text here.</p>
+    </div>
+
+    <div id="sms-option" class="hidden rounded-lg border border-slate-700 bg-slate-900/40 p-3 space-y-2">
+      <button type="button" onclick="requestSMSCode({{ job_id }})" class="rounded-lg bg-sky-600 hover:bg-sky-500 px-3 py-2 text-xs font-semibold text-white">Send code to loader</button>
+      <div>
+        <label class="block text-slate-400 text-xs mb-1">6-digit code</label>
+        <input type="text" name="sms_code" inputmode="numeric" maxlength="6" pattern="[0-9]*" placeholder="000000" class="w-32 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white tracking-widest" autocomplete="one-time-code" />
+      </div>
+    </div>
+
+    <div id="gps-option" class="hidden rounded-lg border border-amber-500/20 bg-amber-950/20 p-3 text-amber-100/90 text-xs">
+      Use a camera photo (JPG/PNG/HEIC) with GPS/location enabled — PDFs cannot be used for GPS check.
+    </div>
+
     <div>
-      <label class="block text-slate-400 text-sm mb-1">File (PDF, JPG, PNG, HEIC, max 10 MB)</label>
+      <label class="block text-slate-400 text-sm mb-1">Proof file (PDF, JPG, PNG, HEIC, max 10 MB)</label>
       <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.heic" required class="w-full text-sm text-slate-300" />
     </div>
     <div>
       <label class="block text-slate-400 text-sm mb-1">Notes (optional)</label>
       <input type="text" name="notes" placeholder="Optional" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500" />
     </div>
-    <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium w-full">Upload & complete delivery</button>
+    <button type="submit" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm text-white font-medium w-full">Upload &amp; complete delivery</button>
   </form>
   <p class="text-slate-500 text-sm mt-4"><a href="/driver" class="text-emerald-400 hover:underline">Back to Driver</a></p>
+  <script>
+    function showVerificationOption(method) {
+      var qr = document.getElementById('qr-option');
+      var sms = document.getElementById('sms-option');
+      var gps = document.getElementById('gps-option');
+      if (!qr || !sms || !gps) return;
+      qr.classList.add('hidden');
+      sms.classList.add('hidden');
+      gps.classList.add('hidden');
+      if (method === 'qr') qr.classList.remove('hidden');
+      if (method === 'sms') sms.classList.remove('hidden');
+      if (method === 'gps') gps.classList.remove('hidden');
+    }
+    async function requestSMSCode(jobId) {
+      try {
+        var r = await fetch('/driver/jobs/' + jobId + '/request-sms-code', { method: 'POST', credentials: 'same-origin' });
+        var data = await r.json();
+        alert(data.message || (data.success ? 'OK' : 'Request failed'));
+      } catch (e) {
+        alert('Could not request SMS code');
+      }
+    }
+    showVerificationOption('manual');
+  </script>
 {% endblock %}

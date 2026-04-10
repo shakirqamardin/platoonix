@@ -6,7 +6,7 @@ import logging
 from typing import Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -815,9 +815,88 @@ async def loader_accept_interest(
         load.status = models.LoadStatusEnum.MATCHED.value
         db.add(load)
     interest.status = "accepted"
+    from app.services.qr_verification import ensure_qr_for_load
+
+    ensure_qr_for_load(db, load)
     db.commit()
     from app.services import vehicle_availability as vehicle_availability_svc
 
     vehicle_availability_svc.refresh_vehicle_availability(db, job.vehicle_id)
     db.commit()
     return RedirectResponse(url="/?section=matches&job_created=1", status_code=303)
+
+
+@router.get("/loader/loads/{load_id}/qr.png")
+def loader_load_qr_png(
+    load_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """PNG QR for delivery verification (loader must own the load)."""
+    redir = require_loader(request, db)
+    if redir is not None:
+        return redir
+    user = get_current_user_optional(request, db)
+    if not user or not user.loader_id:
+        return RedirectResponse(url="/login", status_code=302)
+    load = _loader_get_load_owned(db, load_id, user.loader_id)
+    if not load:
+        return RedirectResponse(url="/?section=loads", status_code=302)
+    from app.services.qr_verification import ensure_qr_for_load, qr_png_bytes
+
+    ensure_qr_for_load(db, load)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        return RedirectResponse(url="/?section=loads", status_code=302)
+    return Response(content=qr_png_bytes(load.qr_code), media_type="image/png")
+
+
+@router.post("/loader/jobs/{job_id}/confirm-delivery", response_class=RedirectResponse)
+def loader_confirm_pending_delivery(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Confirm proof of delivery after manual / fallback verification."""
+    redir = require_loader(request, db)
+    if redir is not None:
+        return redir
+    user = get_current_user_optional(request, db)
+    if not user or not user.loader_id:
+        return RedirectResponse(url="/login", status_code=302)
+    job = db.get(models.BackhaulJob, job_id)
+    if not job or job.haulier_cancelled_at:
+        return RedirectResponse(url="/?section=loads&msg=job_not_found", status_code=303)
+    load = db.get(models.Load, job.load_id)
+    if not load or load.loader_id != user.loader_id:
+        return RedirectResponse(url="/?section=loads&msg=not_your_job", status_code=303)
+    if job.completed_at or job.verification_status != "awaiting_loader":
+        return RedirectResponse(url="/?section=loads&msg=nothing_to_confirm", status_code=303)
+    pod = (
+        db.query(models.POD)
+        .filter(models.POD.backhaul_job_id == job.id)
+        .filter(models.POD.status == models.PODStatusEnum.PENDING.value)
+        .order_by(models.POD.created_at.desc())
+        .first()
+    )
+    if not pod:
+        return RedirectResponse(url="/?section=loads&msg=no_pod", status_code=303)
+    from app.services.job_completion import confirm_pending_pod_and_release
+
+    err = confirm_pending_pod_and_release(db, job, pod, auto_confirmed=False)
+    if err:
+        db.rollback()
+        from urllib.parse import quote_plus
+
+        return RedirectResponse(
+            url="/?section=loads&msg=" + quote_plus(err or "confirm_failed")[:200],
+            status_code=303,
+        )
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        return RedirectResponse(url="/?section=loads&msg=save_failed", status_code=303)
+    return RedirectResponse(url="/?section=loads&delivery_confirmed=1", status_code=303)

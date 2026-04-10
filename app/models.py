@@ -240,6 +240,14 @@ class Load(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
+    # Delivery verification (QR / SMS shared per load)
+    qr_code: Mapped[Optional[str]] = mapped_column(String(100))
+    qr_code_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    qr_code_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    sms_verification_code: Mapped[Optional[str]] = mapped_column(String(6))
+    sms_code_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    sms_code_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    sms_code_used: Mapped[bool] = mapped_column(Boolean, default=False)
 
     loader: Mapped[Optional["Loader"]] = relationship("Loader", back_populates="loads")
 
@@ -350,6 +358,17 @@ class BackhaulJob(Base):
     emergency_approved: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     # Haulier cancelled via dashboard: row kept for emergency evidence workflow (soft cancel)
     haulier_cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    verification_method: Mapped[Optional[str]] = mapped_column(String(20))
+    verification_status: Mapped[str] = mapped_column(String(20), default="pending")
+    delivery_gps_lat: Mapped[Optional[float]] = mapped_column(Float)
+    delivery_gps_lng: Mapped[Optional[float]] = mapped_column(Float)
+    delivery_photo_timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    gps_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    loader_confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    auto_confirm_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    dispute_reason: Mapped[Optional[str]] = mapped_column(String(1000))
+    disputed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     vehicle: Mapped["Vehicle"] = relationship("Vehicle", foreign_keys=[vehicle_id])
     load: Mapped["Load"] = relationship("Load")

@@ -5,12 +5,12 @@ Only for users with role=haulier; data filtered by haulier_id.
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.exc import IntegrityError
@@ -353,29 +353,116 @@ async def driver_epod_submit(
 
     POD_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     safe_name = f"{uuid.uuid4().hex}{suffix}"
-    (POD_UPLOAD_DIR / safe_name).write_bytes(content)
+    pod_path = POD_UPLOAD_DIR / safe_name
+    pod_path.write_bytes(content)
+    saved_path = str(pod_path)
     file_url = f"/static/uploads/pods/{safe_name}"
 
-    from app.services.job_completion import finalize_job_with_pod_upload
-
     notes = (form.get("notes") or "").strip() or None
-    err = finalize_job_with_pod_upload(db, job, file_url, notes)
-    if err == "Confirm+collection+first":
+    verification_method = (form.get("verification_method") or "manual").strip().lower()
+    qr_code = (form.get("qr_code") or "").strip() or None
+    sms_code = (form.get("sms_code") or "").strip() or None
+
+    load = db.get(models.Load, job.load_id)
+    if not load:
         db.rollback()
-        return RedirectResponse(
-            url=f"/driver/epod?job_id={job_id}&error=Confirm+collection+first",
-            status_code=303,
-        )
-    if err:
+        return RedirectResponse(url=f"/driver/epod?job_id={job_id}&error=Load+not+found", status_code=303)
+
+    from app.services.delivery_verification_flow import process_driver_delivery
+
+    outcome, verr = process_driver_delivery(
+        db,
+        job,
+        load,
+        file_url,
+        notes,
+        verification_method,
+        qr_code,
+        sms_code,
+        saved_path,
+    )
+    if outcome == "error":
         db.rollback()
         from urllib.parse import quote_plus
 
+        err_msg = verr or "Verification failed"
+        if err_msg == "Confirm+collection+first":
+            return RedirectResponse(
+                url=f"/driver/epod?job_id={job_id}&error=Confirm+collection+first",
+                status_code=303,
+            )
         return RedirectResponse(
-            url=f"/driver/epod?job_id={job_id}&error=" + quote_plus(err),
+            url=f"/driver/epod?job_id={job_id}&error=" + quote_plus(err_msg),
             status_code=303,
         )
-    db.commit()
+    if outcome == "pending_manual":
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/driver/epod?job_id={job_id}&error=Save+failed",
+                status_code=303,
+            )
+        return RedirectResponse(url="/driver?epod_pending=1", status_code=303)
+    # instant_ok
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/driver/epod?job_id={job_id}&error=Save+failed",
+            status_code=303,
+        )
     return RedirectResponse(url="/driver?epod_done=1", status_code=303)
+
+
+@router.post("/driver/jobs/{job_id}/request-sms-code")
+def driver_request_sms_code(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Driver requests a 6-digit code sent to the loader's phone (logged until SMS provider is wired)."""
+    result = _haulier_or_driver_context(request, db)
+    if isinstance(result, RedirectResponse):
+        return JSONResponse({"success": False, "message": "Unauthorized"}, status_code=401)
+    haulier, actor_driver = result
+    job = _driver_job_for_haulier(job_id, haulier, db, actor_driver=actor_driver)
+    if not job:
+        return JSONResponse({"success": False, "message": "Job not found"}, status_code=404)
+    load = db.get(models.Load, job.load_id)
+    if not load or not load.loader_id:
+        return JSONResponse({"success": False, "message": "No loader for load"}, status_code=400)
+    loader = db.get(models.Loader, load.loader_id)
+    if not loader:
+        return JSONResponse({"success": False, "message": "Loader not found"}, status_code=400)
+
+    from app.services.sms_verification import generate_sms_code, send_verification_sms
+
+    code = generate_sms_code()
+    now = datetime.now(timezone.utc)
+    load.sms_verification_code = code
+    load.sms_code_sent_at = now
+    load.sms_code_expires_at = now + timedelta(minutes=15)
+    load.sms_code_used = False
+    db.add(load)
+    phone = (loader.contact_phone or "").strip()
+    if phone:
+        send_verification_sms(phone, code)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        return JSONResponse({"success": False, "message": "Could not save code"}, status_code=500)
+
+    tail = phone[-4:] if len(phone) >= 4 else "****"
+    return JSONResponse(
+        {
+            "success": True,
+            "message": (f"Code sent to loader phone ending {tail}" if phone else "Code generated — loader has no phone on file; contact support"),
+        }
+    )
 
 
 @router.get("/haulier", response_class=HTMLResponse)
