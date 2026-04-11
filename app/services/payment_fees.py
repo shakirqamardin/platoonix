@@ -54,14 +54,19 @@ def compute_loader_platform_fee_gbp(
     return (fee, detail)
 
 
-def loader_platform_fee_payload(amount_gbp: Optional[float], settings: Settings) -> Optional[dict[str, Any]]:
+def loader_platform_fee_payload(
+    amount_gbp: Optional[float],
+    settings: Settings,
+    *,
+    fee_multiplier: float = 1.0,
+) -> Optional[dict[str, Any]]:
     """For API/JSON: fee breakdown when amount is set."""
     if amount_gbp is None:
         return None
     amt = float(amount_gbp or 0.0)
     if amt <= 0:
         return None
-    fee, detail = compute_loader_platform_fee_gbp(amt, settings)
+    fee, detail = compute_loader_platform_fee_gbp(amt, settings, fee_multiplier=fee_multiplier)
     return {
         "loader_platform_fee_gbp": fee,
         "loader_platform_fee_detail": detail,
