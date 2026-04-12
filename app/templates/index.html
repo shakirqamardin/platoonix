@@ -31,18 +31,18 @@
 
   <div class="relative max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
     <!-- Top bar -->
-    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-12 sm:mb-16">
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-12 sm:mb-16">
       <a href="/" class="inline-flex shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/40">
         <img src="/static/logo.png" alt="Platoonix" class="h-10 w-auto" />
       </a>
-      <nav class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm justify-end">
-        <a href="/login" class="text-slate-400 hover:text-teal-400 transition-colors">Loader/Haulier Login</a>
-        <span class="text-slate-600 hidden sm:inline">|</span>
-        <a href="/driver-login" class="text-slate-400 hover:text-teal-400 transition-colors">Driver Login</a>
-        <span class="text-slate-600 hidden sm:inline">|</span>
-        <a href="/pricing" class="text-slate-400 hover:text-teal-400 transition-colors">Pricing</a>
-        <span class="text-slate-600 hidden sm:inline">|</span>
-        <a href="/api-docs" class="text-slate-400 hover:text-teal-400 transition-colors">API Docs</a>
+      <nav class="flex flex-nowrap items-center justify-start sm:justify-end gap-x-2 sm:gap-x-3 text-[11px] leading-tight sm:text-sm w-full min-w-0 -mx-0.5 sm:mx-0" aria-label="Site links">
+        <a href="/login" class="text-slate-400 hover:text-teal-400 transition-colors whitespace-nowrap shrink-0" title="Loader/Haulier Login"><span class="sm:hidden">Office login</span><span class="hidden sm:inline">Loader/Haulier Login</span></a>
+        <span class="text-slate-600 shrink-0" aria-hidden="true">|</span>
+        <a href="/driver-login" class="text-slate-400 hover:text-teal-400 transition-colors whitespace-nowrap shrink-0" title="Driver Login"><span class="sm:hidden">Driver</span><span class="hidden sm:inline">Driver Login</span></a>
+        <span class="text-slate-600 shrink-0" aria-hidden="true">|</span>
+        <a href="/pricing" class="text-slate-400 hover:text-teal-400 transition-colors whitespace-nowrap shrink-0">Pricing</a>
+        <span class="text-slate-600 shrink-0" aria-hidden="true">|</span>
+        <a href="/api-docs" class="text-slate-400 hover:text-teal-400 transition-colors whitespace-nowrap shrink-0" title="API documentation"><span class="sm:hidden">API</span><span class="hidden sm:inline">API Docs</span></a>
       </nav>
     </header>
 
