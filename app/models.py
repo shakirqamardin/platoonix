@@ -236,6 +236,11 @@ class Load(Base):
     pickup_window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     delivery_window_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     delivery_window_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Simple schedule (UK): date + slot; legacy window_* still populated for APIs & policies
+    pickup_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    pickup_time_window: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    delivery_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    delivery_time_window: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     weight_kg: Mapped[Optional[float]] = mapped_column(Float)
     volume_m3: Mapped[Optional[float]] = mapped_column(Float)
     pallets: Mapped[Optional[float]] = mapped_column(Float)  # if set, volume_m3 = pallets * 1.2 (display both)

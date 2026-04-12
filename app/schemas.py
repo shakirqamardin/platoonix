@@ -80,6 +80,10 @@ class LoadBase(BaseModel):
     pickup_window_end: datetime
     delivery_window_start: Optional[datetime] = None
     delivery_window_end: Optional[datetime] = None
+    pickup_date: Optional[date] = None
+    pickup_time_window: Optional[str] = None
+    delivery_date: Optional[date] = None
+    delivery_time_window: Optional[str] = None
     weight_kg: Optional[float] = None
     volume_m3: Optional[float] = None
     pallets: Optional[float] = None

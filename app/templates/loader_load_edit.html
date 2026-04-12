@@ -44,20 +44,30 @@
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1">Pickup window start</label>
-            <input name="pickup_window_start" type="datetime-local" value="{{ pickup_window_start }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+            <label class="block text-sm font-medium text-slate-300 mb-1">Collection date <span class="text-red-400">*</span></label>
+            <input name="pickup_date" type="date" required min="{{ load_form_date_min }}" value="{{ pickup_date }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1">Pickup window end</label>
-            <input name="pickup_window_end" type="datetime-local" value="{{ pickup_window_end }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+            <label class="block text-sm font-medium text-slate-300 mb-1">Collection time window</label>
+            <select name="pickup_time_window" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+              <option value="morning" {% if pickup_time_window == 'morning' %}selected{% endif %}>Morning (8am–12pm)</option>
+              <option value="afternoon" {% if pickup_time_window == 'afternoon' %}selected{% endif %}>Afternoon (12pm–5pm)</option>
+              <option value="evening" {% if pickup_time_window == 'evening' %}selected{% endif %}>Evening (5pm–8pm)</option>
+              <option value="flexible" {% if pickup_time_window == 'flexible' or not pickup_time_window %}selected{% endif %}>Flexible / anytime</option>
+            </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1">Delivery window start</label>
-            <input name="delivery_window_start" type="datetime-local" value="{{ delivery_window_start }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+            <label class="block text-sm font-medium text-slate-300 mb-1">Delivery date <span class="text-red-400">*</span></label>
+            <input name="delivery_date" type="date" required min="{{ load_form_date_min }}" value="{{ delivery_date }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1">Delivery window end</label>
-            <input name="delivery_window_end" type="datetime-local" value="{{ delivery_window_end }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
+            <label class="block text-sm font-medium text-slate-300 mb-1">Delivery time window</label>
+            <select name="delivery_time_window" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm">
+              <option value="morning" {% if delivery_time_window == 'morning' %}selected{% endif %}>Morning (8am–12pm)</option>
+              <option value="afternoon" {% if delivery_time_window == 'afternoon' %}selected{% endif %}>Afternoon (12pm–5pm)</option>
+              <option value="evening" {% if delivery_time_window == 'evening' %}selected{% endif %}>Evening (5pm–8pm)</option>
+              <option value="flexible" {% if delivery_time_window == 'flexible' or not delivery_time_window %}selected{% endif %}>Flexible / anytime</option>
+            </select>
           </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -90,6 +100,10 @@
             <label class="block text-sm font-medium text-slate-300 mb-1">Cubic metres</label>
             <input name="cubic_metres" type="number" min="0" step="0.1" value="{{ '%.1f'|format(load.volume_m3) if load.volume_m3 is not none else '' }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" />
             <p class="text-xs text-slate-500 mt-1">1 pallet = {{ "%.2f"|format(pallet_volume_m3) }} m³</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Weight (tonnes) <span class="text-slate-500 font-normal">— optional</span></label>
+            <input name="weight_tonnes" type="number" min="0" step="0.1" value="{{ weight_tonnes }}" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm" placeholder="e.g. 12" />
           </div>
         </div>
         <div>

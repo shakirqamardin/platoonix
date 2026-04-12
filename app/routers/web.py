@@ -45,6 +45,7 @@ from app.services.referral_program import (
     ensure_user_referral_code,
     loader_referral_fee_multiplier,
 )
+from app.services.load_schedule import VALID_SLOTS, schedule_to_utc_windows
 
 
 router = APIRouter()
@@ -924,6 +925,7 @@ def home(
             "haulier_user_count": haulier_user_count,
             "driver_count": driver_count,
             "recent_registrations": recent_registrations,
+            "load_form_date_min": date.today().isoformat(),
             **rating_ctx,
         },
     )
@@ -1058,28 +1060,31 @@ async def create_load(
     cubic_metres = form.get("cubic_metres")
     budget_gbp = form.get("budget_gbp")
 
-    from datetime import datetime, timezone
-    from app.services.upload_parser import parse_datetime_optional
+    weight_kg = None
+    try:
+        wt = form.get("weight_tonnes")
+        if wt is not None and str(wt).strip():
+            weight_kg = float(str(wt).strip()) * 1000.0
+    except (TypeError, ValueError):
+        pass
 
-    now = datetime.now(timezone.utc)
-    ps = parse_datetime_optional(form.get("pickup_window_start"))
-    pe = parse_datetime_optional(form.get("pickup_window_end"))
-    ds = parse_datetime_optional(form.get("delivery_window_start"))
-    de = parse_datetime_optional(form.get("delivery_window_end"))
-    if ps is None and pe is None:
-        ps = pe = now
-    else:
-        if ps is None:
-            ps = pe
-        if pe is None:
-            pe = ps
-    if ds is None and de is None:
-        ds = de = now
-    else:
-        if ds is None:
-            ds = de
-        if de is None:
-            de = ds
+    pickup_tw = (form.get("pickup_time_window") or "flexible").strip().lower()
+    delivery_tw = (form.get("delivery_time_window") or "flexible").strip().lower()
+    if pickup_tw not in VALID_SLOTS:
+        pickup_tw = "flexible"
+    if delivery_tw not in VALID_SLOTS:
+        delivery_tw = "flexible"
+    pd_raw = (form.get("pickup_date") or "").strip()
+    dd_raw = (form.get("delivery_date") or "").strip()
+    if not pd_raw or not dd_raw:
+        return RedirectResponse(url="/?section=loads&error=Please+set+collection+and+delivery+dates", status_code=303)
+    try:
+        pickup_d = date.fromisoformat(pd_raw)
+        delivery_d = date.fromisoformat(dd_raw)
+    except ValueError:
+        return RedirectResponse(url="/?section=loads&error=Invalid+collection+or+delivery+date", status_code=303)
+
+    ps, pe, ds, de = schedule_to_utc_windows(pickup_d, pickup_tw, delivery_d, delivery_tw)
 
     if not shipper_name or not pickup_postcode or not delivery_postcode:
         return RedirectResponse(url="/?section=loads&error=Missing+required+fields", status_code=303)
@@ -1117,6 +1122,11 @@ async def create_load(
         pickup_window_end=pe,
         delivery_window_start=ds,
         delivery_window_end=de,
+        pickup_date=pickup_d,
+        pickup_time_window=pickup_tw,
+        delivery_date=delivery_d,
+        delivery_time_window=delivery_tw,
+        weight_kg=weight_kg,
         pallets=pallets_val,
         volume_m3=float(cubic_metres) if cubic_metres else None,
         budget_gbp=float(budget_gbp) if budget_gbp else None,
@@ -1595,6 +1605,7 @@ def find_backhaul_page(
             "onboarding_checklist": onboarding_checklist,
             "emergency_evidence_jobs": emergency_evidence_jobs,
             "cancellation_ui_settings": cancellation_ui_settings,
+            "load_form_date_min": date.today().isoformat(),
             **rating_ctx,
         },
     )
@@ -1714,6 +1725,21 @@ async def create_vehicle_form(
 
     base_postcode = (form.get("base_postcode") or "").strip().upper() or None
 
+    capacity_weight_kg = None
+    try:
+        cwt = form.get("capacity_weight_tonnes")
+        if cwt is not None and str(cwt).strip():
+            capacity_weight_kg = float(str(cwt).strip()) * 1000.0
+    except (TypeError, ValueError):
+        pass
+    capacity_volume_m3 = None
+    try:
+        cv = form.get("capacity_volume_m3")
+        if cv is not None and str(cv).strip():
+            capacity_volume_m3 = float(str(cv).strip())
+    except (TypeError, ValueError):
+        pass
+
     def _optional_str(name: str, maxlen: int) -> Optional[str]:
         s = (form.get(name) or "").strip()
         return s[:maxlen] if s else None
@@ -1732,6 +1758,8 @@ async def create_vehicle_form(
             registration=registration,
             vehicle_type=vehicle_type,
             trailer_type=trailer_type,
+            capacity_weight_kg=capacity_weight_kg,
+            capacity_volume_m3=capacity_volume_m3,
             base_postcode=base_postcode,
             make=_optional_str("vehicle_make", 128),
             model=_optional_str("vehicle_model", 128),

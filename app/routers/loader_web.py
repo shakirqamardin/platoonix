@@ -190,11 +190,18 @@ async def loader_add_load(
     weight_kg = None
     volume_m3 = None
     try:
-        w = form.get("weight_kg")
-        if w is not None and str(w).strip():
-            weight_kg = float(w)
+        wt = form.get("weight_tonnes")
+        if wt is not None and str(wt).strip():
+            weight_kg = float(str(wt).strip()) * 1000.0
     except (TypeError, ValueError):
         pass
+    if weight_kg is None:
+        try:
+            w = form.get("weight_kg")
+            if w is not None and str(w).strip():
+                weight_kg = float(w)
+        except (TypeError, ValueError):
+            pass
     try:
         v = form.get("volume_m3")
         if v is not None and str(v).strip():
@@ -228,25 +235,51 @@ async def loader_add_load(
     except (TypeError, ValueError):
         pass
 
+    from datetime import date as date_cls
+
+    from app.services.load_schedule import VALID_SLOTS, schedule_to_utc_windows
+
     now = datetime.now(timezone.utc)
-    ps = parse_datetime_optional(form.get("pickup_window_start"))
-    pe = parse_datetime_optional(form.get("pickup_window_end"))
-    ds = parse_datetime_optional(form.get("delivery_window_start"))
-    de = parse_datetime_optional(form.get("delivery_window_end"))
-    if ps is None and pe is None:
-        ps = pe = now
-    else:
-        if ps is None:
-            ps = pe
-        if pe is None:
-            pe = ps
-    if ds is None and de is None:
-        ds = de = now
-    else:
-        if ds is None:
-            ds = de
-        if de is None:
-            de = ds
+    pd_raw = (form.get("pickup_date") or "").strip()
+    dd_raw = (form.get("delivery_date") or "").strip()
+    pickup_tw = (form.get("pickup_time_window") or "flexible").strip().lower()
+    delivery_tw = (form.get("delivery_time_window") or "flexible").strip().lower()
+    if pickup_tw not in VALID_SLOTS:
+        pickup_tw = "flexible"
+    if delivery_tw not in VALID_SLOTS:
+        delivery_tw = "flexible"
+    ps = pe = ds = de = None  # type: ignore[assignment]
+    pickup_d_val = None
+    delivery_d_val = None
+    if pd_raw and dd_raw:
+        try:
+            pickup_d_val = date_cls.fromisoformat(pd_raw)
+            delivery_d_val = date_cls.fromisoformat(dd_raw)
+            ps, pe, ds, de = schedule_to_utc_windows(
+                pickup_d_val, pickup_tw, delivery_d_val, delivery_tw
+            )
+        except ValueError:
+            pickup_d_val = None
+            delivery_d_val = None
+    if ps is None:
+        ps = parse_datetime_optional(form.get("pickup_window_start"))
+        pe = parse_datetime_optional(form.get("pickup_window_end"))
+        ds = parse_datetime_optional(form.get("delivery_window_start"))
+        de = parse_datetime_optional(form.get("delivery_window_end"))
+        if ps is None and pe is None:
+            ps = pe = now
+        else:
+            if ps is None:
+                ps = pe
+            if pe is None:
+                pe = ps
+        if ds is None and de is None:
+            ds = de = now
+        else:
+            if ds is None:
+                ds = de
+            if de is None:
+                de = ds
 
     load = models.Load(
         loader_id=loader.id,
@@ -259,6 +292,10 @@ async def loader_add_load(
         pickup_window_end=pe,
         delivery_window_start=ds,
         delivery_window_end=de,
+        pickup_date=pickup_d_val,
+        pickup_time_window=pickup_tw if pickup_d_val else None,
+        delivery_date=delivery_d_val,
+        delivery_time_window=delivery_tw if delivery_d_val else None,
         weight_kg=weight_kg,
         volume_m3=volume_m3,
         pallets=pallets,
@@ -319,6 +356,29 @@ def loader_edit_load_page(
     vt = (req.get("vehicle_type") or "") if isinstance(req, dict) else ""
     tt = (req.get("trailer_type") or "") if isinstance(req, dict) else ""
     pallet_vol = get_settings().pallet_volume_m3
+    from datetime import date as date_cls
+
+    from app.services.load_schedule import infer_schedule_from_datetimes
+
+    ipd, iptw, idd, idtw = infer_schedule_from_datetimes(
+        load.pickup_window_start,
+        load.delivery_window_start or load.pickup_window_start,
+    )
+    pickup_date_str = ""
+    delivery_date_str = ""
+    if load.pickup_date:
+        pickup_date_str = load.pickup_date.isoformat()
+    elif ipd:
+        pickup_date_str = ipd.isoformat()
+    if load.delivery_date:
+        delivery_date_str = load.delivery_date.isoformat()
+    elif idd:
+        delivery_date_str = idd.isoformat()
+    pickup_tw_val = load.pickup_time_window or iptw or "flexible"
+    delivery_tw_val = load.delivery_time_window or idtw or "flexible"
+    wton = ""
+    if load.weight_kg is not None:
+        wton = ("%s" % round(load.weight_kg / 1000.0, 3)).rstrip("0").rstrip(".")
     return templates.TemplateResponse(
         "loader_load_edit.html",
         {
@@ -326,10 +386,12 @@ def loader_edit_load_page(
             "load": load,
             "vehicle_type": vt,
             "trailer_type": tt,
-            "pickup_window_start": _fmt_dt_for_input(load.pickup_window_start),
-            "pickup_window_end": _fmt_dt_for_input(load.pickup_window_end),
-            "delivery_window_start": _fmt_dt_for_input(load.delivery_window_start),
-            "delivery_window_end": _fmt_dt_for_input(load.delivery_window_end),
+            "pickup_date": pickup_date_str,
+            "delivery_date": delivery_date_str,
+            "pickup_time_window": pickup_tw_val,
+            "delivery_time_window": delivery_tw_val,
+            "weight_tonnes": wton,
+            "load_form_date_min": date_cls.today().isoformat(),
             "pallet_volume_m3": pallet_vol,
             "loader_fee_minimum_gbp": get_settings().loader_flat_fee_gbp,
             "loader_fee_percent_of_load": get_settings().loader_fee_percent_of_load,
@@ -355,8 +417,10 @@ async def loader_update_load(
     if _primary_job_for_load(db, load_id):
         return RedirectResponse(url="/?section=loads&load_error=cannot_edit_matched", status_code=303)
 
+    from datetime import date as date_cls
     from datetime import datetime, timezone
 
+    from app.services.load_schedule import VALID_SLOTS, schedule_to_utc_windows
     from app.services.upload_parser import parse_datetime_optional
 
     form = await request.form()
@@ -396,24 +460,46 @@ async def loader_update_load(
     notes = (form.get("load_notes") or "").strip() or None
 
     now = datetime.now(timezone.utc)
-    ps = parse_datetime_optional(form.get("pickup_window_start"))
-    pe = parse_datetime_optional(form.get("pickup_window_end"))
-    ds = parse_datetime_optional(form.get("delivery_window_start"))
-    de = parse_datetime_optional(form.get("delivery_window_end"))
-    if ps is None and pe is None:
-        ps = pe = now
-    else:
-        if ps is None:
-            ps = pe
-        if pe is None:
-            pe = ps
-    if ds is None and de is None:
-        ds = de = now
-    else:
-        if ds is None:
-            ds = de
-        if de is None:
-            de = ds
+    pd_raw = (form.get("pickup_date") or "").strip()
+    dd_raw = (form.get("delivery_date") or "").strip()
+    pickup_tw = (form.get("pickup_time_window") or "flexible").strip().lower()
+    delivery_tw = (form.get("delivery_time_window") or "flexible").strip().lower()
+    if pickup_tw not in VALID_SLOTS:
+        pickup_tw = "flexible"
+    if delivery_tw not in VALID_SLOTS:
+        delivery_tw = "flexible"
+    ps = pe = ds = de = None  # type: ignore[assignment]
+    pickup_d_val = None
+    delivery_d_val = None
+    if pd_raw and dd_raw:
+        try:
+            pickup_d_val = date_cls.fromisoformat(pd_raw)
+            delivery_d_val = date_cls.fromisoformat(dd_raw)
+            ps, pe, ds, de = schedule_to_utc_windows(
+                pickup_d_val, pickup_tw, delivery_d_val, delivery_tw
+            )
+        except ValueError:
+            pickup_d_val = None
+            delivery_d_val = None
+    if ps is None:
+        ps = parse_datetime_optional(form.get("pickup_window_start"))
+        pe = parse_datetime_optional(form.get("pickup_window_end"))
+        ds = parse_datetime_optional(form.get("delivery_window_start"))
+        de = parse_datetime_optional(form.get("delivery_window_end"))
+        if ps is None and pe is None:
+            ps = pe = now
+        else:
+            if ps is None:
+                ps = pe
+            if pe is None:
+                pe = ps
+        if ds is None and de is None:
+            ds = de = now
+        else:
+            if ds is None:
+                ds = de
+            if de is None:
+                de = ds
 
     if not shipper_name or not pickup_postcode or not delivery_postcode:
         return RedirectResponse(url=f"/loader/loads/{load_id}/edit?error=missing", status_code=303)
@@ -434,6 +520,19 @@ async def loader_update_load(
     load.pickup_window_end = pe
     load.delivery_window_start = ds
     load.delivery_window_end = de
+    load.pickup_date = pickup_d_val
+    load.pickup_time_window = pickup_tw if pickup_d_val else None
+    load.delivery_date = delivery_d_val
+    load.delivery_time_window = delivery_tw if delivery_d_val else None
+    _wt = form.get("weight_tonnes")
+    if _wt is not None:
+        if str(_wt).strip():
+            try:
+                load.weight_kg = float(str(_wt).strip()) * 1000.0
+            except ValueError:
+                pass
+        else:
+            load.weight_kg = None
     load.pallets = pallets_val
     load.volume_m3 = volume_m3
     load.budget_gbp = budget_val

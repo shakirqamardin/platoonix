@@ -487,6 +487,19 @@ def check_db_and_create_tables():
                 conn.rollback()
                 if "no such column" not in str(e).lower():
                     print(f"Migration vehicles insurance grandfather verify: {e!r}", file=sys.stderr)
+            for col_sql in (
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS pickup_date DATE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS pickup_time_window VARCHAR(20)",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS delivery_date DATE",
+                "ALTER TABLE loads ADD COLUMN IF NOT EXISTS delivery_time_window VARCHAR(20)",
+            ):
+                try:
+                    conn.execute(text(col_sql))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        print(f"Migration loads simple schedule columns: {e!r}", file=sys.stderr)
         # Create or sync admin from ADMIN_EMAIL / ADMIN_PASSWORD
         db = SessionLocal()
         try:
@@ -534,6 +547,35 @@ def check_db_and_create_tables():
             print(f"Referral code backfill: {e!r}", file=sys.stderr)
         finally:
             db_ref.close()
+
+        db_sched = SessionLocal()
+        try:
+            from app import models as _models
+            from app.services.load_schedule import infer_schedule_from_datetimes
+
+            rows = (
+                db_sched.query(_models.Load)
+                .filter(_models.Load.pickup_date.is_(None))
+                .filter(_models.Load.pickup_window_start.isnot(None))
+                .all()
+            )
+            for load in rows:
+                pd, ptw, dd, dtw = infer_schedule_from_datetimes(
+                    load.pickup_window_start,
+                    load.delivery_window_start,
+                )
+                load.pickup_date = pd
+                load.pickup_time_window = ptw
+                load.delivery_date = dd
+                load.delivery_time_window = dtw
+            if rows:
+                db_sched.commit()
+                print(f"Backfilled simple schedule for {len(rows)} load(s)", file=sys.stderr)
+        except Exception as e:
+            db_sched.rollback()
+            print(f"Load schedule backfill: {e!r}", file=sys.stderr)
+        finally:
+            db_sched.close()
     except Exception as e:
         print(f"Startup error: {e!r}", file=sys.stderr)
         raise

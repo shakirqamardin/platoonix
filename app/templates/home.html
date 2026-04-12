@@ -917,6 +917,13 @@
                             <p class="text-xs text-slate-400 mb-3 rounded-lg border border-slate-700/50 bg-slate-900/30 px-3 py-2">
                                 <span class="text-slate-500">Selected vehicle</span>
                                 <span class="font-mono text-teal-300 ml-1">{{ vv.registration }}</span>
+                                {% if vv.capacity_weight_kg or vv.capacity_volume_m3 %}
+                                <span class="text-slate-600 mx-1">·</span>
+                                <span class="text-slate-500">Max</span>
+                                {% if vv.capacity_weight_kg %}<span class="text-slate-300 ml-1">{{ (vv.capacity_weight_kg / 1000)|round(1) }}T</span>{% endif %}
+                                {% if vv.capacity_weight_kg and vv.capacity_volume_m3 %}<span class="text-slate-600">/</span>{% endif %}
+                                {% if vv.capacity_volume_m3 %}<span class="text-slate-300">{{ "%.1f"|format(vv.capacity_volume_m3) }} m³</span>{% endif %}
+                                {% endif %}
                                 <span class="text-slate-600 mx-1">·</span>
                                 {% if vv.has_tail_lift|default(false) %}<span class="text-teal-400">✓</span> Tail lift{% else %}<span class="text-slate-600">○</span> Tail lift{% endif %}
                                 <span class="text-slate-600 mx-1">|</span>
@@ -951,6 +958,11 @@
                             </div>
                             <div>
                                 <div class="font-semibold text-slate-100">{{ m.load.shipper_name }}</div>
+                                <div class="text-xs text-slate-500 mt-1">
+                                    {% if m.load.pallets %}Pallets: {{ m.load.pallets }}{% endif %}
+                                    {% if m.load.weight_kg %}{% if m.load.pallets %} · {% endif %}Weight: {{ (m.load.weight_kg / 1000)|round(1) }}T{% endif %}
+                                    {% if m.load.volume_m3 %}{% if m.load.pallets or m.load.weight_kg %} · {% endif %}Vol: {{ m.load.volume_m3 }} m³{% endif %}
+                                </div>
                             </div>
                             {{ haulier_earnings_breakdown(m.load, m.distance_miles, platform_fee_percent, 'card') }}
                             <div class="flex flex-wrap items-center gap-2 pt-1">
@@ -994,8 +1006,10 @@
                                         <div class="font-semibold text-slate-100">{{ m.load.shipper_name }}</div>
                                         <div class="text-teal-300 font-mono">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</div>
                                         <div class="text-xs text-slate-500 mt-1">
-                                            Pallets: {% if m.load.pallets %}{{ m.load.pallets }}{% else %}-{% endif %} ·
-                                            Volume: {% if m.load.volume_m3 %}{{ m.load.volume_m3 }} m³{% else %}-{% endif %}
+                                            {% if m.load.pallets %}Pallets: {{ m.load.pallets }}{% endif %}
+                                            {% if m.load.weight_kg %}{% if m.load.pallets %} · {% endif %}Weight: {{ (m.load.weight_kg / 1000)|round(1) }}T{% endif %}
+                                            {% if m.load.volume_m3 %}{% if m.load.pallets or m.load.weight_kg %} · {% endif %}Vol: {{ m.load.volume_m3 }} m³{% endif %}
+                                            {% if not m.load.pallets and not m.load.weight_kg and not m.load.volume_m3 %}—{% endif %}
                                         </div>
                                         {% if m.load.requires_tail_lift|default(false) or m.load.requires_forklift|default(false) or m.load.requires_temp_control|default(false) or m.load.requires_adr|default(false) %}
                                         <div class="text-xs text-amber-200/90 mt-1 font-medium">Needs: {% if m.load.requires_tail_lift|default(false) %}Tail lift{% endif %}{% if m.load.requires_forklift|default(false) %}{% if m.load.requires_tail_lift|default(false) %}, {% endif %}Forklift{% endif %}{% if m.load.requires_temp_control|default(false) %}{% if m.load.requires_tail_lift|default(false) or m.load.requires_forklift|default(false) %}, {% endif %}Temp control{% endif %}{% if m.load.requires_adr|default(false) %}{% if m.load.requires_tail_lift|default(false) or m.load.requires_forklift|default(false) or m.load.requires_temp_control|default(false) %}, {% endif %}ADR{% endif %}</div>
@@ -1146,6 +1160,16 @@
                                     <option value="flatbed">Flatbed</option>
                                     <option value="other">Other</option>
                                 </select>
+                                <div class="w-full sm:w-auto flex flex-wrap gap-3 items-end">
+                                    <div>
+                                        <label class="block text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">Max weight (t) <span class="text-slate-600 normal-case">optional</span></label>
+                                        <input name="capacity_weight_tonnes" type="number" min="0" step="0.1" placeholder="e.g. 18" class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm w-28" title="Maximum carrying weight — matching excludes loads above this when set" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">Max vol (m³) <span class="text-slate-600 normal-case">optional</span></label>
+                                        <input name="capacity_volume_m3" type="number" min="0" step="0.1" placeholder="e.g. 26" class="rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm w-28" />
+                                    </div>
+                                </div>
                                 <button type="submit" class="btn-primary px-4 py-2 text-sm font-semibold text-white rounded-lg">Add Vehicle</button>
                             </div>
                             <p id="dvla-lookup-msg" class="mt-2 text-xs min-h-[1.25rem] text-slate-400" role="status" aria-live="polite"></p>
@@ -1659,45 +1683,35 @@
                                 <input id="load-delivery-postcode" name="delivery_postcode" required placeholder="e.g. B2 4QA" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm uppercase" />
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window start</label>
-                                <div class="relative">
-                                    <input id="load-pickup-window-start" name="pickup_window_start" type="datetime-local" class="load-datetime-input w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 py-2.5 pl-3 pr-12 text-base sm:text-sm text-slate-200 placeholder:text-slate-500" />
-                                    <button type="button" class="load-datetime-open absolute right-0 top-0 flex h-full min-h-[44px] w-11 items-center justify-center rounded-r-lg border-l border-slate-500 bg-slate-700 text-teal-300 shadow-sm hover:bg-slate-600 hover:text-teal-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50" title="Open calendar" aria-label="Open calendar for pickup window start">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    </button>
-                                </div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Collection date <span class="text-red-400">*</span></label>
+                                <input id="load-pickup-date" name="pickup_date" type="date" required min="{{ load_form_date_min|default('') }}" value="{{ load_form_date_min|default('') }}" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm text-slate-200" />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Pickup window end</label>
-                                <div class="relative">
-                                    <input id="load-pickup-window-end" name="pickup_window_end" type="datetime-local" class="load-datetime-input w-full min-h-[40px] rounded-lg border border-slate-600 bg-slate-900/80 py-2.5 pl-3 pr-12 text-sm text-slate-200 placeholder:text-slate-500" />
-                                    <button type="button" class="load-datetime-open absolute right-0 top-0 flex h-full min-h-[40px] w-11 items-center justify-center rounded-r-lg border-l border-slate-500 bg-slate-700 text-teal-300 shadow-sm hover:bg-slate-600 hover:text-teal-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50" title="Open calendar" aria-label="Open calendar for pickup window end">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    </button>
-                                </div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Collection time window</label>
+                                <select id="load-pickup-time-window" name="pickup_time_window" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm">
+                                    <option value="morning">Morning (8am–12pm)</option>
+                                    <option value="afternoon">Afternoon (12pm–5pm)</option>
+                                    <option value="evening">Evening (5pm–8pm)</option>
+                                    <option value="flexible" selected>Flexible / anytime</option>
+                                </select>
+                                <p class="text-xs text-slate-500 mt-1">Standard windows (UK). Exact times are agreed after matching.</p>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Delivery window start</label>
-                                <div class="relative">
-                                    <input id="load-delivery-window-start" name="delivery_window_start" type="datetime-local" class="load-datetime-input w-full min-h-[40px] rounded-lg border border-slate-600 bg-slate-900/80 py-2.5 pl-3 pr-12 text-sm text-slate-200 placeholder:text-slate-500" />
-                                    <button type="button" class="load-datetime-open absolute right-0 top-0 flex h-full min-h-[40px] w-11 items-center justify-center rounded-r-lg border-l border-slate-500 bg-slate-700 text-teal-300 shadow-sm hover:bg-slate-600 hover:text-teal-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50" title="Open calendar" aria-label="Open calendar for delivery window start">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    </button>
-                                </div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Delivery date <span class="text-red-400">*</span></label>
+                                <input id="load-delivery-date" name="delivery_date" type="date" required min="{{ load_form_date_min|default('') }}" value="{{ load_form_date_min|default('') }}" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-base sm:text-sm text-slate-200" />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Delivery window end</label>
-                                <div class="relative">
-                                    <input id="load-delivery-window-end" name="delivery_window_end" type="datetime-local" class="load-datetime-input w-full min-h-[40px] rounded-lg border border-slate-600 bg-slate-900/80 py-2.5 pl-3 pr-12 text-sm text-slate-200 placeholder:text-slate-500" />
-                                    <button type="button" class="load-datetime-open absolute right-0 top-0 flex h-full min-h-[40px] w-11 items-center justify-center rounded-r-lg border-l border-slate-500 bg-slate-700 text-teal-300 shadow-sm hover:bg-slate-600 hover:text-teal-200 focus:outline-none focus:ring-2 focus:ring-teal-500/50" title="Open calendar" aria-label="Open calendar for delivery window end">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    </button>
-                                </div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Delivery time window</label>
+                                <select id="load-delivery-time-window" name="delivery_time_window" class="w-full min-h-[44px] rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm">
+                                    <option value="morning">Morning (8am–12pm)</option>
+                                    <option value="afternoon">Afternoon (12pm–5pm)</option>
+                                    <option value="evening">Evening (5pm–8pm)</option>
+                                    <option value="flexible" selected>Flexible / anytime</option>
+                                </select>
                             </div>
                         </div>
-                        <p class="text-xs text-slate-500 mb-4">Optional — use these for <strong class="text-slate-400 font-medium">timed shipments</strong> (collection and delivery slots). Leave all blank for flexible loads; we then default windows to “now”. If you set only one end of a pair, the other is copied.</p>
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Vehicle Type</label>
@@ -1731,6 +1745,13 @@
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Cubic Metres</label>
                                 <input name="cubic_metres" type="number" min="0" step="0.1" inputmode="decimal" placeholder="e.g. 25.5" autocomplete="off" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" />
                                 <p class="text-xs text-slate-500 mt-1">1 pallet = {{ "%.2f"|format(pallet_volume_m3|default(1.2)) }} m³ — editing one field updates the other.</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Weight (tonnes) <span class="text-slate-500 font-normal">— optional</span></label>
+                                <input name="weight_tonnes" type="number" min="0" step="0.1" inputmode="decimal" placeholder="e.g. 12" autocomplete="off" class="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2.5 text-sm" title="Total load weight — vehicles without enough capacity are excluded when capacity is set" />
+                                <p class="text-xs text-slate-500 mt-1">Leave blank if unknown. Typical part load 1–5T; full load 10–25T.</p>
                             </div>
                         </div>
                         <div id="load-pricing-guidance" class="text-xs text-slate-400 mb-3 rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-3 space-y-1.5" style="display: none;" aria-live="polite">
@@ -1914,7 +1935,11 @@
                             }
                             var vt = (form.querySelector('[name="vehicle_type_required"]') || {}).value || "";
                             var tt = (form.querySelector('[name="trailer_type_required"]') || {}).value || "";
-                            var pws = (form.querySelector('[name="pickup_window_start"]') || {}).value || "";
+                            var pd = (form.querySelector('[name="pickup_date"]') || {}).value || "";
+                            var ptw = (form.querySelector('[name="pickup_time_window"]') || {}).value || "flexible";
+                            var slotHour = { morning: "08", afternoon: "12", evening: "17", flexible: "08" };
+                            var hh = slotHour[ptw] || "08";
+                            var pws = pd ? pd + "T" + hh + ":00" : "";
                             var params = new URLSearchParams();
                             params.set("pickup_postcode", pu);
                             params.set("delivery_postcode", del);
@@ -1982,7 +2007,7 @@
                             updatePlatformFeeFromBudget();
                             scheduleFetch();
                         });
-                        ["pickup_postcode", "delivery_postcode", "vehicle_type_required", "trailer_type_required", "pickup_window_start"].forEach(function (name) {
+                        ["pickup_postcode", "delivery_postcode", "vehicle_type_required", "trailer_type_required", "pickup_date", "pickup_time_window"].forEach(function (name) {
                             var el = form.querySelector('[name="' + name + '"]');
                             if (!el) return;
                             el.addEventListener("input", scheduleFetch);
@@ -2204,6 +2229,7 @@
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Route</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Schedule</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Pallets</th>
+                                <th class="py-3 px-4 text-left font-semibold text-slate-400">Weight (t)</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">m³</th>
                                 <th class="py-3 px-4 text-left font-semibold text-slate-400">Status</th>
                                 <th class="py-3 px-4 text-right font-semibold text-slate-400">Actions</th>
@@ -2229,12 +2255,20 @@
                                     <span class="font-mono text-slate-300">{{ l.delivery_postcode }}</span>
                                 </td>
                                 <td class="py-3 px-4 text-slate-400 text-xs whitespace-nowrap">
+                                    {% if l.pickup_date %}
+                                    <div>P {{ l.pickup_date.strftime('%d %b %Y') }}{% if l.pickup_time_window and l.pickup_time_window != 'flexible' %} · {% if l.pickup_time_window == 'morning' %}Morning{% elif l.pickup_time_window == 'afternoon' %}Afternoon{% elif l.pickup_time_window == 'evening' %}Evening{% else %}Flexible{% endif %}{% endif %}</div>
+                                    {% if l.delivery_date %}
+                                    <div class="text-slate-500">D {{ l.delivery_date.strftime('%d %b %Y') }}{% if l.delivery_time_window and l.delivery_time_window != 'flexible' %} · {% if l.delivery_time_window == 'morning' %}Morning{% elif l.delivery_time_window == 'afternoon' %}Afternoon{% elif l.delivery_time_window == 'evening' %}Evening{% else %}Flexible{% endif %}{% endif %}</div>
+                                    {% endif %}
+                                    {% else %}
                                     {% set dws = l.delivery_window_start or l.pickup_window_start %}
                                     {% set dwe = l.delivery_window_end or l.pickup_window_end %}
                                     <div>P {{ l.pickup_window_start.strftime('%d %b %H:%M') }}–{{ l.pickup_window_end.strftime('%H:%M') }}</div>
                                     <div class="text-slate-500">D {{ dws.strftime('%d %b %H:%M') if dws else '—' }}–{{ dwe.strftime('%H:%M') if dwe else '—' }}</div>
+                                    {% endif %}
                                 </td>
                                 <td class="py-3 px-4 text-slate-400">{{ l.pallets or "—" }}</td>
+                                <td class="py-3 px-4 text-slate-400">{% if l.weight_kg is not none %}{{ "%.1f"|format(l.weight_kg / 1000) }}{% else %}—{% endif %}</td>
                                 <td class="py-3 px-4 text-slate-400">{% if l.volume_m3 is not none %}{{ "%.1f"|format(l.volume_m3) }}{% else %}—{% endif %}</td>
                                 <td class="py-3 px-4">
                                     <span class="badge badge-success">{{ l.status }}</span>

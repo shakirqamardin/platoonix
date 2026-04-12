@@ -298,27 +298,25 @@
           <p>When a haulier searches for backhaul loads, our matching logic sorts results using multiple factors so the best options appear first:</p>
 
           <h4 class="text-sm font-semibold text-white mt-3 mb-2">Matching priority order</h4>
-          <ol class="list-decimal pl-6 space-y-3 mt-2">
-            <li>
-              <strong class="text-slate-200">Perfect match (highest priority)</strong>
-              <ul class="list-disc pl-6 space-y-1 mt-2">
-                <li>Vehicle type aligns with load requirements (e.g. rigid, artic, van) where specified</li>
-                <li>Vehicle capacity covers load weight and volume where specified</li>
-                <li>Trailer type aligns with load requirements (e.g. curtain, box, flatbed) where specified</li>
-                <li>Any required equipment flags on the load (e.g. tail lift, temperature, ADR) must be satisfied — loads that fail these checks are excluded</li>
-              </ul>
-              <p class="text-slate-500 text-sm mt-2">Perfect matches are listed before any “near” matches, regardless of distance, so specialised loads surface to suitable vehicles.</p>
-            </li>
-            <li>
-              <strong class="text-slate-200">Distance (secondary priority)</strong>
-              <ul class="list-disc pl-6 space-y-1 mt-2">
-                <li>Road distance from the search origin to the load’s pickup point (not straight-line)</li>
-                <li>Default search radius is configurable (commonly 25 miles; searches may allow a larger radius where supported)</li>
-                <li>Within the same match tier, closer pickups appear first</li>
-              </ul>
-              <p class="text-slate-500 text-sm mt-2">Distance-based ordering reduces empty miles and fuel. Loads a few miles off your position rank above those farther away when match quality is equal.</p>
-            </li>
-          </ol>
+          <p class="text-slate-300 text-sm mt-2"><strong class="text-slate-200">Loads are excluded from results if:</strong></p>
+          <ul class="list-disc pl-6 space-y-1 mt-2 text-slate-300 text-sm">
+            <li>The load is outside the search radius (road miles from your search origin, or along the empty→base corridor when you set a destination).</li>
+            <li>Vehicle type does not match the load requirement (e.g. load needs artic, your vehicle is rigid) where a type is specified.</li>
+            <li>Required equipment is missing (e.g. load needs tail lift or ADR, your vehicle does not have it).</li>
+            <li>Load weight exceeds your vehicle’s maximum weight capacity, or load volume exceeds your vehicle’s volume capacity — <strong class="text-slate-200">only when those capacities are set on the vehicle</strong>.</li>
+          </ul>
+          <p class="text-slate-300 text-sm mt-4"><strong class="text-slate-200">Perfect matches (shown first):</strong></p>
+          <ul class="list-disc pl-6 space-y-1 mt-2 text-slate-300 text-sm">
+            <li>Vehicle type matches the load requirement where specified.</li>
+            <li>All required equipment flags are satisfied.</li>
+            <li>Weight and volume are within your vehicle limits when you have entered capacities.</li>
+            <li>Trailer type matches the load preference where specified.</li>
+          </ul>
+          <p class="text-slate-300 text-sm mt-4"><strong class="text-slate-200">Near matches (shown second):</strong></p>
+          <ul class="list-disc pl-6 space-y-1 mt-2 text-slate-300 text-sm">
+            <li>All hard requirements above are met (including distance), but the trailer type on your vehicle does not match the load’s stated trailer preference — you may still be able to run the job; the platform flags this so you can decide.</li>
+          </ul>
+          <p class="text-slate-500 text-sm mt-3">Results are sorted: perfect matches first, then by distance (closest pickup first within each tier).</p>
 
           <h4 class="text-sm font-semibold text-white mt-4 mb-2">What we don’t use (and why)</h4>
           <ul class="list-disc pl-6 space-y-2 mt-2">
