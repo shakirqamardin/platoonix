@@ -16,9 +16,17 @@ def apply_driver_status_milestone(db: Session, job: models.BackhaulJob, status_v
     """
     now = datetime.now(timezone.utc)
     s = (status_val or "").strip().lower()
+    if job.completed_at:
+        return "Job already completed. Status updates are locked."
     if s == "reached_pickup":
+        if job.reached_pickup_at:
+            return None
         job.reached_pickup_at = now
     elif s == "collected":
+        if not job.reached_pickup_at:
+            return "Mark 'Reached collection' first."
+        if job.collected_at:
+            return None
         payment = (
             db.query(models.Payment)
             .filter(models.Payment.backhaul_job_id == job.id)
@@ -35,8 +43,16 @@ def apply_driver_status_milestone(db: Session, job: models.BackhaulJob, status_v
             db.add(payment)
         job.collected_at = now
     elif s == "departed_pickup":
+        if not job.collected_at:
+            return "Mark 'Collected' first."
+        if job.departed_pickup_at:
+            return None
         job.departed_pickup_at = now
     elif s == "reached_delivery":
+        if not job.departed_pickup_at:
+            return "Mark 'Departed' first."
+        if job.reached_delivery_at:
+            return None
         job.reached_delivery_at = now
     else:
         return "status must be one of: reached_pickup, collected, departed_pickup, reached_delivery"

@@ -112,7 +112,7 @@
             <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if group_pickup_all_collected %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">2</span>
             <span class="text-slate-400 flex-1">Collected (pay captured, each job)</span>
             {% if not group_pickup_all_collected %}
-            <button type="button" data-batch-status="collected" class="driver-batch-pickup-btn rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">Collected (all)</button>
+            <button type="button" data-batch-status="collected" {% if not group_pickup_all_reached %}disabled aria-disabled="true"{% endif %} class="driver-batch-pickup-btn rounded-lg px-3 py-1.5 text-sm text-white min-h-[2.5rem] {% if group_pickup_all_reached %}bg-amber-600 hover:bg-amber-500{% else %}bg-slate-700 text-slate-400 cursor-not-allowed{% endif %}">Collected (all)</button>
             {% else %}
             <span class="text-emerald-400 text-sm">Done</span>
             {% endif %}
@@ -121,7 +121,7 @@
             <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if group_pickup_all_departed %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">3</span>
             <span class="text-slate-400 flex-1">Departed collection</span>
             {% if not group_pickup_all_departed %}
-            <button type="button" data-batch-status="departed_pickup" class="driver-batch-pickup-btn rounded-lg bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">Departed (all)</button>
+            <button type="button" data-batch-status="departed_pickup" {% if not group_pickup_all_collected %}disabled aria-disabled="true"{% endif %} class="driver-batch-pickup-btn rounded-lg px-3 py-1.5 text-sm text-white min-h-[2.5rem] {% if group_pickup_all_collected %}bg-slate-600 hover:bg-slate-500{% else %}bg-slate-700 text-slate-400 cursor-not-allowed{% endif %}">Departed (all)</button>
             {% else %}
             <span class="text-emerald-400 text-sm">Done</span>
             {% endif %}
@@ -142,7 +142,7 @@
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-slate-500 text-xs w-28">At delivery</span>
                 {% if not gj.reached_delivery_at %}
-                <button type="button" data-job-id="{{ gj.id }}" data-status="reached_delivery" class="driver-per-job-btn rounded-lg bg-slate-600 hover:bg-slate-500 px-2 py-1 text-xs text-white">I’m here</button>
+                <button type="button" data-job-id="{{ gj.id }}" data-status="reached_delivery" {% if not gj.departed_pickup_at %}disabled aria-disabled="true"{% endif %} class="driver-per-job-btn rounded-lg px-2 py-1 text-xs text-white {% if gj.departed_pickup_at %}bg-slate-600 hover:bg-slate-500{% else %}bg-slate-700 text-slate-400 cursor-not-allowed{% endif %}">I’m here</button>
                 {% else %}
                 <span class="text-emerald-400 text-xs">{{ gj.reached_delivery_at.strftime('%H:%M') }}</span>
                 {% endif %}
@@ -181,7 +181,7 @@
             <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if j.collected_at %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">2</span>
             <span class="text-slate-400 flex-1">Collected (pay captured)</span>
             {% if not j.collected_at %}
-            <button type="button" data-status="collected" class="driver-status-btn rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">Collected</button>
+            <button type="button" data-status="collected" {% if not j.reached_pickup_at %}disabled aria-disabled="true"{% endif %} class="driver-status-btn rounded-lg px-3 py-1.5 text-sm text-white min-h-[2.5rem] {% if j.reached_pickup_at %}bg-amber-600 hover:bg-amber-500{% else %}bg-slate-700 text-slate-400 cursor-not-allowed{% endif %}">Collected</button>
             {% else %}
             <span class="text-emerald-400 text-sm">{{ j.collected_at.strftime('%H:%M') if j.collected_at else '' }}</span>
             {% endif %}
@@ -190,7 +190,7 @@
             <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if j.departed_pickup_at %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">3</span>
             <span class="text-slate-400 flex-1">Departed</span>
             {% if not j.departed_pickup_at %}
-            <button type="button" data-status="departed_pickup" class="driver-status-btn rounded-lg bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">Departed</button>
+            <button type="button" data-status="departed_pickup" {% if not j.collected_at %}disabled aria-disabled="true"{% endif %} class="driver-status-btn rounded-lg px-3 py-1.5 text-sm text-white min-h-[2.5rem] {% if j.collected_at %}bg-slate-600 hover:bg-slate-500{% else %}bg-slate-700 text-slate-400 cursor-not-allowed{% endif %}">Departed</button>
             {% else %}
             <span class="text-emerald-400 text-sm">{{ j.departed_pickup_at.strftime('%H:%M') if j.departed_pickup_at else '' }}</span>
             {% endif %}
@@ -199,7 +199,7 @@
             <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium {% if j.reached_delivery_at %}bg-emerald-600 text-white{% else %}bg-slate-700 text-slate-400{% endif %}">4</span>
             <span class="text-slate-400 flex-1">Reached delivery</span>
             {% if not j.reached_delivery_at %}
-            <button type="button" data-status="reached_delivery" class="driver-status-btn rounded-lg bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-sm text-white min-h-[2.5rem]">I’m here</button>
+            <button type="button" data-status="reached_delivery" {% if not j.departed_pickup_at %}disabled aria-disabled="true"{% endif %} class="driver-status-btn rounded-lg px-3 py-1.5 text-sm text-white min-h-[2.5rem] {% if j.departed_pickup_at %}bg-slate-600 hover:bg-slate-500{% else %}bg-slate-700 text-slate-400 cursor-not-allowed{% endif %}">I’m here</button>
             {% else %}
             <span class="text-emerald-400 text-sm">{{ j.reached_delivery_at.strftime('%H:%M') if j.reached_delivery_at else '' }}</span>
             {% endif %}
@@ -391,7 +391,16 @@ if ("serviceWorker" in navigator) {
       body: JSON.stringify({ status: statusVal }),
       credentials: 'same-origin'
     }).then(function (r) {
-      if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.status); });
+      if (!r.ok) {
+        return r.text().then(function (t) {
+          var msg = t || String(r.status);
+          try {
+            var parsed = JSON.parse(t || '{}');
+            if (parsed && parsed.detail) msg = parsed.detail;
+          } catch (e) {}
+          throw new Error(msg);
+        });
+      }
       return r;
     });
   }
@@ -427,9 +436,10 @@ if ("serviceWorker" in navigator) {
       btn.textContent = '…';
       postJobStatus(jid, statusVal, btn, '')
         .then(function () { window.location.reload(); })
-        .catch(function () {
+        .catch(function (e) {
           btn.disabled = false;
           btn.textContent = 'I’m here';
+          alert('Could not update status: ' + (e.message || e));
         });
     });
   });
@@ -444,9 +454,10 @@ if ("serviceWorker" in navigator) {
         btn.textContent = '…';
         postJobStatus(singleId, statusVal, btn, '')
           .then(function () { window.location.reload(); })
-          .catch(function () {
+          .catch(function (e) {
             btn.disabled = false;
             btn.textContent = btn.getAttribute('data-status') === 'reached_pickup' ? 'I’m here' : (btn.getAttribute('data-status') === 'collected' ? 'Collected' : (btn.getAttribute('data-status') === 'departed_pickup' ? 'Departed' : 'I’m here'));
+            alert('Could not update status: ' + (e.message || e));
           });
       });
     });
