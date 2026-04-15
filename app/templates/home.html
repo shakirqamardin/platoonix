@@ -409,7 +409,7 @@
 
 {% macro haulier_earnings_breakdown(load, to_collection_miles, load_distance_miles, platform_fee_percent, layout) -%}
         {%- if layout == 'card' -%}
-        <div class="rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2.5 space-y-1 text-sm text-slate-200">
+        <div class="rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2 space-y-0.5 text-sm text-slate-200">
             <div><span class="text-slate-500">To collection:</span> <span class="text-slate-100">{{ to_collection_miles }} miles</span></div>
             {% if load_distance_miles is not none %}
             <div><span class="text-slate-400">Load distance:</span> <span class="text-slate-100 font-semibold text-base">{{ load_distance_miles }} miles</span></div>
@@ -419,8 +419,11 @@
             {% set _b = load.budget_gbp|float %}
             {% set _fee = _b * _pct / 100 %}
             {% set _net = _b - _fee %}
-            <div><span class="text-slate-400">You receive:</span> <span class="font-semibold text-emerald-300 text-2xl leading-none">£{{ "%.2f"|format(_net) }} ✅</span></div>
-            <div class="border-t border-dashed border-slate-500/60 my-2"></div>
+            <div class="flex items-center justify-between gap-2">
+                <span class="text-slate-400">You receive:</span>
+                <span class="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-emerald-300 text-2xl leading-none">£{{ "%.2f"|format(_net) }} <span aria-hidden="true">✅</span></span>
+            </div>
+            <div class="border-t border-dashed border-slate-500/60 my-1.5"></div>
             <div class="text-slate-500"><span>Budget:</span> <span>£{{ "%.2f"|format(_b) }}</span></div>
             <div class="text-slate-500">Service fee: <span>£{{ "%.2f"|format(_fee) }}</span> ({{ _pct|round(1) }}%)</div>
             {% endif %}
