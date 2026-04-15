@@ -235,22 +235,27 @@
         <p class="text-slate-500 text-xs mb-3">From delivery back to base: open loads whose pickup is within 25 miles of your route. Tap to show interest.</p>
         <div class="overflow-x-auto -mx-1">
           <table class="w-full text-sm border-collapse">
-            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Shipper</th><th class="py-2 pr-2">Pickup → Delivery</th><th class="py-2 pr-2">Mi</th><th class="py-2 pr-2">Budget / you receive</th><th class="py-2 w-16"></th></tr></thead>
+            <thead><tr class="border-b border-slate-600 text-left text-slate-400"><th class="py-2 pr-2">Route</th><th class="py-2 pr-2">Shipper</th><th class="py-2 pr-2">Distance</th><th class="py-2 pr-2">You receive</th><th class="py-2 w-16"></th></tr></thead>
             <tbody>
               {% for row in loads_on_route_home %}
               <tr class="border-b border-slate-800 align-top">
-                <td class="py-2 pr-2">{{ row.load.shipper_name or '—' }}</td>
                 <td class="py-2 pr-2 font-mono text-xs">{{ row.load.pickup_postcode }} → {{ row.load.delivery_postcode }}</td>
-                <td class="py-2 pr-2">{{ row.distance_miles }}</td>
+                <td class="py-2 pr-2">{{ row.load.shipper_name or '—' }}</td>
+                <td class="py-2 pr-2 text-xs text-slate-300">
+                  <div>To collection: {{ row.distance_miles }} mi</div>
+                  {% if row.load_distance_miles is not none %}
+                  <div class="text-slate-500">Load: {{ row.load_distance_miles }} mi</div>
+                  {% endif %}
+                </td>
                 <td class="py-2 pr-2 text-xs text-slate-300">
                   {% if row.load.budget_gbp is not none %}
                   {% set _pct = platform_fee_percent|default(8)|float %}
                   {% set _b = row.load.budget_gbp|float %}
                   {% set _fee = _b * _pct / 100 %}
                   {% set _net = _b - _fee %}
-                  <div>Budget £{{ "%.2f"|format(_b) }}</div>
-                  <div class="text-slate-500">Fee {{ _pct|round(0) }}%: £{{ "%.2f"|format(_fee) }}</div>
                   <div class="text-emerald-400 font-medium">You £{{ "%.2f"|format(_net) }} ✅</div>
+                  <div class="text-slate-500">Budget £{{ "%.2f"|format(_b) }}</div>
+                  <div class="text-slate-500">Fee {{ _pct|round(0) }}%: £{{ "%.2f"|format(_fee) }}</div>
                   {% else %}<span class="text-slate-500">—</span>{% endif %}
                 </td>
                 <td class="py-2"><a href="/haulier/find-backhaul?vehicle_id={{ j.vehicle_id }}&origin_postcode={{ row.load.pickup_postcode | replace(' ', '+') }}" class="text-emerald-400 hover:underline text-xs">Interest</a></td>

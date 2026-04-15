@@ -153,13 +153,24 @@ def driver_page(
             base_postcode_used = base or None
             if base:
                 from app.services.matching import find_matching_loads_along_route
+                from app.services import load_pricing as load_pricing_svc
                 pairs = find_matching_loads_along_route(
                     active_job.vehicle_id,
                     load.delivery_postcode,
                     base,
                     db,
                 )
-                loads_on_route_home = [{"load": l, "distance_miles": d} for l, d, _, _ in pairs]
+                loads_on_route_home = []
+                for l, d, _, _ in pairs:
+                    suggestion = load_pricing_svc.suggest_for_open_load(l)
+                    load_distance_miles = suggestion.get("distance_miles") if isinstance(suggestion, dict) else None
+                    loads_on_route_home.append(
+                        {
+                            "load": l,
+                            "distance_miles": d,
+                            "load_distance_miles": load_distance_miles,
+                        }
+                    )
             else:
                 show_route_home_hint = True
     group_jobs: list[models.BackhaulJob] = []

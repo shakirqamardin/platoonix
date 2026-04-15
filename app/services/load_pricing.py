@@ -158,6 +158,7 @@ def suggest_for_open_load(load: models.Load) -> dict[str, Any]:
         "suggested_gbp": total,
         "detail_line": f"Market rate: £{total:.2f} ({line})",
         "breakdown": breakdown,
+        "distance_miles": round(float(dist), 1),
         "distance_note": note,
     }
 

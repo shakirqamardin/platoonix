@@ -407,20 +407,23 @@
         {%- endif -%}
         {%- endmacro %}
 
-        {% macro haulier_earnings_breakdown(load, distance_miles, platform_fee_percent, layout) -%}
+{% macro haulier_earnings_breakdown(load, to_collection_miles, load_distance_miles, platform_fee_percent, layout) -%}
         {%- if layout == 'card' -%}
         <div class="rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2.5 space-y-1 text-sm text-slate-200">
             <div><span class="text-slate-500">Load:</span> <span class="font-mono text-teal-300">{{ load.pickup_postcode }} → {{ load.delivery_postcode }}</span></div>
-            <div><span class="text-slate-500">Distance:</span> <span class="text-slate-100">{{ distance_miles }} miles</span></div>
+            <div><span class="text-slate-500">To collection:</span> <span class="text-slate-100">{{ to_collection_miles }} miles</span></div>
+            {% if load_distance_miles is not none %}
+            <div><span class="text-slate-500">Load distance:</span> <span class="text-slate-100">{{ load_distance_miles }} miles</span></div>
+            {% endif %}
             {% if load.budget_gbp is not none %}
             {% set _pct = platform_fee_percent|default(8)|float %}
             {% set _b = load.budget_gbp|float %}
             {% set _fee = _b * _pct / 100 %}
             {% set _net = _b - _fee %}
-            <div><span class="text-slate-500">Budget:</span> <span class="font-semibold text-green-300">£{{ "%.2f"|format(_b) }}</span></div>
+            <div><span class="text-slate-500">You receive:</span> <span class="font-semibold text-emerald-300">£{{ "%.2f"|format(_net) }} ✅</span></div>
             <div class="border-t border-dashed border-slate-500/60 my-2"></div>
+            <div><span class="text-slate-500">Budget:</span> <span class="font-semibold text-green-300">£{{ "%.2f"|format(_b) }}</span></div>
             <div>Service fee: <span class="text-amber-200/95">£{{ "%.2f"|format(_fee) }}</span> ({{ _pct|round(1) }}%)</div>
-            <div class="font-semibold text-emerald-300">You receive: £{{ "%.2f"|format(_net) }} ✅</div>
             {% endif %}
         </div>
         {%- elif layout == 'table_cell' and load.budget_gbp is not none -%}
@@ -428,10 +431,10 @@
         {% set _b = load.budget_gbp|float %}
         {% set _fee = _b * _pct / 100 %}
         {% set _net = _b - _fee %}
-        <div class="font-semibold text-green-300">Budget: £{{ "%.2f"|format(_b) }}</div>
+        <div class="font-semibold text-emerald-300">You receive: £{{ "%.2f"|format(_net) }} ✅</div>
         <div class="border-t border-dashed border-slate-600/70 my-2 max-w-[15rem]"></div>
+        <div class="font-semibold text-green-300">Budget: £{{ "%.2f"|format(_b) }}</div>
         <div class="text-slate-300">Service fee: <span class="text-amber-200/95">£{{ "%.2f"|format(_fee) }}</span> ({{ _pct|round(1) }}%)</div>
-        <div class="font-semibold text-emerald-300 mt-1">You receive: £{{ "%.2f"|format(_net) }} ✅</div>
         {%- endif -%}
         {%- endmacro %}
         
@@ -954,17 +957,18 @@
                                 {% else %}
                                 <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-amber-900/40 text-amber-300 rounded">⚠ Near</span>
                                 {% endif %}
-                                <span class="font-semibold {% if m.is_perfect_match %}text-green-300{% else %}text-amber-300{% endif %}">{{ m.distance_miles }} mi</span>
+                                <span class="font-semibold {% if m.is_perfect_match %}text-green-300{% else %}text-amber-300{% endif %}">To collection {{ m.distance_miles }} mi</span>
                             </div>
                             <div>
-                                <div class="font-semibold text-slate-100">{{ m.load.shipper_name }}</div>
+                                <div class="text-teal-300 font-mono">{{ m.load.pickup_postcode }} → {{ m.load.delivery_postcode }}</div>
+                                <div class="font-semibold text-slate-100 mt-1">{{ m.load.shipper_name }}</div>
                                 <div class="text-xs text-slate-500 mt-1">
                                     {% if m.load.pallets %}Pallets: {{ m.load.pallets }}{% endif %}
                                     {% if m.load.weight_kg %}{% if m.load.pallets %} · {% endif %}Weight: {{ (m.load.weight_kg / 1000)|round(1) }}T{% endif %}
                                     {% if m.load.volume_m3 %}{% if m.load.pallets or m.load.weight_kg %} · {% endif %}Vol: {{ m.load.volume_m3 }} m³{% endif %}
                                 </div>
                             </div>
-                            {{ haulier_earnings_breakdown(m.load, m.distance_miles, platform_fee_percent, 'card') }}
+                            {{ haulier_earnings_breakdown(m.load, m.distance_miles, (m.market_rate.distance_miles if m.market_rate else none), platform_fee_percent, 'card') }}
                             <div class="flex flex-wrap items-center gap-2 pt-1">
                                 {{ wa_share_btn(m.load) }}
                                 <form method="post" action="/interest" class="inline flex-1 min-w-[10rem]">
@@ -986,7 +990,7 @@
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Match</th>
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Load / Route</th>
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Loader rating</th>
-                                    <th class="py-3 px-3 text-left font-semibold text-slate-400">Distance</th>
+                                    <th class="py-3 px-3 text-left font-semibold text-slate-400">To collection</th>
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Requirements</th>
                                     <th class="py-3 px-3 text-left font-semibold text-slate-400">Budget</th>
                                     <th class="py-3 px-3 text-right font-semibold text-slate-400">Action</th>
@@ -1020,6 +1024,9 @@
                                     </td>
                                     <td class="py-3 px-3">
                                         <span class="font-semibold {% if m.is_perfect_match %}text-green-300{% else %}text-amber-300{% endif %}">{{ m.distance_miles }} mi</span>
+                                        {% if m.market_rate and m.market_rate.distance_miles is not none %}
+                                        <div class="text-xs text-slate-500 mt-1">Load: {{ m.market_rate.distance_miles }} mi</div>
+                                        {% endif %}
                                     </td>
                                     <td class="py-3 px-3">
                                         <div class="text-slate-300 text-xs">
@@ -1049,7 +1056,7 @@
                                     </td>
                                     <td class="py-3 px-3">
                                         {% if m.load.budget_gbp %}
-                                        {{ haulier_earnings_breakdown(m.load, m.distance_miles, platform_fee_percent, 'table_cell') }}
+                                        {{ haulier_earnings_breakdown(m.load, m.distance_miles, (m.market_rate.distance_miles if m.market_rate else none), platform_fee_percent, 'table_cell') }}
                                         {% if m.market_rate and m.market_rate.suggested_gbp is not none %}
                                         <div class="text-xs text-cyan-300/90 mt-1">{{ m.market_rate.detail_line }}</div>
                                         {% endif %}
