@@ -389,9 +389,18 @@ async def driver_epod_submit(
     file = form.get("file")
     if not file or not getattr(file, "filename", None):
         return RedirectResponse(url=f"/driver/epod?job_id={job_id}&error=No+file", status_code=303)
+    verification_method = (form.get("verification_method") or "manual").strip().lower()
     suffix = Path(file.filename).suffix.lower()
     if suffix not in POD_ALLOWED:
         return RedirectResponse(url=f"/driver/epod?job_id={job_id}&error=Bad+file+type", status_code=303)
+    if verification_method == "gps_photo" and suffix == ".pdf":
+        from urllib.parse import quote_plus
+
+        return RedirectResponse(
+            url=f"/driver/epod?job_id={job_id}&error="
+            + quote_plus("GPS method needs a photo file (JPG, PNG, or HEIC), not a PDF."),
+            status_code=303,
+        )
     content = await file.read()
     if len(content) > POD_MAX_MB * 1024 * 1024:
         return RedirectResponse(url=f"/driver/epod?job_id={job_id}&error=File+too+large", status_code=303)
@@ -404,7 +413,6 @@ async def driver_epod_submit(
     file_url = f"/static/uploads/pods/{safe_name}"
 
     notes = (form.get("notes") or "").strip() or None
-    verification_method = (form.get("verification_method") or "manual").strip().lower()
     qr_code = (form.get("qr_code") or "").strip() or None
     sms_code = (form.get("sms_code") or "").strip() or None
 

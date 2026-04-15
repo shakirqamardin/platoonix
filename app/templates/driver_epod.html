@@ -59,13 +59,15 @@
       <p class="text-slate-500 text-[11px]">Loader sees the code in their bell notifications and email.</p>
     </div>
 
-    <div id="gps-option" class="hidden rounded-lg border border-amber-500/20 bg-amber-950/20 p-3 text-amber-100/90 text-xs">
-      Use a camera photo (JPG/PNG/HEIC) with GPS/location enabled — PDFs cannot be used for GPS check.
+    <div id="gps-option" class="hidden rounded-lg border border-amber-500/20 bg-amber-950/20 p-3 space-y-2 text-xs">
+      <p class="text-amber-100/95 font-medium">GPS check needs a photo file with location embedded</p>
+      <p class="text-amber-200/90">Use JPG, PNG, or HEIC from your camera app with <strong class="text-amber-100">location/GPS turned on</strong> for that photo. Do not upload a PDF for this method.</p>
     </div>
 
     <div>
-      <label class="block text-slate-400 text-sm mb-1">Proof file (PDF, JPG, PNG, HEIC, max 10 MB)</label>
-      <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.heic" required class="w-full text-sm text-slate-300" />
+      <label id="proof-file-label" for="proof-file-input" class="block text-slate-300 text-sm font-medium mb-1">Proof file (PDF, JPG, PNG, HEIC — max 10 MB)</label>
+      <input id="proof-file-input" type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.heic" required class="w-full min-h-[44px] text-sm text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-500" />
+      <p id="proof-file-hint" class="text-slate-500 text-xs mt-2 leading-snug">On phones and tablets, choosing a file often opens the <strong class="text-slate-400">camera</strong>, <strong class="text-slate-400">photo library</strong>, or <strong class="text-slate-400">Files</strong> — that is normal. Pick or take your proof, then upload.</p>
     </div>
     <div>
       <label class="block text-slate-400 text-sm mb-1">Notes (optional)</label>
@@ -75,6 +77,35 @@
   </form>
   <p class="text-slate-500 text-sm mt-4"><a href="/driver" class="text-emerald-400 hover:underline">Back to Driver</a></p>
   <script>
+    function updateProofFileForMethod(method) {
+      var label = document.getElementById('proof-file-label');
+      var input = document.getElementById('proof-file-input');
+      var hint = document.getElementById('proof-file-hint');
+      if (!input) return;
+      try {
+        input.value = '';
+      } catch (e) {}
+      if (method === 'gps') {
+        input.setAttribute('accept', 'image/jpeg,image/png,image/heic,.jpg,.jpeg,.png,.heic');
+        input.removeAttribute('capture');
+        if (label) {
+          label.textContent = 'Delivery photo (JPG, PNG, or HEIC — photos only, not PDF)';
+        }
+        if (hint) {
+          hint.innerHTML = 'This button only accepts <strong class="text-slate-300">image</strong> files for GPS. Your device may still offer <strong class="text-slate-300">Camera</strong> or <strong class="text-slate-300">Gallery</strong> — use a real photo with location saved in the file (not a PDF scan).';
+        }
+      } else {
+        input.setAttribute('accept', '.pdf,.jpg,.jpeg,.png,.heic');
+        input.removeAttribute('capture');
+        if (label) {
+          label.textContent = 'Proof file (PDF, JPG, PNG, HEIC — max 10 MB)';
+        }
+        if (hint) {
+          hint.innerHTML = '“Choose file” on a phone often opens the <strong class="text-slate-400">camera</strong>, <strong class="text-slate-400">photos</strong>, or <strong class="text-slate-400">files</strong> — that is expected. Select or capture your proof document or image.';
+        }
+      }
+    }
+
     function showVerificationOption(method) {
       var qr = document.getElementById('qr-option');
       var app = document.getElementById('app-option');
@@ -86,6 +117,7 @@
       if (method === 'qr') qr.classList.remove('hidden');
       if (method === 'app') app.classList.remove('hidden');
       if (method === 'gps') gps.classList.remove('hidden');
+      updateProofFileForMethod(method);
     }
     async function requestAppCode(jobId) {
       var statusEl = document.getElementById('code-status');
