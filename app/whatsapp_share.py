@@ -1,6 +1,7 @@
 """Pre-filled WhatsApp share URLs for loads (api.whatsapp.com/send)."""
 from __future__ import annotations
 
+import re
 from urllib.parse import quote
 
 from app import models
@@ -45,3 +46,27 @@ def build_whatsapp_send_url(load: models.Load, base_url: str) -> str:
     """https://api.whatsapp.com/send?text=... (works on mobile and desktop browsers)."""
     msg = load_share_message(load, base_url)
     return "https://api.whatsapp.com/send?text=" + quote(msg, safe="")
+
+
+def build_driver_support_whatsapp_url(
+    job_summary: str,
+    route_line: str,
+    support_whatsapp_e164: str | None,
+) -> str:
+    """
+    Driver help: breakdown, site closed, etc. Opens WhatsApp with prefilled context.
+    If support_whatsapp_e164 is set (digits, country code), uses https://wa.me/<digits>?text=...
+    Otherwise opens api.whatsapp.com/send?text=... (user picks contact).
+    """
+    body = (
+        "Platoonix — driver help needed\n\n"
+        f"{job_summary}\n"
+        f"{route_line}\n\n"
+        "Please describe what happened (e.g. breakdown, site closed, running late)."
+    )
+    q = quote(body, safe="")
+    raw = (support_whatsapp_e164 or "").strip()
+    digits = re.sub(r"\D", "", raw) if raw else ""
+    if len(digits) >= 10:
+        return f"https://wa.me/{digits}?text={q}"
+    return "https://api.whatsapp.com/send?text=" + q

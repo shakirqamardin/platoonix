@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # Public site URL for share links (WhatsApp, etc.). Override via PUBLIC_APP_BASE_URL in env.
     public_app_base_url: str = "https://web-production-7ca42.up.railway.app"
 
+    # Optional: Platoonix support WhatsApp (digits only, country code included, e.g. 447123456789).
+    # When set, driver "Get help" opens wa.me to this number with a prefilled job context message.
+    support_whatsapp_e164: Optional[str] = None
+
     # Vehicle insurance certificate files (PDF/images). Default: <project>/data/insurance
     insurance_upload_dir: Optional[str] = None
 

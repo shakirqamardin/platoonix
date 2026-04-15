@@ -213,6 +213,39 @@ def driver_page(
                     "vehicle_registration": (vehicle.registration if vehicle else ""),
                 }
             )
+    _settings = get_settings()
+    from app.whatsapp_share import build_driver_support_whatsapp_url
+
+    support_whatsapp_href = build_driver_support_whatsapp_url(
+        "Driver (no active job on screen)",
+        "—",
+        _settings.support_whatsapp_e164,
+    )
+    if active_job:
+        load_for_msg = db.get(models.Load, active_job.load_id)
+        if is_multi_drop and group_jobs:
+            g0 = group_jobs[0]
+            l0 = db.get(models.Load, g0.load_id)
+            dn = (active_job.display_number or "").strip()
+            job_summary = f"Multi-drop · {len(group_jobs)} jobs" + (f" · {dn}" if dn else "")
+            route_line = (
+                f"{l0.pickup_postcode} → {l0.delivery_postcode} (+ other drops)"
+                if l0
+                else "—"
+            )
+        else:
+            job_summary = active_job.display_number or f"Job #{active_job.id}"
+            route_line = (
+                f"{load_for_msg.pickup_postcode} → {load_for_msg.delivery_postcode}"
+                if load_for_msg
+                else "—"
+            )
+        support_whatsapp_href = build_driver_support_whatsapp_url(
+            job_summary,
+            route_line,
+            _settings.support_whatsapp_e164,
+        )
+
     return templates.TemplateResponse(
         "driver.html",
         {
@@ -230,6 +263,7 @@ def driver_page(
             "is_driver_login": bool(actor_driver),
             "dashboard_url": ("/driver-login" if actor_driver else "/?section=matches"),
             "platform_fee_percent": float(get_settings().platform_fee_percent or 8),
+            "support_whatsapp_href": support_whatsapp_href,
         },
     )
 
