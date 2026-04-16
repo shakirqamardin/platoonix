@@ -121,11 +121,17 @@
           <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="requires_temp_control" class="rounded border-slate-600 bg-slate-900" {% if load.requires_temp_control %}checked{% endif %} /> Temp control</label>
           <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="requires_adr" class="rounded border-slate-600 bg-slate-900" {% if load.requires_adr %}checked{% endif %} /> ADR</label>
         </div>
-        <div class="flex flex-wrap gap-3 pt-2">
-          <button type="submit" class="rounded-lg bg-teal-600 hover:bg-teal-500 px-5 py-2.5 text-sm font-semibold text-white">Save changes</button>
-          <a href="/?section=loads" class="rounded-lg border border-slate-600 px-5 py-2.5 text-sm text-slate-300 hover:bg-slate-800">Cancel</a>
+        <div class="flex flex-wrap gap-3 pt-2 items-center">
+          <button type="submit" class="rounded-lg bg-teal-600 hover:bg-teal-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm">Save changes</button>
+          <a href="/?section=loads" class="rounded-lg border border-slate-600 px-5 py-2.5 text-sm text-slate-300 hover:bg-slate-800">Back to My loads</a>
         </div>
       </form>
+      <div class="mt-8 pt-6 border-t border-slate-800">
+        <p class="text-sm text-slate-400 mb-3">No longer need this listing? You can remove it completely (only when no haulier is assigned to a job yet).</p>
+        <form method="post" action="/loader/delete-load/{{ load.id }}" class="inline" onsubmit="return confirm('Permanently delete this load? This cannot be undone.');">
+          <button type="submit" class="rounded-lg bg-rose-600 hover:bg-rose-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm">Delete load</button>
+        </form>
+      </div>
     </div>
   </body>
 </html>

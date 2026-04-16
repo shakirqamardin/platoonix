@@ -621,7 +621,13 @@ def home(
     elif current_user and current_user.loader_id:
         # LOADER VIEW - only their loads
         loader = db.get(models.Loader, current_user.loader_id)
-        loads = db.query(models.Load).filter(models.Load.loader_id == loader.id).order_by(models.Load.created_at.desc()).all()
+        loads = (
+            db.query(models.Load)
+            .filter(models.Load.loader_id == loader.id)
+            .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
+            .order_by(models.Load.created_at.desc())
+            .all()
+        )
         planned_loads = db.query(models.PlannedLoad).filter(models.PlannedLoad.loader_id == loader.id).order_by(models.PlannedLoad.created_at.desc()).all()
         load_ids = [l.id for l in loads]
         planned_ids = [p.id for p in planned_loads]
@@ -1357,7 +1363,13 @@ def find_backhaul_page(
         current_user = _driver_portal_user(driver_actor)
     elif current_user and current_user.loader_id:
         loader = db.get(models.Loader, current_user.loader_id)
-        loads = db.query(models.Load).filter(models.Load.loader_id == loader.id).order_by(models.Load.created_at.desc()).all()
+        loads = (
+            db.query(models.Load)
+            .filter(models.Load.loader_id == loader.id)
+            .filter(models.Load.status != models.LoadStatusEnum.CANCELLED.value)
+            .order_by(models.Load.created_at.desc())
+            .all()
+        )
         planned_loads = db.query(models.PlannedLoad).filter(models.PlannedLoad.loader_id == loader.id).order_by(models.PlannedLoad.created_at.desc()).all()
         load_ids = [l.id for l in loads]
         planned_ids = [p.id for p in planned_loads]

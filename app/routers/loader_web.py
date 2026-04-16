@@ -352,6 +352,7 @@ def loader_edit_load_page(
         return RedirectResponse(url="/?section=loads&load_error=cannot_edit_status", status_code=303)
     if _primary_job_for_load(db, load_id):
         return RedirectResponse(url="/?section=loads&load_error=cannot_edit_matched", status_code=303)
+    # Edit page is only reachable when there is no active job — safe to offer delete load.
     req = load.requirements or {}
     vt = (req.get("vehicle_type") or "") if isinstance(req, dict) else ""
     tt = (req.get("trailer_type") or "") if isinstance(req, dict) else ""
