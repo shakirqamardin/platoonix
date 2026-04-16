@@ -2059,9 +2059,8 @@
                     {% elif l.pickup_window_start %}
                     {% set ns.hu = ((l.pickup_window_start - utcnow()).total_seconds() / 3600) %}
                     {% endif %}
-                    {% set ns.blocked = ns.hu < 0 %}
                     {% set can_edit = (st == 'open' and not lj) %}
-                    {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at)) and not ns.blocked) %}
+                    {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at))) %}
                     <article class="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-2" data-whatsapp-load-id="{{ l.id }}">
                         <div class="font-medium text-slate-100">{{ l.shipper_name }}</div>
                         <div class="font-mono text-teal-300 text-sm">{{ l.pickup_postcode }} → {{ l.delivery_postcode }}</div>
@@ -2076,7 +2075,7 @@
                         {% if not l.pickup_window_start %}
                         <div class="text-xs text-emerald-400/90">You can cancel anytime (no pickup time scheduled).</div>
                         {% elif ns.hu < 0 %}
-                        <div class="text-xs text-red-400/90">Pickup time has passed — contact <a href="mailto:support@platoonix.co.uk" class="text-teal-400 hover:underline">support@platoonix.co.uk</a>.</div>
+                        <div class="text-xs text-amber-200/90">Pickup time has passed — use <strong class="text-amber-100">Cancel</strong> below to remove this load{% if lj %} or cancel the matched job{% endif %} if you no longer need it.</div>
                         {% elif lj %}
                         <div class="text-xs text-slate-400">Cancel before pickup for a full refund. The haulier is notified; your load is reopened for others.</div>
                         {% else %}
@@ -2140,9 +2139,8 @@
                             {% elif l.pickup_window_start %}
                             {% set ns.hu = ((l.pickup_window_start - utcnow()).total_seconds() / 3600) %}
                             {% endif %}
-                            {% set ns.blocked = ns.hu < 0 %}
                             {% set can_edit = (st == 'open' and not lj) %}
-                            {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at)) and not ns.blocked) %}
+                            {% set can_cancel = (st != 'cancelled' and (not lj or (not lj.collected_at and not lj.completed_at))) %}
                             <tr class="border-b border-slate-800/50" data-whatsapp-load-id="{{ l.id }}">
                                 <td class="py-3 px-4">
                                     <div class="font-medium text-slate-100">{{ l.shipper_name }}</div>
@@ -2158,7 +2156,7 @@
                                         {% if not l.pickup_window_start %}
                                         <span class="text-emerald-400/90">You can cancel anytime (no pickup time scheduled).</span>
                                         {% elif ns.hu < 0 %}
-                                        <span class="text-red-400/90">Pickup time has passed — contact <a href="mailto:support@platoonix.co.uk" class="text-teal-400 hover:underline">support@platoonix.co.uk</a>.</span>
+                                        <span class="text-amber-200/90">Pickup time has passed — use <strong class="text-amber-100">Cancel</strong> to remove this load{% if lj %} or cancel the matched job{% endif %} if you no longer need it.</span>
                                         {% elif lj %}
                                         <span class="text-slate-400">Cancel before pickup for a full refund. The haulier is notified; your load is reopened for others.</span>
                                         {% else %}

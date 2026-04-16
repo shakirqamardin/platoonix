@@ -39,11 +39,12 @@ def hours_until_pickup(load: models.Load, job: Optional[models.BackhaulJob], now
 
 def loader_matched_cancellation_tier(hours: float) -> Tuple[bool, float, str]:
     """
-    Loader cancelling matched load — no fees. Block self-serve only after pickup time has passed.
+    Loader cancelling matched load — no fees. Allowed until collection or payout (checked in router).
+    Past-due / stale jobs can still be cancelled so loaders can clear listings without support.
     Returns (blocked, fee_gbp, tier_key).
     """
     if hours < 0:
-        return (True, 0.0, "blocked")
+        return (False, 0.0, "past_due")
     return (False, 0.0, "free")
 
 
@@ -52,6 +53,6 @@ def haulier_cancellation_penalty_kind(hours: float) -> str:
     return "none"
 
 
-def open_load_cancel_blocked(hours: float) -> bool:
-    """Block only when pickup reference time is already in the past."""
-    return hours < 0
+def open_load_cancel_blocked(_hours: float) -> bool:
+    """Open unmatched loads: always allow loader cancel (including past-due stale listings)."""
+    return False
