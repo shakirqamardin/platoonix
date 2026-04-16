@@ -642,9 +642,24 @@ def loader_cancel_load(
         except Exception:
             logger.exception("notify haulier load cancelled")
 
-        vehicle_id_to_refresh = job.vehicle_id
-        db.query(models.POD).filter(models.POD.backhaul_job_id == job.id).delete()
-        db.query(models.Payment).filter(models.Payment.backhaul_job_id == job.id).delete()
+        vehicle_id_to_refresh = int(job.vehicle_id)
+        vehicle = db.get(models.Vehicle, vehicle_id_to_refresh)
+        if vehicle and vehicle.current_job_id == job.id:
+            vehicle.current_job_id = None
+            vehicle.available_from = None
+            db.add(vehicle)
+        db.query(models.DriverLocation).filter(models.DriverLocation.job_id == job.id).delete(
+            synchronize_session=False
+        )
+        db.query(models.JobRating).filter(models.JobRating.job_id == job.id).delete(
+            synchronize_session=False
+        )
+        db.query(models.POD).filter(models.POD.backhaul_job_id == job.id).delete(
+            synchronize_session=False
+        )
+        db.query(models.Payment).filter(models.Payment.backhaul_job_id == job.id).delete(
+            synchronize_session=False
+        )
         _interest_accepted_to_suggested(db, load.id, job.vehicle_id)
         db.delete(job)
         load.status = models.LoadStatusEnum.OPEN.value
